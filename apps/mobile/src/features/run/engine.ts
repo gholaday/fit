@@ -14,6 +14,7 @@ import {
   type GpsFilterState,
   type GpsFix,
   type HrSample,
+  type SpeedSegment,
   type PlayerState,
   type SessionMode,
   type Step,
@@ -32,7 +33,10 @@ import {
   playerReducer,
   rollingPace,
   secondsInZone,
+  setSpeed,
   snapshot,
+  treadmillDistance,
+  treadmillTarget,
   trimSamples,
   zonePace,
 } from '@fit/core';
@@ -67,6 +71,10 @@ export interface RunView {
   voice: boolean;
   /** Saving completes a plan workout. */
   linked: boolean;
+  /** Treadmill: the belt speed you set (km/h) and the current step's suggestion. */
+  speedKph?: number;
+  targetKph?: number;
+  inclinePct?: number;
 }
 
 export interface Live {
@@ -97,6 +105,8 @@ let player: PlayerState = createPlayer([]);
 let gps: GpsFilterState = initialGpsFilter();
 let samples: DistanceSample[] = [];
 let pending: TrackPoint[] = [];
+/** Treadmill speed changes over active time; distance is integrated from them. */
+let speeds: SpeedSegment[] = [];
 /** Live HR since the last save, and the whole run's for the Zone 2 total. */
 let hrPending: HrSample[] = [];
 let hrAll: HrSample[] = [];
@@ -118,6 +128,36 @@ export function paceRangeFor(step: Step): { minSecPerKm: number; maxSecPerKm: nu
 }
 
 const unit = () => useFit.getState().settings.units.distance;
+const treadmill = () => setup?.mode === 'treadmill';
+
+/** Distance so far: GPS outdoors, speed x time on the treadmill, none for Timer. */
+function distanceAt(t: number): number {
+  return treadmill() ? treadmillDistance(speeds, activeMs(player, t)) : gps.distanceM;
+}
+
+/** Treadmill: the current step's suggested speed and incline. */
+function suggestion(): { speedKph: number; inclinePct?: number } | undefined {
+  const st = player.steps[player.stepIdx];
+  return st && treadmill() ? treadmillTarget(st, useFit.getState().settings.treadmill, vdot) : undefined;
+}
+
+/** Jumps the belt speed to the step's suggestion (start and step changes). */
+function applySuggestion(t: number): void {
+  const sug = suggestion();
+  if (!sug) return;
+  speeds = setSpeed(speeds, activeMs(player, t), sug.speedKph);
+  useRun.setState({ speedKph: sug.speedKph, targetKph: sug.speedKph, inclinePct: sug.inclinePct });
+}
+
+/** Treadmill +/- buttons: record the speed you set on the belt, km/h. */
+export function changeSpeed(kph: number): void {
+  if (!treadmill()) return;
+  const t = Date.now();
+  const speed = Math.max(0, Math.min(30, Math.round(kph * 10) / 10));
+  speeds = setSpeed(speeds, activeMs(player, t), speed);
+  useRun.setState({ speedKph: speed });
+  step(t);
+}
 
 function resetEngine(s: RunSetup, p: PlayerState): void {
   setup = s;
@@ -125,6 +165,7 @@ function resetEngine(s: RunSetup, p: PlayerState): void {
   gps = initialGpsFilter();
   samples = [];
   pending = [];
+  speeds = [];
   hrPending = [];
   hrAll = [];
   setHrSink(onHr);
@@ -149,6 +190,10 @@ export function prepareRun(s: RunSetup): void {
 export async function setMode(mode: SessionMode): Promise<void> {
   if (setup) setup = { ...setup, mode };
   useRun.setState({ mode });
+  if (mode === 'treadmill') {
+    const sug = suggestion();
+    useRun.setState({ speedKph: sug?.speedKph, targetKph: sug?.speedKph, inclinePct: sug?.inclinePct });
+  }
   if (mode === 'outdoor') await services.location?.watch(onFix);
   else await services.location?.stop();
 }
@@ -191,6 +236,7 @@ function begin(): void {
   });
   lastSaveAt = t;
   useRun.setState({ phase: 'active', sessionId, countdownEndsAt: undefined });
+  applySuggestion(t);
   if (setup.mode === 'outdoor') void services.location?.record(onFix);
   startTicker();
   step(t);
@@ -203,6 +249,14 @@ export function resumeRecovered(active: ActiveSession, items: readonly WorkoutIt
   const phase: RunPhase = player.status === 'paused' ? 'paused' : 'active';
   useRun.setState({ phase, name: active.name, mode: active.mode, steps: player.steps, stepIdx: player.stepIdx, sessionId: active.id, locked: false, linked: active.planWorkoutId != null });
   if (active.mode === 'outdoor') void services.location?.record(onFix);
+  if (active.mode === 'treadmill') {
+    // Speed changes are not saved; carry the saved distance at its average speed, then
+    // continue at the current step's suggestion.
+    const t = Date.now();
+    const ms = activeMs(player, t);
+    speeds = ms > 0 ? [{ activeMs: 0, speedKph: (active.distanceM * 3.6) / (ms / 1000) }] : [];
+    applySuggestion(t);
+  }
   holdHr();
   startTicker();
   step(Date.now());
@@ -263,11 +317,12 @@ function onHr(bpm: number, t: number): void {
 function step(tIn: number): void {
   const t = Math.max(tIn, lastT);
   lastT = t;
-  const distanceM = gps.distanceM;
+  const distanceM = distanceAt(t);
   const before = player.stepIdx;
   player = playerReducer(player, { type: 'tick', t, distanceM });
   samples = trimSamples(samples, t);
-  const paceSecPerKm = rollingPace(samples, t);
+  const belt = useRun.getState().speedKph;
+  const paceSecPerKm = treadmill() ? (belt ? 3600 / belt : undefined) : rollingPace(samples, t);
   const snap = snapshot(player, t, distanceM);
   const r = cuesFor(cue, { snap, t, distanceM, currentPace: paceSecPerKm }, { unit: unit(), prefs: useFit.getState().settings.cues ?? DEFAULT_CUE_PREFS, paceRange: paceRangeFor });
   cue = r.state;
@@ -277,7 +332,10 @@ function step(tIn: number): void {
     const text = c.kind === 'countdown' ? COUNT_WORDS[cue.countdownAt ?? 0] : c.text;
     if (text && useRun.getState().voice) services.speaker?.speak(text);
   }
-  if (player.stepIdx !== before) useRun.setState({ stepIdx: player.stepIdx });
+  if (player.stepIdx !== before) {
+    useRun.setState({ stepIdx: player.stepIdx });
+    applySuggestion(t);
+  }
   publish(t, paceSecPerKm);
   if (player.status === 'finished') {
     void finishRun();
@@ -287,15 +345,16 @@ function step(tIn: number): void {
 }
 
 function publish(t: number, paceSecPerKm?: number): void {
-  const snap = snapshot(player, t, gps.distanceM);
+  const distanceM = distanceAt(t);
+  const snap = snapshot(player, t, distanceM);
   useLive.setState({
     activeMs: snap.activeMs,
     stepElapsedMs: snap.stepElapsedMs,
     stepRemainingMs: snap.stepRemainingMs,
     stepRemainingM: snap.stepRemainingM,
     stepProgress: snap.stepProgress,
-    distanceM: gps.distanceM,
-    stepDistanceM: gps.distanceM - player.stepStartDistanceM,
+    distanceM,
+    stepDistanceM: distanceM - player.stepStartDistanceM,
     paceSecPerKm,
   });
 }
@@ -307,10 +366,10 @@ function save(t: number): void {
   const hr = hrPending;
   pending = [];
   hrPending = [];
-  repo.saveProgress(id, { player, distanceM: gps.distanceM, points, hr });
+  repo.saveProgress(id, { player, distanceM: distanceAt(t), points, hr });
   lastSaveAt = t;
   updateZone2(t);
-  const status = `${formatDistance(gps.distanceM, unit(), 2)}, ${formatClock(activeMs(player, t) / 1000)}`;
+  const status = `${formatDistance(distanceAt(t), unit(), 2)}, ${formatClock(activeMs(player, t) / 1000)}`;
   services.location?.setStatus(status);
 }
 
@@ -351,13 +410,13 @@ export function resume(): void {
 
 export function skipStep(): void {
   const t = Date.now();
-  player = playerReducer(player, { type: 'skip', t, distanceM: gps.distanceM });
+  player = playerReducer(player, { type: 'skip', t, distanceM: distanceAt(t) });
   step(t);
 }
 
 export function lap(): void {
   const t = Date.now();
-  player = playerReducer(player, { type: 'lap', t, distanceM: gps.distanceM });
+  player = playerReducer(player, { type: 'lap', t, distanceM: distanceAt(t) });
   step(t);
 }
 
@@ -366,19 +425,20 @@ export async function finishRun(): Promise<string | undefined> {
   const id = useRun.getState().sessionId;
   if (useRun.getState().phase === 'finished') return id;
   const t = Date.now();
-  player = playerReducer(player, { type: 'finish', t, distanceM: gps.distanceM });
+  const finalM = distanceAt(t);
+  player = playerReducer(player, { type: 'finish', t, distanceM: finalM });
   stopTimers();
   useRun.setState({ phase: 'finished' });
   publish(t);
   if (id) {
     // Flush the last points with the progress write, then close the session.
-    repo.saveProgress(id, { player, distanceM: gps.distanceM, points: pending, hr: hrPending });
+    repo.saveProgress(id, { player, distanceM: finalM, points: pending, hr: hrPending });
     pending = [];
     hrPending = [];
     repo.finishSession(id, {
       endedAt: new Date(t).toISOString(),
       player,
-      distanceM: gps.distanceM,
+      distanceM: finalM,
       elapsedMs: activeMs(player, t),
       pausedMs: player.pausedMs,
     });

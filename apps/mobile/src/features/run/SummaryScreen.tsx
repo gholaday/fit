@@ -2,13 +2,14 @@
  * Run summary (spec §5 "Post-session summary", mockup Summary). Reads the stored session
  * once; the map and replay are lazy-loaded so opening a summary never waits on MapLibre.
  */
-import { type DistanceUnit, type SessionDetail, cumulativeDistance, formatClock, formatDistance, hrStats, metersToUnit, paceToUnit, splits as splitsOf } from '@fit/core';
+import { type DistanceUnit, type SessionDetail, cumulativeDistance, formatClock, formatDistance, hrStats, metersToUnit, paceToUnit, splits as splitsOf, unitToMeters } from '@fit/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { lazy, Suspense, useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
-import { useHrProfile, useUnits } from '@/data/store';
+import { actions, showSnack, useHrProfile, useUnits } from '@/data/store';
+import { useFormStyles } from '@/features/items/ItemSheet';
 import { haptic } from '@/lib/haptics';
 import { createStyles, toneColor, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -36,7 +37,7 @@ const pace = (secPerKm: number | undefined, unit: DistanceUnit) => (secPerKm ===
 export function SummaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   // One read for the whole screen.
-  const [session] = useState<SessionDetail | undefined>(() => repo.session(id));
+  const [session, setSession] = useState<SessionDetail | undefined>(() => repo.session(id));
   const s = useStyles();
   const p = usePalette();
   const insets = useSafeAreaInsets();
@@ -63,7 +64,8 @@ export function SummaryScreen() {
   }
 
   const hasRoute = session.points.length > 1;
-  const avgPace = session.distanceM > 20 ? session.elapsedMs / session.distanceM : undefined;
+  const hasDistance = session.distanceM > 20;
+  const avgPace = hasDistance ? session.elapsedMs / session.distanceM : undefined;
   const splitRows = hasRoute ? splitsOf(cumulativeDistance(session.points), unit, session.pauses) : [];
 
   return (
@@ -96,9 +98,11 @@ export function SummaryScreen() {
 
         <View style={s.hero}>
           <Stat value={formatClock(Math.round(session.elapsedMs / 1000))} label="Time" />
-          {session.mode === 'outdoor' && <Stat value={metersToUnit(session.distanceM, unit).toFixed(2)} label={unit === 'mi' ? 'Miles' : 'Kilometers'} />}
-          {session.mode === 'outdoor' && <Stat value={pace(avgPace, unit)} label={`Pace /${unit}`} />}
+          {hasDistance && <Stat value={metersToUnit(session.distanceM, unit).toFixed(2)} label={unit === 'mi' ? 'Miles' : 'Kilometers'} />}
+          {hasDistance && <Stat value={pace(avgPace, unit)} label={`Pace /${unit}`} />}
         </View>
+
+        {session.mode !== 'outdoor' && <DistanceFix session={session} onSaved={() => setSession(repo.session(id))} />}
 
         {hr && <HrCard session={session} stats={hr} zones={zones} />}
 
@@ -122,7 +126,7 @@ export function SummaryScreen() {
                   <T v="bodyStrong" num>
                     {formatClock(Math.round(r.durationS))}
                   </T>
-                  {session.mode === 'outdoor' && (
+                  {hasDistance && (
                     <T v="caption" tone="secondary" num>
                       {r.avgPaceSecPerKm !== undefined ? `${formatDistance(r.distanceM, unit, 2)}, ${pace(r.avgPaceSecPerKm, unit)} /${unit}` : formatDistance(r.distanceM, unit, 2)}
                     </T>
@@ -178,6 +182,56 @@ function Stat({ value, label }: { value: string; label: string }) {
       <T v="caption" tone="secondary">
         {label}
       </T>
+    </View>
+  );
+}
+
+/**
+ * Treadmill: "Treadmill says X" replaces the speed x time estimate with the belt's own
+ * count. Timer: an optional distance. Either way every step's distance is rescaled.
+ */
+function DistanceFix({ session, onSaved }: { session: SessionDetail; onSaved: () => void }) {
+  const s = useStyles();
+  const f = useFormStyles();
+  const p = usePalette();
+  const unit = useUnits().distance;
+  const [text, setText] = useState('');
+  const value = Number(text.replace(',', '.'));
+  const valid = text.trim() !== '' && Number.isFinite(value) && value > 0 && value < 200;
+  const treadmill = session.mode === 'treadmill';
+  const save = () => {
+    if (!valid) return;
+    haptic.commit();
+    repo.correctDistance(session.id, unitToMeters(value, unit));
+    actions.reload();
+    setText('');
+    onSaved();
+    showSnack({ message: `Distance set to ${value.toFixed(2)} ${unit}` });
+  };
+  return (
+    <View style={s.card}>
+      <T v="headline" style={s.cardTitle}>
+        {treadmill ? 'Treadmill says' : 'Distance'}
+      </T>
+      <T v="caption" tone="secondary" style={{ marginBottom: 10 }}>
+        {treadmill ? 'Enter the distance on the treadmill display to replace the estimate.' : 'Optional. Add how far you went to get pace and splits.'}
+      </T>
+      <View style={[f.inputWrap, { marginBottom: 12 }]}>
+        <TextInput
+          value={text}
+          onChangeText={setText}
+          keyboardType="decimal-pad"
+          placeholder={treadmill && session.distanceM > 0 ? metersToUnit(session.distanceM, unit).toFixed(2) : '3.10'}
+          placeholderTextColor={p.textMuted}
+          style={[f.input, { flex: 1 }]}
+          accessibilityLabel={`Distance in ${unit}`}
+          onSubmitEditing={save}
+        />
+        <T v="bodyMedium" tone="secondary">
+          {unit}
+        </T>
+        <Button label="Save" size="sm" kind={valid ? 'primary' : 'quiet'} onPress={save} />
+      </View>
     </View>
   );
 }

@@ -15,7 +15,8 @@ import { haptic } from '@/lib/haptics';
 import { createStyles, motion, type Palette, toneColor, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { T } from '@/ui/primitives';
-import { type Live, lap, pause, paceRangeFor, resume, setLocked, skipStep, useLive, useRun } from './engine';
+import { changeSpeed, type Live, lap, pause, paceRangeFor, resume, setLocked, skipStep, useLive, useRun } from './engine';
+import { formatSpeed, kphToUnit, nudgeKph, speedUnit } from './speed';
 import { type Arc, Ring } from './Ring';
 import { gaugeFor, hrRangeFor, repLabel, stepAmount, stepName, stepTargetText, stepTone } from './steps';
 
@@ -178,6 +179,83 @@ const TimerGauge = memo(function TimerGauge({ step }: { step: Step }) {
     </View>
   );
 });
+
+/** Treadmill: the belt speed you set, big, with the step's suggestion and the time left. */
+const TreadmillGauge = memo(function TreadmillGauge({ step }: { step: Step }) {
+  const p = usePalette();
+  const s = useStyles();
+  const size = useRingSize();
+  const unit = useUnits().distance;
+  const speed = useRun((r) => r.speedKph) ?? 0;
+  const target = useRun((r) => r.targetKph);
+  const incline = useRun((r) => r.inclinePct);
+  const progress = useLive((l) => (l.stepProgress === undefined ? undefined : Math.round(l.stepProgress * 200) / 200));
+  const offTarget = target !== undefined && kphToUnit(target, unit) !== kphToUnit(speed, unit);
+  return (
+    <View style={[s.gauge, { width: size, height: size * 0.94 }]}>
+      <Ring size={size} arcs={[{ from: 0, to: 1, color: p.ringTrack, width: 10 }]} progress={progress} progressColor={toneColor(p, stepTone(step))} markerColor={p.text} bg={p.bg} />
+      <View style={s.gaugeCenter} pointerEvents="none">
+        <T v="labelStrong" tone="secondary">
+          {incline ? `${stepName(step)}, incline ${incline}%` : stepName(step)}
+        </T>
+        <T v="title" num style={{ fontSize: size * 0.3, lineHeight: size * 0.32, letterSpacing: -size * 0.012 }}>
+          {kphToUnit(speed, unit).toFixed(1)}
+        </T>
+        <T v="label" tone="secondary">
+          {offTarget ? `${speedUnit(unit)}, suggested ${formatSpeed(target, unit)}` : speedUnit(unit)}
+        </T>
+      </View>
+    </View>
+  );
+});
+
+/** -0.5, -0.1, +0.1, +0.5 in the display unit; each press records a speed change. */
+function SpeedButtons({ light }: { light?: boolean }) {
+  const p = usePalette();
+  const s = useStyles();
+  const unit = useUnits().distance;
+  const press = (delta: number) => {
+    haptic.tick();
+    changeSpeed(nudgeKph(useRun.getState().speedKph ?? 0, delta, unit));
+  };
+  return (
+    <View style={s.speedRow}>
+      {[-0.5, -0.1, 0.1, 0.5].map((d) => (
+        <Pressable
+          key={d}
+          accessibilityRole="button"
+          accessibilityLabel={`${d > 0 ? 'Faster' : 'Slower'} by ${Math.abs(d)} ${speedUnit(unit)}`}
+          onPress={() => press(d)}
+          style={({ pressed }) => [s.speedBtn, light && { backgroundColor: 'rgba(255,255,255,0.7)' }, pressed && { opacity: 0.6 }]}
+        >
+          <T v="bodyStrong" num color={p.text}>
+            {`${d > 0 ? '+' : '-'}${Math.abs(d).toFixed(1)}`}
+          </T>
+        </Pressable>
+      ))}
+    </View>
+  );
+}
+
+/** Compact speed readout and buttons for the HR and sprint views on a treadmill. */
+function SpeedStrip({ light }: { light?: boolean }) {
+  const s = useStyles();
+  const unit = useUnits().distance;
+  const speed = useRun((r) => r.speedKph) ?? 0;
+  return (
+    <View style={{ gap: 8 }}>
+      <View style={s.speedStrip}>
+        <T v="caption" tone="secondary">
+          Belt speed
+        </T>
+        <T v="bodyStrong" num>
+          {formatSpeed(speed, unit)}
+        </T>
+      </View>
+      <SpeedButtons light={light} />
+    </View>
+  );
+}
 
 // ---------- pieces ----------
 
@@ -374,7 +452,11 @@ function GaugeView({ step, onEnd }: { step: Step; onEnd: () => void }) {
   const steps = useRun((r) => r.steps);
   const idx = useRun((r) => r.stepIdx);
   const outdoor = useRun((r) => r.mode === 'outdoor');
+  const onBelt = useRun((r) => r.mode === 'treadmill');
   const gauge = gaugeFor(step);
+  // On a treadmill, pace and timer steps show the belt speed instead.
+  const beltGauge = onBelt && gauge !== 'hr';
+  const moving = outdoor || onBelt;
   const sub = repLabel(steps, idx) ?? (steps.length > 1 ? `Step ${idx + 1} of ${steps.length}` : stepName(step));
 
   return (
@@ -382,11 +464,12 @@ function GaugeView({ step, onEnd }: { step: Step; onEnd: () => void }) {
       <TopBar title={name} sub={sub} />
       {steps.length > 1 && <WorkoutBar steps={steps} idx={idx} />}
       <Animated.View key={idx} entering={FadeIn.duration(motion.base)} style={{ alignItems: 'center' }}>
-        {gauge === 'hr' ? <HrGauge step={step} /> : gauge === 'pace' ? <PaceGauge step={step} /> : <TimerGauge step={step} />}
+        {beltGauge ? <TreadmillGauge step={step} /> : gauge === 'hr' ? <HrGauge step={step} /> : gauge === 'pace' ? <PaceGauge step={step} /> : <TimerGauge step={step} />}
       </Animated.View>
+      {onBelt && (beltGauge ? <SpeedButtons /> : <SpeedStrip />)}
       <PausedPill />
 
-      {gauge !== 'timer' && (
+      {(gauge !== 'timer' || onBelt) && (
         <View style={s.cards}>
           <View style={s.card}>
             <LiveText pick={(l) => leftInStep(l, unit)} />
@@ -395,9 +478,9 @@ function GaugeView({ step, onEnd }: { step: Step; onEnd: () => void }) {
             </T>
           </View>
           <View style={s.card}>
-            {outdoor ? <LiveText pick={(l) => paceText(l.stepDistanceM > 10 ? l.stepElapsedMs / l.stepDistanceM : undefined, unit)} /> : <LiveText pick={(l) => clock(l.stepElapsedMs)} />}
+            {moving ? <LiveText pick={(l) => paceText(l.stepDistanceM > 10 ? l.stepElapsedMs / l.stepDistanceM : undefined, unit)} /> : <LiveText pick={(l) => clock(l.stepElapsedMs)} />}
             <T v="caption" tone="secondary">
-              {outdoor ? `Step pace /${unit}` : 'In step'}
+              {moving ? `Step pace /${unit}` : 'In step'}
             </T>
           </View>
         </View>
@@ -410,7 +493,7 @@ function GaugeView({ step, onEnd }: { step: Step; onEnd: () => void }) {
             Elapsed
           </T>
         </View>
-        {outdoor && (
+        {moving && (
           <View style={{ flex: 1 }}>
             <LiveText v="statSm" pick={(l) => formatDistance(l.distanceM, unit, 2)} />
             <T v="caption" tone="secondary">
@@ -446,6 +529,7 @@ function SprintView({ step, onEnd }: { step: Step; onEnd: () => void }) {
   const name = useRun((r) => r.name);
   const steps = useRun((r) => r.steps);
   const idx = useRun((r) => r.stepIdx);
+  const onBelt = useRun((r) => r.mode === 'treadmill');
   const { width } = useWindowDimensions();
   const sprintIdx = steps.map((st, i) => [st, i] as const).filter(([st]) => st.activity === step.activity && stepName(st) === stepName(step));
   const at = sprintIdx.findIndex(([, i]) => i === idx);
@@ -475,6 +559,7 @@ function SprintView({ step, onEnd }: { step: Step; onEnd: () => void }) {
       </View>
       <PausedPill />
       <View style={{ marginTop: 'auto', gap: 14 }}>
+        {onBelt && <SpeedStrip light />}
         <NextCard step={steps[idx + 1]} unit={unit} tint="rgba(255,255,255,0.7)" />
         <Controls step={step} onEnd={onEnd} light />
       </View>
@@ -501,6 +586,9 @@ const useStyles = createStyles((p) => ({
   primaryCtrl: { width: 80, height: 80, borderRadius: 40, backgroundColor: p.primary, alignItems: 'center', justifyContent: 'center' },
   pausedPill: { alignSelf: 'center', paddingHorizontal: 12, paddingVertical: 4, borderRadius: 999, backgroundColor: p.inset },
   reps: { flexDirection: 'row', gap: 6, width: 220, marginTop: 20 },
+  speedRow: { flexDirection: 'row', gap: 8 },
+  speedBtn: { flex: 1, height: 52, borderRadius: 14, backgroundColor: p.surface, alignItems: 'center', justifyContent: 'center' },
+  speedStrip: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingHorizontal: 4 },
   rep: { flex: 1, height: 8, borderRadius: 4 },
   lockLayer: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, justifyContent: 'flex-end', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.04)' },
   unlock: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 20, height: 48, borderRadius: 24, backgroundColor: p.primary },

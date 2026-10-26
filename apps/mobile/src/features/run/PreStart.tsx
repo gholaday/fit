@@ -8,16 +8,17 @@ import { Pressable, ScrollView, Switch, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { useHrProfile, useSettings, useUnits } from '@/data/store';
+import { actions, useHrProfile, useSettings, useUnits } from '@/data/store';
 import { useHrLive } from '@/features/hr/live';
 import { useSensor } from '@/features/hr/sensor';
 import { haptic } from '@/lib/haptics';
 import { createStyles, motion, toneColor, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
-import { Button, IconButton, Segmented, StructureBar, T } from '@/ui/primitives';
+import { Button, IconButton, Segmented, Stepper, StructureBar, T } from '@/ui/primitives';
 import { cancelCountdown, paceRangeFor, setMode, setVoice, startCountdown, useLive, useRun } from './engine';
 import { accessComplete, type RecordingAccess, readAccess } from './permissions';
 import { RunPermissions } from './RunPermissions';
+import { formatSpeed, nudgeKph } from './speed';
 import { stepAmount, stepName, stepTargetText, stepTone } from './steps';
 
 /** Start is enabled once a fix is this accurate (spec §5 GPS warmup). */
@@ -78,6 +79,27 @@ function GpsRow() {
       <T v="label" color={color}>
         {sig.text}
       </T>
+    </View>
+  );
+}
+
+/** Treadmill: the remembered easy speed that steps without a pace target start at. */
+function EasySpeedRow() {
+  const s = useStyles();
+  const unit = useUnits().distance;
+  const prefs = useSettings().treadmill;
+  const change = (delta: number) => {
+    haptic.tick();
+    actions.updateSettings({ treadmill: { ...prefs, easyKph: nudgeKph(prefs.easyKph, delta, unit) } });
+    // Re-suggest the first step's speed from the new easy speed.
+    void setMode('treadmill');
+  };
+  return (
+    <View style={s.setting}>
+      <T v="bodyMedium" style={{ flex: 1 }}>
+        Easy speed
+      </T>
+      <Stepper value={formatSpeed(prefs.easyKph, unit)} width={96} minusLabel="Slower easy speed" plusLabel="Faster easy speed" onMinus={() => change(-0.1)} onPlus={() => change(0.1)} />
     </View>
   );
 }
@@ -179,7 +201,8 @@ export function PreStart({ onClose }: { onClose: () => void }) {
 
         <View style={s.card}>
           {mode === 'outdoor' && <GpsRow />}
-          <View style={[s.setting, mode === 'outdoor' && s.dividerTop]}>
+          {mode === 'treadmill' && <EasySpeedRow />}
+          <View style={[s.setting, mode !== 'timer' && s.dividerTop]}>
             {voice ? <Icons.volume size={20} color={p.text} /> : <Icons.volumeOff size={20} color={p.textTertiary} />}
             <T v="bodyMedium" style={{ flex: 1 }}>
               Voice cues
@@ -197,7 +220,7 @@ export function PreStart({ onClose }: { onClose: () => void }) {
         </View>
         {mode !== 'outdoor' && (
           <T v="caption" tone="tertiary">
-            {mode === 'timer' ? 'Timer mode records time only, with no GPS or map.' : 'Treadmill runs record time only for now. Distance and pace come in a later update.'}
+            {mode === 'timer' ? 'Timer mode records time only, with no GPS or map. You can add the distance at the end.' : 'Set the belt to the speed shown, and tap the speed buttons whenever you change it. Distance comes from your speed and time.'}
           </T>
         )}
         {mode === 'outdoor' && access && access.location === 'granted' && !accessComplete(access) && (
