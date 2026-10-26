@@ -20,3 +20,6 @@ apps/api/.vercel/
 
 # scratch smoke scripts
 *.tmp.ts
+
+# personal testing feedback, cleaned up as fixes land
+docs/FEEDBACK.md
