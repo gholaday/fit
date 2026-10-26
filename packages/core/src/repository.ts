@@ -472,6 +472,8 @@ export interface FitRepository {
   /** Upserts seed exercises (keeps hidden flags and custom rows) and starter routines in one transaction. */
   seedCatalog(catalog: Catalog): void;
   exercises(filter?: ExerciseFilter): ExerciseSummary[];
+  /** Visible exercises and how many of them are yours, without loading the rows. */
+  exerciseCounts(): { total: number; custom: number };
   exercise(id: string): (Exercise & { custom: boolean; hidden: boolean; note?: string }) | undefined;
   addCustomExercise(input: CustomExerciseInput): ExerciseSummary;
   setExerciseHidden(id: string, hidden: boolean): void;

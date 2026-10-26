@@ -30,10 +30,7 @@ export function LibraryScreen() {
 
   // The store's version changes on every reload (after seeding or edits), so counts follow.
   const version = useDataVersion();
-  const counts = useMemo(() => {
-    const all = repo.exercises({});
-    return { total: all.length, custom: all.filter((e) => e.custom).length };
-  }, [version]);
+  const counts = useMemo(() => repo.exerciseCounts(), [version]);
   const matches = useMemo<ExerciseSummary[]>(() => (q ? repo.exercises({ query: q }).slice(0, 30) : []), [q, version]);
 
   const lower = q.toLowerCase();

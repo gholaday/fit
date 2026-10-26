@@ -1231,6 +1231,15 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       return db.select().from(t.exercises).where(and(...conds)).orderBy(asc(t.exercises.name)).all().map(toSummary);
     },
 
+    exerciseCounts() {
+      const row = db
+        .select({ total: sql<number>`count(*)`, custom: sql<number>`coalesce(sum(${t.exercises.origin} = 'custom'), 0)` })
+        .from(t.exercises)
+        .where(and(notDeleted(t.exercises), eq(t.exercises.hidden, false)))
+        .get();
+      return { total: row?.total ?? 0, custom: row?.custom ?? 0 };
+    },
+
     exercise(id) {
       const row = db.select().from(t.exercises).where(and(eq(t.exercises.id, id), notDeleted(t.exercises))).get();
       return row ? toExercise(row) : undefined;
