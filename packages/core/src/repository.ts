@@ -4,6 +4,7 @@ import type { HrProfileInput, HrZoneBand } from './hr';
 import type { ExternalActivity, PlanMatch } from './external';
 import type { CuePrefs } from './session/cues';
 import type { HrSample } from './session/heart';
+import type { TreadmillPrefs } from './session/treadmill';
 import type { TrackPoint } from './session/geo';
 import type { PlayerState, StepLogEntry } from './session/player';
 import type { StepResult } from './session/track';
@@ -186,6 +187,8 @@ export interface Settings {
   /** Remembered BLE heart-rate sensor, reconnected at session start (spec §7). */
   hrSensor?: { id: string; name: string };
   healthConnect: HealthConnectPrefs;
+  /** Remembered treadmill speeds (spec §5 Treadmill, "remember last"). */
+  treadmill: TreadmillPrefs;
 }
 
 /** Spec §11 Settings. */
@@ -394,6 +397,17 @@ export interface FitRepository {
   session(id: string): SessionDetail | undefined;
   recentSessions(limit: number): SessionListItem[];
   updateSessionNotes(id: string, patch: { rpe?: number; notes?: string }): void;
+  /**
+   * "Treadmill says X km" or Timer's manual distance: sets the total and rescales every
+   * step's distance (rescaleLog) and the average pace.
+   */
+  correctDistance(id: string, totalM: number): void;
+  /** Rename, e.g. to the autoTitle() for free runs. */
+  renameSession(id: string, name: string): void;
+
+  /** Route for a watch-only run from a GPX file (parseGpx); replaces any earlier one. */
+  attachExternalRoute(externalId: string, points: readonly TrackPoint[]): void;
+  externalRoute(externalId: string): TrackPoint[];
 
   // Exercise catalog (M1.5). Seed after first paint, only when CATALOG_VERSION differs.
   catalogVersion(): string | undefined;

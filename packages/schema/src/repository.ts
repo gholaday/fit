@@ -62,9 +62,11 @@ import {
   findMergeTarget,
   GARMIN_CONNECT_PACKAGE,
   hrGaps,
+  DEFAULT_TREADMILL,
   localIsoDate,
   matchPlanItem,
   mergeHr,
+  rescaleLog,
   routineSeconds,
   stepResults,
   volumeKg,
@@ -92,6 +94,7 @@ const DEFAULT_SETTINGS: Settings = {
   autoPauseOnWalks: true,
   postRunStretch: true,
   healthConnect: { importWorkouts: true, addHr: true, writeSessions: false, allSources: false, autoMatch: false },
+  treadmill: DEFAULT_TREADMILL,
 };
 
 const ACTIVITY_TITLES: Record<ExternalActivity, string> = {
@@ -134,7 +137,7 @@ const toHrSample = (r: typeof t.hrSamples.$inferSelect): HrSample => ({ tOffsetM
 /** Rows per seed insert; 50 rows of ~24 columns stays far under SQLite's variable limit. */
 const SEED_BATCH = 50;
 
-/** Health Connect HR rows per insert (4 columns each). */
+/** HR and route rows per insert (at most 8 columns each). */
 const HR_BATCH = 200;
 
 /** M0 rows stored names only. seedCatalog upgrades them in place, keeping their ids. */
@@ -933,6 +936,63 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       if (patch.rpe !== undefined) set.rpe = patch.rpe;
       if (patch.notes !== undefined) set.notes = patch.notes;
       db.update(t.sessions).set(set).where(eq(t.sessions.id, id)).run();
+    },
+
+    correctDistance(id, totalM) {
+      const row = db.select().from(t.sessions).where(eq(t.sessions.id, id)).get();
+      if (!row) throw new Error(`Unknown session ${id}`);
+      const player = JSON.parse(row.playerJson) as PlayerState;
+      const log = rescaleLog(player.log, totalM);
+      const steps = db.select().from(t.sessionSteps).where(eq(t.sessionSteps.sessionId, id)).all();
+      db.transaction((tx) => {
+        tx.update(t.sessions)
+          .set({
+            distanceM: totalM,
+            avgPaceSPerKm: totalM >= 50 ? row.elapsedMs / 1000 / (totalM / 1000) : null,
+            playerJson: JSON.stringify({ ...player, log }),
+            ...stamp(),
+          })
+          .where(eq(t.sessions.id, id))
+          .run();
+        for (const s of steps) {
+          const e = log.find((l) => l.idx === s.idx && l.startOffsetMs === s.startedAtOffsetMs);
+          if (!e) continue;
+          const distanceM = e.endDistanceM - e.startDistanceM;
+          tx.update(t.sessionSteps)
+            .set({ distanceM, avgPaceSPerKm: distanceM >= 10 ? s.activeMs / 1000 / (distanceM / 1000) : null, ...stamp() })
+            .where(eq(t.sessionSteps.id, s.id))
+            .run();
+        }
+      });
+    },
+
+    renameSession(id, name) {
+      db.update(t.sessions)
+        .set({ name, ...stamp() })
+        .where(eq(t.sessions.id, id))
+        .run();
+    },
+
+    attachExternalRoute(externalId, points) {
+      db.transaction((tx) => {
+        tx.delete(t.trackPoints).where(eq(t.trackPoints.sessionId, externalId)).run();
+        for (let i = 0; i < points.length; i += HR_BATCH) {
+          tx.insert(t.trackPoints)
+            .values(
+              points.slice(i, i + HR_BATCH).map((p) => ({ sessionId: externalId, tOffsetMs: p.tOffsetMs, lat: p.lat, lng: p.lng, alt: p.alt ?? null, accuracy: p.accuracy, speed: p.speed ?? null, source: 'file' as const })),
+            )
+            .onConflictDoNothing()
+            .run();
+        }
+        tx.update(t.externalSessions)
+          .set({ hasRoute: points.length > 0, ...stamp() })
+          .where(eq(t.externalSessions.id, externalId))
+          .run();
+      });
+    },
+
+    externalRoute(externalId) {
+      return db.select().from(t.trackPoints).where(eq(t.trackPoints.sessionId, externalId)).orderBy(asc(t.trackPoints.tOffsetMs)).all().map(toTrackPoint);
     },
 
     catalogVersion() {
