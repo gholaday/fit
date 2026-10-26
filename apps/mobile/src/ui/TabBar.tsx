@@ -3,6 +3,7 @@ import { Pressable, View } from 'react-native';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from './icons';
 import { T } from './primitives';
+import { haptic } from '@/lib/haptics';
 
 const ICONS = {
   index: Icons.sun,
@@ -28,7 +29,10 @@ export function TabBar({ state, descriptors, navigateToTab, insets }: BottomTabB
             accessibilityRole="tab"
             accessibilityState={{ selected: on }}
             accessibilityLabel={title}
-            onPress={() => navigateToTab(route.key)}
+            onPress={() => {
+              if (!on) haptic.tick();
+              navigateToTab(route.key);
+            }}
             style={s.item}
           >
             <Icon size={22} color={color} />

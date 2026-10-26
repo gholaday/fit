@@ -1,5 +1,4 @@
 import { type AgendaItem, type IsoDate, type SkipReason, addDays, dateRange, formatMinutes, metersToUnit, startOfWeek, unitToMeters, weekdayOf } from '@fit/core';
-import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { create } from 'zustand';
@@ -13,6 +12,7 @@ import { type as typeRamp } from '@/theme/type';
 import { Button, Chip, Group, LaneTile, Row, Stepper, T } from '@/ui/primitives';
 import { Sheet } from '@/ui/Sheet';
 import { dayName, isPast, plannedLine } from './meta';
+import { haptic } from '@/lib/haptics';
 
 export type ItemSheetMode = 'actions' | 'details' | 'skip' | 'move';
 
@@ -28,7 +28,7 @@ function close(): void {
 
 /** Done with one tap, with haptic and Undo. */
 export function markDoneNow(item: AgendaItem): void {
-  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+  haptic.commit();
   actions.markDone(item.key);
   showSnack({ message: `${item.title} done`, actionLabel: 'Undo', onAction: () => actions.reopen(item.key) });
 }
@@ -36,7 +36,8 @@ export function markDoneNow(item: AgendaItem): void {
 export function ItemSheetHost() {
   const { key, mode } = useItemSheet();
   const item = useFit((s) => (key ? s.items[key] : undefined));
-  if (!key || !item) return null;
+  // Always rendered so the sheet can slide out after `key` clears.
+  if (!key || !item) return <Sheet visible={false} onClose={close} />;
   const header = (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
       <LaneTile lane={item.lane} size={40} />
@@ -132,6 +133,7 @@ function Skip({ item }: { item: AgendaItem }) {
         label="Skip"
         onPress={() => {
           close();
+          haptic.commit();
           actions.skip(item.key, reason);
           showSnack({ message: `${item.title} skipped`, actionLabel: 'Undo', onAction: () => actions.reopen(item.key) });
         }}
@@ -157,7 +159,7 @@ function Details({ item }: { item: AgendaItem }) {
       note: note.trim() || undefined,
     };
     close();
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.commit();
     const wasDone = item.status === 'done';
     actions.markDone(item.key, details);
     showSnack({ message: wasDone ? 'Details saved' : `${item.title} done`, actionLabel: wasDone ? undefined : 'Undo', onAction: wasDone ? undefined : () => actions.reopen(item.key) });
@@ -185,7 +187,10 @@ function Details({ item }: { item: AgendaItem }) {
                 accessibilityRole="button"
                 accessibilityLabel={`RPE ${n}`}
                 accessibilityState={{ selected: rpe === n }}
-                onPress={() => setRpe(rpe === n ? undefined : n)}
+                onPress={() => {
+                  haptic.tick();
+                  setRpe(rpe === n ? undefined : n);
+                }}
                 style={[s.rpe, rpe === n && { backgroundColor: p.primary }]}
               >
                 <T v="labelStrong" num color={rpe === n ? p.onPrimary : p.textBody}>
@@ -229,7 +234,17 @@ function MovePicker({ item }: { item: AgendaItem }) {
             {w.label}
           </T>
           {w.days.map((d) => (
-            <DayOption key={d} date={d} item={item} today={today} selected={selected === d} onPress={() => setSelected(d)} />
+            <DayOption
+              key={d}
+              date={d}
+              item={item}
+              today={today}
+              selected={selected === d}
+              onPress={() => {
+                haptic.tick();
+                setSelected(d);
+              }}
+            />
           ))}
         </View>
       ))}

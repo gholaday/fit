@@ -1,5 +1,4 @@
 import { type IsoDate, type QuickLogType, addDays, diffDays, formatMinutes, unitToMeters } from '@fit/core';
-import * as Haptics from 'expo-haptics';
 import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { actions, showSnack, useToday, useUnits } from '@/data/store';
@@ -9,6 +8,7 @@ import { usePalette } from '@/theme';
 import { Button, Group, IconButton, Row, Stepper, T } from '@/ui/primitives';
 import { Icons, QUICK_LOG_ICON } from '@/ui/icons';
 import { Sheet } from '@/ui/Sheet';
+import { haptic } from '@/lib/haptics';
 
 const TYPES: readonly { value: QuickLogType; label: string }[] = [
   { value: 'walk', label: 'Walk' },
@@ -52,6 +52,7 @@ function Form({ onClose }: { onClose: () => void }) {
   const [note, setNote] = useState('');
 
   const pick = (t: QuickLogType) => {
+    haptic.tick();
     setKind(t);
     if (!touchedMinutes) setMinutes(DEFAULT_MINUTES[t]);
   };
@@ -69,7 +70,7 @@ function Form({ onClose }: { onClose: () => void }) {
       distanceM: distance.trim() !== '' && Number.isFinite(d) && d > 0 ? unitToMeters(d, units.distance) : undefined,
       note: note.trim() || undefined,
     });
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    haptic.commit();
     onClose();
     showSnack({ message: `${label} saved, ${formatMinutes(minutes * 60)}` });
   };
@@ -101,13 +102,19 @@ function Form({ onClose }: { onClose: () => void }) {
       <Group style={{ borderWidth: 1, borderColor: p.outline }}>
         <Row label="Date">
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-            <IconButton label="Day before" bg="none" onPress={() => setDate(addDays(date, -1))}>
+            <IconButton label="Day before" bg="none" onPress={() => {
+                haptic.tick();
+                setDate(addDays(date, -1));
+              }}>
               <Icons.chevronLeft size={18} color={p.text} />
             </IconButton>
             <T v="bodyStrong" num>
               {dateLabel(date, today)}
             </T>
-            <IconButton label="Day after" bg="none" disabled={date >= today} style={{ opacity: date >= today ? 0.3 : 1 }} onPress={() => setDate(addDays(date, 1))}>
+            <IconButton label="Day after" bg="none" disabled={date >= today} style={{ opacity: date >= today ? 0.3 : 1 }} onPress={() => {
+                haptic.tick();
+                setDate(addDays(date, 1));
+              }}>
               <Icons.chevronRight size={18} color={p.text} />
             </IconButton>
           </View>

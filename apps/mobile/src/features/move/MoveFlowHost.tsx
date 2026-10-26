@@ -15,7 +15,7 @@ export function MoveFlowHost() {
   const item = useFit((s) => (pending ? s.items[pending.key] : undefined));
   const today = useFit((s) => s.today);
   const p = usePalette();
-  if (!pending || !item) return null;
+  if (!pending || !item) return <Sheet visible={false} onClose={cancelMove} />;
   const day = dayName(pending.toDate, today);
   const occupant = pending.evaluation.occupants[0];
 

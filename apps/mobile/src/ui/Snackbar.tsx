@@ -5,6 +5,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dismissSnack, useSnack } from '@/data/store';
 import { createStyles, motion, usePalette } from '@/theme';
 import { T } from './primitives';
+import { haptic } from '@/lib/haptics';
 
 const TAB_BAR = 64;
 
@@ -41,6 +42,7 @@ export function Snackbar() {
               hitSlop={10}
               onPress={() => {
                 dismissSnack(snack.id);
+                haptic.commit();
                 snack.onAction?.();
               }}
             >
@@ -61,6 +63,7 @@ export function Snackbar() {
                 hitSlop={10}
                 onPress={() => {
                   dismissSnack(snack.id);
+                  haptic.commit();
                   snack.onNoteAction?.();
                 }}
               >

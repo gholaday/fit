@@ -9,7 +9,7 @@ export default function TabsLayout() {
   const onboarded = useSettings().onboarded;
   if (!onboarded) return <Redirect href="/setup" />;
   return (
-    <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false, lazy: true, sceneStyle: { backgroundColor: p.bg } }}>
+    <Tabs tabBar={(props) => <TabBar {...props} />} screenOptions={{ headerShown: false, lazy: true, animation: 'shift', sceneStyle: { backgroundColor: p.bg } }}>
       <Tabs.Screen name="index" options={{ title: 'Today' }} />
       <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
       <Tabs.Screen name="library" options={{ title: 'Library' }} />

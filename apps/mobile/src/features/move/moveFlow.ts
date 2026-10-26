@@ -9,6 +9,7 @@ import { create } from 'zustand';
 import { actions, getItems, showSnack, useFit } from '@/data/store';
 import { dayName } from '@/features/items/meta';
 import { weekdayLong } from '@/lib/format';
+import { haptic } from '@/lib/haptics';
 
 export type MoveStep = 'occupied' | 'scope';
 
@@ -64,6 +65,7 @@ export function swapWithOccupant(): void {
   const other = p.evaluation.occupants[0];
   if (!item || !other) return;
   actions.swap(item.key, other.key);
+  haptic.commit();
   feedback(`Swapped ${item.title} and ${other.title}`, () => actions.swap(item.key, other.key), item, p.evaluation.swapWarnings.length > 0, p.evaluation);
 }
 
@@ -82,11 +84,13 @@ function commitMove(item: AgendaItem, toDate: IsoDate, scope: MoveScope, evaluat
     const scheduleId = item.source.scheduleId;
     const oldWeekday: Weekday = weekdayOf(item.originalDate);
     actions.move(item.key, toDate, 'schedule');
+    haptic.commit();
     const undo = () => actions.updateScheduleEntry(scheduleId, { weekday: oldWeekday });
     showSnack({ message: `${item.title} moved to ${weekdayLong(weekdayOf(toDate))}s`, actionLabel: 'Undo', onAction: undo });
     return;
   }
   actions.move(item.key, toDate, 'once');
+  haptic.commit();
   const undo = () => actions.move(item.key, fromDate, 'once');
   feedback(`Moved ${item.title} to ${dayName(toDate, today)}`, undo, item, evaluation.warnings.length > 0, evaluation);
 }
@@ -96,6 +100,7 @@ function feedback(message: string, undo: () => void, item: AgendaItem, warn: boo
     showSnack({ message, actionLabel: 'Undo', onAction: undo });
     return;
   }
+  haptic.warn();
   const s = useFit.getState();
   const suggestion = evaluation.suggestion;
   const other = suggestion ? s.items[suggestion.withKey] : undefined;

@@ -4,6 +4,7 @@ import { Pressable, type PressableProps, type StyleProp, Text, type TextProps, t
 import { createStyles, laneColor, toneColor, usePalette } from '@/theme';
 import { type } from '@/theme/type';
 import { LANE_ICON } from './icons';
+import { haptic } from '@/lib/haptics';
 
 type Variant = keyof typeof type;
 type Tone = 'text' | 'body' | 'secondary' | 'tertiary' | 'muted' | 'onPrimary';
@@ -134,7 +135,10 @@ export function Segmented<V extends string>({ options, value, onChange, look = '
             accessibilityRole="tab"
             accessibilityState={{ selected: on, disabled: o.disabled }}
             disabled={o.disabled}
-            onPress={() => onChange(o.value)}
+            onPress={() => {
+              if (!on) haptic.tick();
+              onChange(o.value);
+            }}
             style={{ flex: 1, height: 36, borderRadius: 9, backgroundColor: on ? active : 'transparent', alignItems: 'center', justifyContent: 'center', opacity: o.disabled ? 0.4 : 1 }}
           >
             <T v={on ? 'labelStrong' : 'label'} tone={on ? 'text' : 'secondary'}>
@@ -191,7 +195,10 @@ function StepButton({ label, glyph, onPress }: { label: string; glyph: string; o
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      onPress={onPress}
+      onPress={() => {
+        haptic.tick();
+        onPress();
+      }}
       hitSlop={5}
       style={({ pressed }) => ({ width: 34, height: 34, borderRadius: 10, backgroundColor: p.inset, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
     >
@@ -210,7 +217,10 @@ export function Chip({ label, on, onPress, disabled }: { label: string; on: bool
       accessibilityRole="button"
       accessibilityState={{ selected: on, disabled }}
       disabled={disabled}
-      onPress={onPress}
+      onPress={() => {
+        haptic.tick();
+        onPress();
+      }}
       style={({ pressed }) => ({ minHeight: 36, paddingHorizontal: 14, borderRadius: 18, justifyContent: 'center', backgroundColor: on ? p.primary : p.inset, opacity: disabled ? 0.4 : pressed ? 0.7 : 1 })}
     >
       <T v="label" color={on ? p.onPrimary : p.textBody}>
