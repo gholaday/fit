@@ -63,6 +63,8 @@ export interface AgendaItem {
   sessionId?: string;
   /** Watch workout attached from Health Connect (also Done + data). */
   externalSessionId?: string;
+  /** The plan dropped it after it was missed (adaptPlan); status is 'skipped'. */
+  missed?: boolean;
 }
 
 /** Completion level (spec §3), derived from status + what is attached. */

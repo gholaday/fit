@@ -166,7 +166,7 @@ function toPlanEvent(r: typeof t.planEvents.$inferSelect): PlanEvent {
 const SEED_BATCH = 50;
 
 /** Settings rows the repository keeps for itself; settings() leaves them out. */
-const INTERNAL_SETTING_KEYS = new Set(['catalogVersion', 'paceBumpDismissedAt', 'planAdaptedOn']);
+const INTERNAL_SETTING_KEYS = new Set(['catalogVersion', 'paceBumpDismissedAt', 'planAdaptedOn', 'dismissedTrials']);
 
 /** HR and route rows per insert (at most 8 columns each). */
 const HR_BATCH = 200;
@@ -421,6 +421,19 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
           : { kind: 'distance', plannedM: Math.round(planned), doneM: Math.round(done) },
       inputs,
     };
+  }
+
+  function internalSetting<T>(key: string): T | undefined {
+    const row = db.select().from(t.settings).where(and(eq(t.settings.key, key), notDeleted(t.settings))).get();
+    return row ? (JSON.parse(row.valueJson) as T) : undefined;
+  }
+
+  function setInternalSetting(key: string, value: unknown) {
+    const valueJson = JSON.stringify(value);
+    db.insert(t.settings)
+      .values({ key, valueJson, ...stamp() })
+      .onConflictDoUpdate({ target: t.settings.key, set: { valueJson, deletedAt: null, ...stamp() } })
+      .run();
   }
 
   function abandonActive() {
@@ -1015,8 +1028,13 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     },
 
     sessionTrial(sessionId) {
+      if (internalSetting<string[]>('dismissedTrials')?.includes(sessionId)) return undefined;
       const s = repo.session(sessionId);
       return s?.endedAt ? trialResult(s.steps) : undefined;
+    },
+
+    dismissTrial(sessionId) {
+      setInternalSetting('dismissedTrials', [...(internalSetting<string[]>('dismissedTrials') ?? []), sessionId].slice(-50));
     },
 
     paceBump() {

@@ -187,6 +187,7 @@ export function buildAgenda(input: AgendaInput): AgendaItem[] {
     if (pw.skipReason) item.skipReason = pw.skipReason;
     if (pw.sessionId) item.sessionId = pw.sessionId;
     if (pw.externalSessionId) item.externalSessionId = pw.externalSessionId;
+    if (pw.status === 'missed') item.missed = true;
     items.push(item);
   }
 

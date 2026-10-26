@@ -481,6 +481,8 @@ export interface FitRepository {
   setPaceProfile(input: PaceProfileInput): PaceProfile;
   /** Trial result of a saved session (trialResult over its steps), for "Update your paces?". */
   sessionTrial(sessionId: string): TrialResult | undefined;
+  /** "Keep current" on the trial card: that session stops offering its trial. */
+  dismissTrial(sessionId: string): void;
   /** +1 VDOT prompt from sessions since the current profile and the last dismissal. */
   paceBump(): { from: number; to: number } | undefined;
   dismissPaceBump(): void;
