@@ -950,11 +950,22 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       const activeS = finish.elapsedMs / 1000;
       const avgPace = finish.distanceM >= 50 ? activeS / (finish.distanceM / 1000) : null;
       const endedAt = Date.parse(finish.endedAt);
+      // A live trace with no gaps never needs Health Connect HR, so sessionsNeedingHr can skip
+      // it by its column instead of re-reading every sample on each sync.
+      const live = db
+        .select({ tOffsetMs: t.hrSamples.tOffsetMs, bpm: t.hrSamples.bpm })
+        .from(t.hrSamples)
+        .where(and(eq(t.hrSamples.sessionId, id), eq(t.hrSamples.source, 'ble')))
+        .orderBy(asc(t.hrSamples.tOffsetMs))
+        .all()
+        .map((h) => ({ ...h, source: 'ble' as const }));
+      const liveComplete = live.length > 0 && hrGaps(live, endedAt - row.startedAt).length === 0;
       db.transaction((tx) => {
         tx.update(t.sessions)
           .set({
             status: 'saved',
             endedAt,
+            ...(liveComplete ? { hrFilledAt: -1 } : {}),
             elapsedMs: finish.elapsedMs,
             pausedMs: finish.pausedMs,
             distanceM: finish.distanceM,
@@ -1508,21 +1519,37 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     sessionsNeedingHr(since) {
       if (!repo.settings().healthConnect.addHr) return [];
       const rows = db
-        .select()
+        .select({ id: t.sessions.id, startedAt: t.sessions.startedAt, endedAt: t.sessions.endedAt })
         .from(t.sessions)
         .where(and(eq(t.sessions.status, 'saved'), notDeleted(t.sessions), isNull(t.sessions.hrFilledAt), gte(t.sessions.startedAt, Date.parse(since))))
         .all();
+      const ended = rows.filter((r): r is typeof r & { endedAt: number } => r.endedAt !== null);
+      if (ended.length === 0) return [];
+      // One query for every candidate's live trace, not one per session.
+      const live = new Map<string, HrSample[]>();
+      const samples = db
+        .select({ sessionId: t.hrSamples.sessionId, tOffsetMs: t.hrSamples.tOffsetMs, bpm: t.hrSamples.bpm })
+        .from(t.hrSamples)
+        .where(
+          and(
+            inArray(
+              t.hrSamples.sessionId,
+              ended.map((r) => r.id),
+            ),
+            eq(t.hrSamples.source, 'ble'),
+          ),
+        )
+        .orderBy(asc(t.hrSamples.sessionId), asc(t.hrSamples.tOffsetMs))
+        .all();
+      for (const s of samples) {
+        let list = live.get(s.sessionId);
+        if (!list) live.set(s.sessionId, (list = []));
+        list.push({ tOffsetMs: s.tOffsetMs, bpm: s.bpm, source: 'ble' });
+      }
       const out: HrWindow[] = [];
-      for (const r of rows) {
-        if (r.endedAt === null) continue;
-        const live = db
-          .select()
-          .from(t.hrSamples)
-          .where(and(eq(t.hrSamples.sessionId, r.id), eq(t.hrSamples.source, 'ble')))
-          .orderBy(asc(t.hrSamples.tOffsetMs))
-          .all()
-          .map(toHrSample);
-        if (live.length > 0 && hrGaps(live, r.endedAt - r.startedAt).length === 0) continue;
+      for (const r of ended) {
+        const trace = live.get(r.id);
+        if (trace && hrGaps(trace, r.endedAt - r.startedAt).length === 0) continue;
         out.push({ sessionId: r.id, startedAt: new Date(r.startedAt).toISOString(), endedAt: new Date(r.endedAt).toISOString() });
       }
       return out;
