@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quick log</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#141518}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; background: #F7F7F8; color: #141518; font-family: 'Inter', system-ui, sans-serif; overflow: hidden">
+  <div aria-hidden="true" style="padding: 52px 20px 0; display: flex; flex-direction: column; gap: 12px">
+    <div style="font-size: 28px; font-weight: 700">Today</div>
+    <div style="height: 128px; border-radius: 20px; background: #FFFFFF"></div>
+    <div style="height: 60px; border-radius: 14px; background: #FFFFFF"></div>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(20,21,24,0.32)"></div>
+
+  <div role="dialog" aria-label="Quick log" style="position: absolute; left: 0; right: 0; bottom: 0; background: #FFFFFF; border-radius: 24px 24px 0 0; padding: 10px 20px 30px; display: flex; flex-direction: column; gap: 18px">
+    <div style="width: 36px; height: 4px; border-radius: 2px; background: #DCDCE0; align-self: center"></div>
+    <div style="display: flex; justify-content: space-between; align-items: center">
+      <h2 style="margin: 0; font-size: 20px; font-weight: 700">Quick log</h2>
+      <button aria-label="Close" style="width: 36px; height: 36px; border-radius: 18px; border: none; background: #F2F2F4; color: #141518; display: flex; align-items: center; justify-content: center">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6l-12 12"></path> <path d="M6 6l12 12"></path></svg>
+      </button>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px">
+      <sc-for list="{{types}}" as="t" hint-placeholder-count="8">
+        <button style="height: 68px; border-radius: 14px; border: none; background: {{t.bg}}; color: {{t.fg}}; font: 500 12px 'Inter', sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; box-shadow: {{t.ring}}">
+          <sc-if value="{{t.walk}}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path> <path d="M7 21l3 -4"></path> <path d="M16 21l-2 -4l-3 -3l1 -6"></path> <path d="M6 12l2 -3l4 -1l3 3l3 1"></path></svg></sc-if>
+          <sc-if value="{{t.hike}}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18l-6.921 -14.612a2.3 2.3 0 0 0 -4.158 0l-6.921 14.612"></path> <path d="M7.5 11l2 2.5l2.5 -2.5l2 3l2.5 -2"></path></svg></sc-if>
+          <sc-if value="{{t.bike}}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 18a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"></path> <path d="M16 18a3 3 0 1 0 6 0a3 3 0 0 0 -6 0"></path> <path d="M12 19v-4l-3 -3l5 -4l2 3h3"></path> <path d="M13.007 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path></svg></sc-if>
+          <sc-if value="{{t.swim}}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 9a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path> <path d="M6 11l4 -2l3.5 3l-1.5 2"></path> <path d="M3 16.75a2.4 2.4 0 0 0 1 .25a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 2 -1a2.4 2.4 0 0 1 2 -1a2.4 2.4 0 0 1 2 1a2.4 2.4 0 0 0 2 1a2.4 2.4 0 0 0 1 -.25"></path></svg></sc-if>
+          <sc-if value="{{t.run}}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.007 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path> <path d="M4 17l5 1l.75 -1.5"></path> <path d="M15 21v-4l-4 -3l1 -6"></path> <path d="M7 12v-3l5 -1l3 3l3 1"></path></svg></sc-if>
+          <sc-if value="{{t.lift}}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h1"></path> <path d="M6 8h-2a1 1 0 0 0 -1 1v6a1 1 0 0 0 1 1h2"></path> <path d="M6 7v10a1 1 0 0 0 1 1h1a1 1 0 0 0 1 -1v-10a1 1 0 0 0 -1 -1h-1a1 1 0 0 0 -1 1"></path> <path d="M9 12h6"></path> <path d="M15 7v10a1 1 0 0 0 1 1h1a1 1 0 0 0 1 -1v-10a1 1 0 0 0 -1 -1h-1a1 1 0 0 0 -1 1"></path> <path d="M18 8h2a1 1 0 0 1 1 1v6a1 1 0 0 1 -1 1h-2"></path> <path d="M22 12h-1"></path></svg></sc-if>
+          <sc-if value="{{t.stretch}}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 5a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path> <path d="M5 20l5 -.5l1 -2"></path> <path d="M18 20v-5h-5.5l2.5 -6.5l-5.5 1l1.5 2"></path></svg></sc-if>
+          <sc-if value="{{t.other}}" hint-placeholder-val="{{ false }}"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5l0 14"></path> <path d="M5 12l14 0"></path></svg></sc-if>
+          {{t.label}}
+        </button>
+      </sc-for>
+    </div>
+
+    <div style="border-radius: 16px; box-shadow: inset 0 0 0 1px #E3E3E7; overflow: hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid #EDEDF0">
+        <div style="font-size: 15px; font-weight: 500">Date</div>
+        <div style="font-size: 15px; font-weight: 600">Today, Sat Oct 31</div>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 16px; border-bottom: 1px solid #EDEDF0">
+        <div style="font-size: 15px; font-weight: 500">Duration</div>
+        <div style="display: flex; align-items: center; gap: 10px">
+          <button aria-label="Less time" style="width: 34px; height: 34px; border-radius: 10px; border: none; background: #F2F2F4; color: #141518; font: 600 18px 'Inter', sans-serif">-</button>
+          <div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; min-width: 82px; text-align: center">1 h 30 min</div>
+          <button aria-label="More time" style="width: 34px; height: 34px; border-radius: 10px; border: none; background: #F2F2F4; color: #141518; font: 600 18px 'Inter', sans-serif">+</button>
+        </div>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid #EDEDF0">
+        <div style="font-size: 15px; font-weight: 500">Distance</div>
+        <div style="font-size: 15px; color: #6B6C74">Optional</div>
+      </div>
+      <div style="padding: 14px 16px">
+        <label for="note" style="display: block; font-size: 15px; font-weight: 500; margin-bottom: 8px">Note</label>
+        <input id="note" value="Family hike" style="width: 100%; box-sizing: border-box; height: 40px; border-radius: 10px; border: none; background: #F2F2F4; padding: 0 12px; font: 400 15px 'Inter', sans-serif; color: #141518">
+      </div>
+    </div>
+
+    <div style="font-size: 12px; color: #62636B">Counts toward weekly totals. Doesn't change your plan.</div>
+
+    <button style="height: 52px; border-radius: 14px; border: none; background: #141518; color: #F7F7F8; font: 600 15px 'Inter', sans-serif">Save</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var keys = [['walk', 'Walk'], ['hike', 'Hike'], ['bike', 'Bike'], ['swim', 'Swim'], ['run', 'Run'], ['lift', 'Workout'], ['stretch', 'Stretch'], ['other', 'Other']];
+    var types = keys.map(function (k) {
+      var on = k[0] === 'hike';
+      var t = { label: k[1], bg: on ? '#141518' : '#F2F2F4', fg: on ? '#F7F7F8' : '#3A3B42', ring: 'none' };
+      keys.forEach(function (kk) { t[kk[0]] = kk[0] === k[0]; });
+      return t;
+    });
+    return { types: types };
+  }
+}
+</script>
+</body>
+</html>

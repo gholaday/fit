@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Run workout builder</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#141518}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; background: #F7F7F8; color: #141518; font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden">
+  <div style="flex: 1; padding: 52px 20px 0; display: flex; flex-direction: column; gap: 14px; overflow: hidden">
+
+    <div style="display: flex; justify-content: space-between; align-items: center">
+      <a href="L-Library.dc.html" aria-label="Back to Library" style="width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; color: #141518; display: flex; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg>
+      </a>
+      <button style="height: 36px; padding: 0 16px; border-radius: 18px; border: none; background: #141518; color: #F7F7F8; font: 600 13px 'Inter', sans-serif">Save</button>
+    </div>
+
+    <div>
+      <div style="font-size: 24px; font-weight: 700; letter-spacing: -0.02em">Speed mix</div>
+      <div style="font-size: 13px; color: #62636B; margin-top: 2px">About 42 min, 3.8 mi</div>
+    </div>
+
+    <div style="display: flex; gap: 2px; height: 10px">
+      <sc-for list="{{bar}}" as="b" hint-placeholder-count="12">
+        <div style="flex: {{b.f}} 1 0; border-radius: 3px; background: {{b.c}}"></div>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <sc-for list="{{steps}}" as="s" hint-placeholder-count="5">
+        <div style="background: #FFFFFF; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; box-shadow: {{s.ring}}">
+          <sc-if value="{{s.repeat}}" hint-placeholder-val="{{ false }}">
+            <div style="font-size: 12px; font-weight: 600; color: #62636B">{{s.repeatLabel}}</div>
+          </sc-if>
+          <sc-for list="{{s.rows}}" as="r" hint-placeholder-count="2">
+            <div style="display: flex; align-items: center; gap: 10px">
+              <div style="width: 6px; height: 30px; border-radius: 3px; background: {{r.c}}"></div>
+              <div style="flex: 1">
+                <div style="font-size: 14px; font-weight: 600">{{r.name}}</div>
+                <div style="font-size: 12px; color: #62636B">{{r.dur}}</div>
+              </div>
+              <div style="height: 28px; padding: 0 10px; border-radius: 8px; background: {{r.tagBg}}; color: {{r.tagFg}}; display: flex; align-items: center; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums">{{r.target}}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="background: #FFFFFF; border-radius: 14px; padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; box-shadow: inset 0 0 0 1.5px #141518">
+      <div style="font-size: 12px; font-weight: 600; color: #62636B">Target for Interval</div>
+      <div style="display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); background: #F2F2F4; border-radius: 10px; padding: 3px">
+        <button style="height: 30px; border: none; border-radius: 8px; background: #FFFFFF; color: #141518; font: 600 12px 'Inter', sans-serif">Pace</button>
+        <button style="height: 30px; border: none; border-radius: 8px; background: transparent; color: #62636B; font: 500 12px 'Inter', sans-serif">Heart rate</button>
+        <button style="height: 30px; border: none; border-radius: 8px; background: transparent; color: #62636B; font: 500 12px 'Inter', sans-serif">Effort</button>
+        <button style="height: 30px; border: none; border-radius: 8px; background: transparent; color: #62636B; font: 500 12px 'Inter', sans-serif">None</button>
+      </div>
+      <div style="display: flex; justify-content: space-between; font-size: 13px">
+        <div style="color: #62636B">Interval pace from your 5K</div>
+        <div style="font-weight: 600; font-variant-numeric: tabular-nums">7:55-8:15 /mi</div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 6px; flex-wrap: wrap">
+      <sc-for list="{{chips}}" as="c" hint-placeholder-count="6">
+        <button style="height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid #DCDCE0; background: #FFFFFF; color: #141518; font: 500 13px 'Inter', sans-serif">+ {{c}}</button>
+      </sc-for>
+    </div>
+  </div>
+  <div style="height: 30px"></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var E = '#9EC3D8', W = '#D0D0D5', H = '#C9A273', S = '#B97A5B';
+    var HRtag = { bg: '#E1ECF2', fg: '#2F6A8C' }, PACE = { bg: '#F3EADF', fg: '#7A5530' }, EFF = { bg: '#F5E4DC', fg: '#7E4630' }, NONE = { bg: '#F2F2F4', fg: '#62636B' };
+    function row(name, dur, c, t, target) { return { name: name, dur: dur, c: c, tagBg: t.bg, tagFg: t.fg, target: target }; }
+    var steps = [
+      { repeat: false, repeatLabel: '', ring: 'none', rows: [row('Warm up', '10 min run', E, HRtag, 'HR Zone 2')] },
+      { repeat: true, repeatLabel: '4 x', ring: 'none', rows: [row('Interval', '400 m', H, PACE, '8:05 /mi'), row('Recover', '90 s walk', W, NONE, 'No target')] },
+      { repeat: true, repeatLabel: '6 x', ring: 'none', rows: [row('Sprint', '20 s', S, EFF, 'All out'), row('Recover', '60 s walk', W, NONE, 'No target')] },
+      { repeat: false, repeatLabel: '', ring: 'none', rows: [row('Cool down', '8 min run', E, HRtag, 'Under 140 bpm')] }
+    ];
+    var segs = [[10, E]];
+    for (var i = 0; i < 4; i++) { segs.push([2, H]); segs.push([1.5, W]); }
+    for (var j = 0; j < 6; j++) { segs.push([0.4, S]); segs.push([1, W]); }
+    segs.push([8, E]);
+    var bar = segs.map(function (s) { return { f: s[0], c: s[1] }; });
+    return { steps: steps, bar: bar, chips: ['Warm up', 'Run', 'Walk', 'Sprint', 'Repeat', 'Cool down'] };
+  }
+}
+</script>
+</body>
+</html>

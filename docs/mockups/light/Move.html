@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Move workout</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#141518}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; background: #F7F7F8; color: #141518; font-family: 'Inter', system-ui, sans-serif; overflow: hidden">
+  <div aria-hidden="true" style="padding: 52px 20px 0; display: flex; flex-direction: column; gap: 12px">
+    <div style="font-size: 28px; font-weight: 700">Plan</div>
+    <div style="height: 42px; border-radius: 12px; background: #EBEBEE"></div>
+    <div style="height: 72px; border-radius: 16px; background: #FFFFFF"></div>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(20,21,24,0.32)"></div>
+
+  <div role="dialog" aria-label="Move Zone 2 Run" style="position: absolute; left: 0; right: 0; bottom: 0; background: #FFFFFF; border-radius: 24px 24px 0 0; padding: 10px 20px 30px; display: flex; flex-direction: column; gap: 14px">
+    <div style="width: 36px; height: 4px; border-radius: 2px; background: #DCDCE0; align-self: center"></div>
+    <div style="display: flex; align-items: center; gap: 12px">
+      <div style="width: 40px; height: 40px; border-radius: 11px; background: #E1ECF2; color: #4F8DB0; display: flex; align-items: center; justify-content: center">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.007 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path> <path d="M4 17l5 1l.75 -1.5"></path> <path d="M15 21v-4l-4 -3l1 -6"></path> <path d="M7 12v-3l5 -1l3 3l3 1"></path></svg>
+      </div>
+      <div style="flex: 1">
+        <div style="font-size: 18px; font-weight: 700">Move Zone 2 Run</div>
+        <div style="font-size: 13px; color: #62636B">Planned for Thu, Oct 29</div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 12px; font-weight: 600; color: #62636B">This week</div>
+      <sc-for list="{{days}}" as="d" hint-placeholder-count="6">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 14px; background: {{d.bg}}; box-shadow: {{d.ring}}; opacity: {{d.op}}">
+          <div style="width: 54px">
+            <div style="font-size: 14px; font-weight: 600">{{d.day}}</div>
+            <div style="font-size: 11px; color: #62636B">{{d.date}}</div>
+          </div>
+          <div style="flex: 1; font-size: 13px; color: #3A3B42">{{d.on}}</div>
+          <div style="font-size: 12px; font-weight: 500; color: {{d.tagColor}}">{{d.tag}}</div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border-radius: 14px; background: #F7F7F8; font-size: 13px; color: #3A3B42; line-height: 1.4">
+      <span style="display: flex; color: #4F8DB0; padding-top: 1px"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 18 0a9 9 0 0 0 -18 0"></path> <path d="M12 9h.01"></path> <path d="M11 12h1v4h1"></path></svg></span>
+      Saturday is open. Zone 2 runs can be back to back, so Friday or Saturday both work.
+    </div>
+
+    <div style="display: flex; gap: 8px">
+      <button style="width: 104px; height: 50px; border-radius: 14px; border: 1px solid #DCDCE0; background: #FFFFFF; color: #141518; font: 500 15px 'Inter', sans-serif">Cancel</button>
+      <button style="flex: 1; height: 50px; border-radius: 14px; border: none; background: #141518; color: #F7F7F8; font: 600 15px 'Inter', sans-serif">Move to Saturday</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var raw = [
+      ['Tue', 'Oct 27', 'Zone 2 Run, Push', 'Past', 'past'],
+      ['Wed', 'Oct 28', 'Stretch only', '', ''],
+      ['Thu', 'Oct 29', 'Zone 2 Run, Legs', 'Planned here', 'current'],
+      ['Fri', 'Oct 30', 'Zone 2 Run', 'Swap or add', ''],
+      ['Sat', 'Oct 31', 'Stretch only', 'Selected', 'sel'],
+      ['Sun', 'Nov 1', 'Zone 2 Long', 'Swap or add', '']
+    ];
+    var days = raw.map(function (r) {
+      var sel = r[4] === 'sel', past = r[4] === 'past';
+      return {
+        day: r[0], date: r[1], on: r[2], tag: r[3],
+        bg: sel ? '#FFFFFF' : '#F7F7F8',
+        ring: sel ? 'inset 0 0 0 1.5px #141518' : 'none',
+        op: past ? 0.45 : 1,
+        tagColor: sel ? '#141518' : '#6B6C74'
+      };
+    });
+    return { days: days };
+  }
+}
+</script>
+</body>
+</html>

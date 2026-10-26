@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>New activity</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#141518}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="position: relative; width: 390px; height: 844px; background: #F7F7F8; color: #141518; font-family: 'Inter', system-ui, sans-serif; overflow: hidden">
+  <div aria-hidden="true" style="padding: 52px 20px 0; display: flex; flex-direction: column; gap: 12px">
+    <div style="font-size: 28px; font-weight: 700">Today</div>
+    <div style="height: 128px; border-radius: 20px; background: #FFFFFF"></div>
+    <div style="height: 60px; border-radius: 14px; background: #FFFFFF"></div>
+    <div style="height: 200px; border-radius: 20px; background: #FFFFFF"></div>
+  </div>
+  <div style="position: absolute; inset: 0; background: rgba(20,21,24,0.32)"></div>
+
+  <div role="dialog" aria-label="New activity from Garmin" style="position: absolute; left: 0; right: 0; bottom: 0; background: #FFFFFF; border-radius: 24px 24px 0 0; padding: 10px 20px 30px; display: flex; flex-direction: column; gap: 16px">
+    <div style="width: 36px; height: 4px; border-radius: 2px; background: #DCDCE0; align-self: center"></div>
+
+    <div style="display: flex; justify-content: space-between; align-items: center">
+      <div style="display: flex; align-items: center; gap: 8px; font-size: 13px; color: #62636B">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a3 3 0 0 1 3 -3h6a3 3 0 0 1 3 3v6a3 3 0 0 1 -3 3h-6a3 3 0 0 1 -3 -3v-6"></path> <path d="M9 18v3h6v-3"></path> <path d="M9 6v-3h6v3"></path></svg>
+        New from Garmin Venu 3
+      </div>
+      <button style="border: none; background: transparent; color: #62636B; font: 500 13px 'Inter', sans-serif">Later</button>
+    </div>
+
+    <div style="display: flex; align-items: center; gap: 12px">
+      <div style="width: 44px; height: 44px; border-radius: 12px; background: #E1ECF2; color: #4F8DB0; display: flex; align-items: center; justify-content: center">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.007 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path> <path d="M4 17l5 1l.75 -1.5"></path> <path d="M15 21v-4l-4 -3l1 -6"></path> <path d="M7 12v-3l5 -1l3 3l3 1"></path></svg>
+      </div>
+      <div>
+        <div style="font-size: 20px; font-weight: 700">Run</div>
+        <div style="font-size: 13px; color: #62636B">Fri, Oct 30, 6:05 PM</div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; padding: 12px 14px; border-radius: 14px; background: #F7F7F8">
+      <div><div style="font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums">37:12</div><div style="font-size: 11px; color: #62636B">Time</div></div>
+      <div><div style="font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums">3.02 mi</div><div style="font-size: 11px; color: #62636B">Distance</div></div>
+      <div><div style="font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums">136</div><div style="font-size: 11px; color: #62636B">Avg bpm</div></div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 13px; font-weight: 600; color: #62636B">Match to plan</div>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; box-shadow: inset 0 0 0 1.5px #141518">
+        <div style="width: 20px; height: 20px; border-radius: 10px; border: 6px solid #141518; box-sizing: border-box"></div>
+        <div style="flex: 1">
+          <div style="font-size: 15px; font-weight: 600">Zone 2 Run</div>
+          <div style="font-size: 12px; color: #62636B">Today, planned 35 min</div>
+        </div>
+        <div style="font-size: 12px; font-weight: 500; color: #2F6A8C">Best match</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 14px; box-shadow: inset 0 0 0 1px #E3E3E7">
+        <div style="width: 20px; height: 20px; border-radius: 10px; border: 1.5px solid #C9C9CF; box-sizing: border-box"></div>
+        <div style="flex: 1; font-size: 15px">Not part of my plan</div>
+      </div>
+      <button style="align-self: flex-start; border: none; background: transparent; padding: 0; color: #62636B; font: 500 13px 'Inter', sans-serif">Choose another workout</button>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 13px; font-weight: 600; color: #62636B">How did it feel?</div>
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px">
+        <sc-for list="{{feel}}" as="f" hint-placeholder-count="5">
+          <button style="height: 40px; border-radius: 10px; border: none; background: {{f.bg}}; color: {{f.fg}}; font: 500 12px 'Inter', sans-serif">{{f.t}}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 8px">
+      <button style="width: 104px; height: 50px; border-radius: 14px; border: 1px solid #DCDCE0; background: #FFFFFF; color: #141518; font: 500 15px 'Inter', sans-serif">Ignore</button>
+      <button style="flex: 1; height: 50px; border-radius: 14px; border: none; background: #141518; color: #F7F7F8; font: 600 15px 'Inter', sans-serif">Save</button>
+    </div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var feel = ['Very easy', 'Easy', 'Okay', 'Hard', 'Very hard'].map(function (t, i) {
+      return { t: t, bg: i === 1 ? '#141518' : '#F2F2F4', fg: i === 1 ? '#F7F7F8' : '#3A3B42' };
+    });
+    return { feel: feel };
+  }
+}
+</script>
+</body>
+</html>

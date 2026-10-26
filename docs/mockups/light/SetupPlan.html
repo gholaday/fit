@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Setup Running plan</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#141518}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; background: #F7F7F8; color: #141518; font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden">
+  <div style="flex: 1; padding: 52px 20px 0; display: flex; flex-direction: column; gap: 16px; overflow: hidden">
+
+    <div style="display: flex; align-items: center; gap: 12px">
+      <button aria-label="Back" style="width: 40px; height: 40px; border-radius: 20px; border: none; background: #FFFFFF; color: #141518; display: flex; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg>
+      </button>
+      <div style="flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px">
+        <div style="height: 4px; border-radius: 2px; background: #141518"></div>
+        <div style="height: 4px; border-radius: 2px; background: #141518"></div>
+        <div style="height: 4px; border-radius: 2px; background: #141518"></div>
+        <div style="height: 4px; border-radius: 2px; background: #DCDCE0"></div>
+      </div>
+      <div style="font-size: 12px; color: #62636B">3 of 4</div>
+    </div>
+
+    <h1 style="margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em">Pick a running plan</h1>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 12px; font-weight: 600; color: #62636B">Train for a race</div>
+      <sc-for list="{{race}}" as="p" hint-placeholder-count="3">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF; box-shadow: {{p.ring}}">
+          <div style="flex: 1">
+            <div style="font-size: 15px; font-weight: {{p.fw}}">{{p.name}}</div>
+            <div style="font-size: 12px; color: #62636B">{{p.sub}}</div>
+          </div>
+          <div style="width: 22px; height: 22px; border-radius: 11px; box-sizing: border-box; border: {{p.radio}}"></div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="font-size: 12px; font-weight: 600; color: #62636B">Build fitness</div>
+      <sc-for list="{{fit}}" as="p" hint-placeholder-count="3">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 14px; background: #FFFFFF">
+          <div style="flex: 1">
+            <div style="font-size: 15px; font-weight: 500">{{p.name}}</div>
+            <div style="font-size: 12px; color: #62636B">{{p.sub}}</div>
+          </div>
+          <div style="width: 22px; height: 22px; border-radius: 11px; box-sizing: border-box; border: 1.5px solid #C9C9CF"></div>
+        </div>
+      </sc-for>
+    </div>
+
+    <div style="background: #FFFFFF; border-radius: 16px; overflow: hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 13px 16px; border-bottom: 1px solid #EDEDF0">
+        <div style="font-size: 15px; font-weight: 500">Race day</div>
+        <div style="font-size: 15px; font-weight: 600">Sat, Dec 12</div>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 13px 16px; border-bottom: 1px solid #EDEDF0">
+        <div style="font-size: 15px; font-weight: 500">Goal time</div>
+        <div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">25:30</div>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 13px 16px">
+        <div>
+          <div style="font-size: 15px; font-weight: 500">Current 5K</div>
+          <div style="font-size: 12px; color: #62636B">Sets your training paces</div>
+        </div>
+        <div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">27:10</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="padding: 12px 20px 30px">
+    <button style="width: 100%; height: 52px; border-radius: 14px; border: none; background: #141518; color: #F7F7F8; font: 600 15px 'Inter', sans-serif">Next: run days</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var race = [
+      { name: '5K', sub: '8 weeks, intervals, tempo and long runs', on: true },
+      { name: '10K', sub: '10 weeks, threshold focus', on: false },
+      { name: 'Half marathon', sub: '12 weeks, long run progression', on: false }
+    ].map(function (p) {
+      return { name: p.name, sub: p.sub, ring: p.on ? 'inset 0 0 0 1.5px #141518' : 'none', fw: p.on ? 600 : 500, radio: p.on ? '6px solid #141518' : '1.5px solid #C9C9CF' };
+    });
+    var fit = [
+      { name: 'Zone 2 Base', sub: 'Heart rate based, builds aerobic base' },
+      { name: 'Base builder', sub: 'Mostly easy miles with strides' },
+      { name: 'Speed block', sub: '6 weeks of sprints and hills' }
+    ];
+    return { race: race, fit: fit };
+  }
+}
+</script>
+</body>
+</html>

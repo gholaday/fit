@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Setup Heart rate zones</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#141518}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; background: #F7F7F8; color: #141518; font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden">
+  <div style="flex: 1; padding: 52px 20px 0; display: flex; flex-direction: column; gap: 18px; overflow: hidden">
+
+    <div style="display: flex; align-items: center; gap: 12px">
+      <button aria-label="Back" style="width: 40px; height: 40px; border-radius: 20px; border: none; background: #FFFFFF; color: #141518; display: flex; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg>
+      </button>
+      <div style="flex: 1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px">
+        <div style="height: 4px; border-radius: 2px; background: #141518"></div>
+        <div style="height: 4px; border-radius: 2px; background: #141518"></div>
+        <div style="height: 4px; border-radius: 2px; background: #DCDCE0"></div>
+        <div style="height: 4px; border-radius: 2px; background: #DCDCE0"></div>
+      </div>
+      <div style="font-size: 12px; color: #62636B">2 of 4</div>
+    </div>
+
+    <div>
+      <h1 style="margin: 0; font-size: 26px; font-weight: 700; letter-spacing: -0.02em">Heart rate zones</h1>
+      <div style="font-size: 14px; color: #62636B; margin-top: 6px; line-height: 1.45">Used for heart rate targets on any run step, and for stats. You can change them later in Settings.</div>
+    </div>
+
+    <div style="background: #FFFFFF; border-radius: 16px; overflow: hidden">
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px; border-bottom: 1px solid #EDEDF0">
+        <div>
+          <div style="font-size: 15px; font-weight: 500">Resting heart rate</div>
+          <div style="font-size: 12px; color: #62636B">14-day average from Garmin</div>
+        </div>
+        <div style="font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums">58 bpm</div>
+      </div>
+      <div style="display: flex; justify-content: space-between; align-items: center; padding: 14px 16px">
+        <div>
+          <div style="font-size: 15px; font-weight: 500">Max heart rate</div>
+          <div style="font-size: 12px; color: #62636B">Estimated from age, edit if you know it</div>
+        </div>
+        <div style="height: 36px; padding: 0 12px; border-radius: 10px; background: #F2F2F4; display: flex; align-items: center; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums">186</div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 8px">
+      <div style="font-size: 13px; font-weight: 600; color: #62636B">Method</div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); background: #EBEBEE; border-radius: 12px; padding: 4px">
+        <button style="height: 34px; border: none; border-radius: 9px; background: #FFFFFF; color: #141518; font: 600 13px 'Inter', sans-serif">HR reserve</button>
+        <button style="height: 34px; border: none; border-radius: 9px; background: transparent; color: #62636B; font: 500 13px 'Inter', sans-serif">% of max</button>
+        <button style="height: 34px; border: none; border-radius: 9px; background: transparent; color: #62636B; font: 500 13px 'Inter', sans-serif">Custom</button>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <sc-for list="{{zones}}" as="z" hint-placeholder-count="5">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: {{z.bg}}; box-shadow: {{z.ring}}">
+          <div style="width: 28px; font-size: 13px; font-weight: 600; color: {{z.labelColor}}">{{z.z}}</div>
+          <div style="flex: 1; font-size: 14px; color: {{z.fg}}">{{z.name}}</div>
+          <div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">{{z.range}}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="padding: 12px 20px 30px">
+    <button style="width: 100%; height: 52px; border-radius: 14px; border: none; background: #141518; color: #F7F7F8; font: 600 15px 'Inter', sans-serif">Continue</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var raw = [['Z1', 'Recovery', '115-128'], ['Z2', 'Aerobic base', '128-145'], ['Z3', 'Tempo', '145-158'], ['Z4', 'Threshold', '158-172'], ['Z5', 'Max effort', '172-186']];
+    var zones = raw.map(function (r) {
+      var on = r[0] === 'Z2';
+      return { z: r[0], name: r[1], range: r[2] + ' bpm', bg: on ? '#E1ECF2' : '#FFFFFF', ring: on ? 'inset 0 0 0 1.5px #4F8DB0' : 'none', labelColor: on ? '#2F6A8C' : '#62636B', fg: on ? '#141518' : '#3A3B42' };
+    });
+    return { zones: zones };
+  }
+}
+</script>
+</body>
+</html>

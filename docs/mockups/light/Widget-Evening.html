@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Midnight Light Widget Evening</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#141518}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="width: 390px; height: 180px; background: #F7F7F8; color: #141518; font-family: 'Inter', system-ui, sans-serif; box-sizing: border-box; padding: 20px; display: flex; flex-direction: column; justify-content: center">
+  <div style="background: #FFFFFF; border-radius: 20px; padding: 16px; display: flex; gap: 16px; align-items: center">
+      <div style="position: relative; width: 96px; height: 96px; flex-shrink: 0">
+        <svg width="96" height="96" viewBox="0 0 96 96" role="img" aria-label="9,120 of 8,000 steps">
+          <circle cx="48" cy="48" r="42" fill="none" stroke="#E6E6EA" stroke-width="8"></circle>
+          <circle cx="48" cy="48" r="42" fill="none" stroke="#5F9370" stroke-width="8" stroke-linecap="round" stroke-dasharray="263.9 263.9" transform="rotate(-90 48 48)"></circle>
+        </svg>
+        <div style="position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center">
+          <div style="font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums">9,120</div>
+          <div style="font-size: 10px; color: #62636B">goal met</div>
+        </div>
+      </div>
+      <div style="flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 9px">
+        <div style="display: flex; justify-content: space-between; align-items: baseline">
+          <div style="font-size: 16px; font-weight: 600">All done</div>
+          <div style="font-size: 10px; color: #6B6C74">3m ago</div>
+        </div>
+        <div style="display: flex; gap: 3px"><div style="flex: 1 1 0; height: 8px; border-radius: 4px; background: #5F9370"></div><div style="flex: 1 1 0; height: 8px; border-radius: 4px; background: #4F8DB0"></div><div style="flex: 1 1 0; height: 8px; border-radius: 4px; background: #8C83C0"></div><div style="flex: 1 1 0; height: 8px; border-radius: 4px; background: #5F9370"></div></div>
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 500"><span style="display: flex; color: #4F8DB0"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11.007 5a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"></path> <path d="M4 17l5 1l.75 -1.5"></path> <path d="M15 21v-4l-4 -3l1 -6"></path> <path d="M7 12v-3l5 -1l3 3l3 1"></path></svg></span>Zone 2 Run, 2.94 mi, 91% in zone</div>
+        <div style="display: flex; align-items: center; gap: 6px; font-size: 12px; color: #62636B"><span style="display: flex; color: #6B6C74"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12"></path> <path d="M16 3v4"></path> <path d="M8 3v4"></path> <path d="M4 11h16"></path> <path d="M11 15h1"></path> <path d="M12 15v3"></path></svg></span>Tomorrow: rest day</div>
+      </div>
+    </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":180}}'>
+class Component extends DCLogic {
+  renderVals() { return {}; }
+}
+</script>
+</body>
+</html>

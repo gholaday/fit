@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Run plan manager</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;display=swap">
+<style>
+body{margin:0}
+a{color:#141518}a:hover{color:#000000}
+</style>
+</helmet>
+<div style="width: 390px; height: 844px; background: #F7F7F8; color: #141518; font-family: 'Inter', system-ui, sans-serif; display: flex; flex-direction: column; box-sizing: border-box; overflow: hidden">
+  <div style="flex: 1; padding: 52px 20px 0; display: flex; flex-direction: column; gap: 14px; overflow: hidden">
+
+    <div style="display: flex; justify-content: space-between; align-items: center">
+      <a href="LA-Schedule.dc.html" aria-label="Back to Plan" style="width: 40px; height: 40px; border-radius: 20px; background: #FFFFFF; color: #141518; display: flex; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 6l-6 6l6 6"></path></svg>
+      </a>
+      <button aria-label="Plan options" style="width: 40px; height: 40px; border-radius: 20px; border: none; background: #FFFFFF; color: #141518; display: flex; align-items: center; justify-content: center">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path> <path d="M11 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path> <path d="M18 12a1 1 0 1 0 2 0a1 1 0 1 0 -2 0"></path></svg>
+      </button>
+    </div>
+
+    <div>
+      <div style="font-size: 13px; color: #62636B">Running plan, week 3 of 8</div>
+      <h1 style="margin: 2px 0 0; font-size: 28px; font-weight: 700; letter-spacing: -0.02em">5K</h1>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px">
+      <div style="background: #FFFFFF; border-radius: 14px; padding: 12px 14px; display: flex; gap: 10px; align-items: center">
+        <span style="display: flex; color: #62636B"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 5a5 5 0 0 1 7 0a5 5 0 0 0 7 0v9a5 5 0 0 1 -7 0a5 5 0 0 0 -7 0v-9"></path> <path d="M5 21v-7"></path></svg></span>
+        <div><div style="font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums">25:30</div><div style="font-size: 11px; color: #62636B">Goal time</div></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 14px; padding: 12px 14px; display: flex; gap: 10px; align-items: center">
+        <span style="display: flex; color: #62636B"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7a2 2 0 0 1 2 -2h12a2 2 0 0 1 2 2v12a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-12"></path> <path d="M16 3v4"></path> <path d="M8 3v4"></path> <path d="M4 11h16"></path> <path d="M11 15h1"></path> <path d="M12 15v3"></path></svg></span>
+        <div><div style="font-size: 16px; font-weight: 600">Sat, Dec 12</div><div style="font-size: 11px; color: #62636B">Race day</div></div>
+      </div>
+    </div>
+
+    <div style="background: #FFFFFF; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <div style="font-size: 14px; font-weight: 600">Weekly miles</div>
+        <div style="font-size: 12px; color: #62636B">Cutback week 4, taper 7 and 8</div>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 8px; align-items: end; height: 60px" role="img" aria-label="Weekly miles for 8 weeks">
+        <sc-for list="{{vol}}" as="v" hint-placeholder-count="8">
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px">
+            <div style="width: 100%; height: {{v.h}}px; border-radius: 5px; background: {{v.c}}"></div>
+            <div style="font-size: 10px; color: {{v.lc}}; font-weight: {{v.lw}}">{{v.w}}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="background: #FFFFFF; border-radius: 16px; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px">
+      <div style="display: flex; justify-content: space-between; align-items: center">
+        <div style="font-size: 14px; font-weight: 600">Training paces</div>
+        <button style="height: 28px; padding: 0 10px; border-radius: 8px; border: 1px solid #DCDCE0; background: #FFFFFF; color: #141518; font: 500 12px 'Inter', sans-serif; display: flex; align-items: center; gap: 4px">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8.1 8.1 0 0 0 -15.5 -2m-.5 -4v4h4"></path> <path d="M4 13a8.1 8.1 0 0 0 15.5 2m.5 4v-4h-4"></path></svg>
+          Re-test
+        </button>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px">
+        <div><div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">10:40</div><div style="font-size: 11px; color: #62636B">Easy /mi</div></div>
+        <div><div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">8:55</div><div style="font-size: 11px; color: #62636B">Tempo /mi</div></div>
+        <div><div style="font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums">8:05</div><div style="font-size: 11px; color: #62636B">Interval /mi</div></div>
+      </div>
+      <div style="font-size: 11px; color: #6B6C74">From your 5K time trial, 27:10 on Oct 4</div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 6px">
+      <div style="display: flex; justify-content: space-between; align-items: baseline">
+        <h2 style="margin: 0; font-size: 15px; font-weight: 600">Week 3</h2>
+        <div style="font-size: 12px; color: #62636B">11.5 mi, 4 runs</div>
+      </div>
+      <sc-for list="{{runs}}" as="r" hint-placeholder-count="4">
+        <div style="background: #FFFFFF; border-radius: 14px; padding: 10px 14px; display: flex; flex-direction: column; gap: 7px; opacity: {{r.op}}">
+          <div style="display: flex; align-items: baseline; gap: 10px">
+            <div style="width: 30px; font-size: 12px; color: #62636B">{{r.day}}</div>
+            <div style="flex: 1; font-size: 14px; font-weight: 600">{{r.name}}</div>
+            <div style="font-size: 12px; color: #62636B">{{r.meta}}</div>
+          </div>
+          <div style="display: flex; gap: 2px; height: 6px; margin-left: 40px">
+            <sc-for list="{{r.bar}}" as="b" hint-placeholder-count="5">
+              <div style="flex: {{b.f}} 1 0; border-radius: 3px; background: {{b.c}}"></div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="padding: 12px 20px 30px; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; border-top: 1px solid #E6E6EA">
+    <button style="height: 46px; border-radius: 12px; border: 1px solid #DCDCE0; background: #FFFFFF; color: #141518; font: 500 13px 'Inter', sans-serif">Change days</button>
+    <button style="height: 46px; border-radius: 12px; border: 1px solid #DCDCE0; background: #FFFFFF; color: #141518; font: 500 13px 'Inter', sans-serif">Push back</button>
+    <button style="height: 46px; border-radius: 12px; border: 1px solid #DCDCE0; background: #FFFFFF; color: #141518; font: 500 13px 'Inter', sans-serif">Switch plan</button>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":390,"height":844}}'>
+class Component extends DCLogic {
+  renderVals() {
+    var miles = [9, 10.5, 11.5, 8.5, 12.5, 13.5, 10, 7];
+    var vol = miles.map(function (m, i) {
+      var cur = i === 2;
+      return { h: Math.round(m / 13.5 * 44), w: 'W' + (i + 1), c: cur ? '#141518' : (i < 2 ? '#9C9DA5' : (i === 3 || i >= 6 ? '#DCDCE0' : '#C9CACF')), lc: cur ? '#141518' : '#6B6C74', lw: cur ? 600 : 400 };
+    });
+    var E = '#9EC3D8', W = '#D0D0D5', H = '#C9A273', T = '#D6B48C';
+    function bar(parts) { return parts.map(function (p) { return { f: p[0], c: p[1] }; }); }
+    var iv = [[10, E]];
+    for (var i = 0; i < 6; i++) { iv.push([1.8, H]); iv.push([1.5, W]); }
+    iv.push([8, E]);
+    var runs = [
+      { day: 'Tue', name: 'Intervals', meta: '6 x 400 m, 40 min', bar: bar(iv), op: 0.5 },
+      { day: 'Thu', name: 'Easy run', meta: '30 min', bar: bar([[1, E]]), op: 1 },
+      { day: 'Sat', name: 'Tempo', meta: '20 min at 8:55, 45 min', bar: bar([[10, E], [20, T], [10, E]]), op: 1 },
+      { day: 'Sun', name: 'Long run', meta: '5 mi easy', bar: bar([[1, E]]), op: 1 }
+    ];
+    return { vol: vol, runs: runs };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+node_modules/
+.turbo/
+dist/
+coverage/
+*.tsbuildinfo
+.env
+.env*.local
+.DS_Store
+
+# expo
+apps/mobile/.expo/
+apps/mobile/android/
+apps/mobile/ios/
+apps/mobile/web-build/
+
+# next
+apps/api/.next/
+apps/api/next-env.d.ts
+apps/api/.vercel/
