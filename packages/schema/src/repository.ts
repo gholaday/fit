@@ -70,6 +70,9 @@ import {
   matchPlanItem,
   mergeHr,
   rescaleLog,
+  trialResult,
+  vdotBumpSuggestion,
+  type PaceProfile,
   routineSeconds,
   stepResults,
   volumeKg,
@@ -135,10 +138,23 @@ function toExternal(r: typeof t.externalSessions.$inferSelect): ExternalSession 
   return e;
 }
 
-const toHrSample = (r: typeof t.hrSamples.$inferSelect): HrSample => ({ tOffsetMs: r.tOffsetMs, bpm: r.bpm, source: r.source });
+function toPaceProfile(r: typeof t.paceProfiles.$inferSelect): PaceProfile {
+  const p: PaceProfile = { id: r.id, vdot: r.vdot, source: r.source, createdAt: new Date(r.createdAt).toISOString() };
+  if (r.sourceDetailJson) {
+    const d = JSON.parse(r.sourceDetailJson) as { meters?: number; seconds?: number; sessionId?: string };
+    // Goal profiles from onboarding may lack a time (no goal entered).
+    if (d.meters !== undefined && d.seconds !== undefined) p.detail = d as NonNullable<PaceProfile['detail']>;
+  }
+  return p;
+}
+
+const toHrSample =(r: typeof t.hrSamples.$inferSelect): HrSample => ({ tOffsetMs: r.tOffsetMs, bpm: r.bpm, source: r.source });
 
 /** Rows per seed insert; 50 rows of ~24 columns stays far under SQLite's variable limit. */
 const SEED_BATCH = 50;
+
+/** Settings rows the repository keeps for itself; settings() leaves them out. */
+const INTERNAL_SETTING_KEYS = new Set(['catalogVersion', 'paceBumpDismissedAt']);
 
 /** HR and route rows per insert (at most 8 columns each). */
 const HR_BATCH = 200;
@@ -827,6 +843,64 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
 
     currentVdot() {
       return db.select({ vdot: t.paceProfiles.vdot }).from(t.paceProfiles).where(and(eq(t.paceProfiles.isCurrent, true), notDeleted(t.paceProfiles))).get()?.vdot;
+    },
+
+    paceProfile() {
+      const row = db.select().from(t.paceProfiles).where(and(eq(t.paceProfiles.isCurrent, true), notDeleted(t.paceProfiles))).get();
+      return row ? toPaceProfile(row) : undefined;
+    },
+
+    paceHistory() {
+      return db.select().from(t.paceProfiles).where(notDeleted(t.paceProfiles)).orderBy(desc(t.paceProfiles.createdAt)).all().map(toPaceProfile);
+    },
+
+    setPaceProfile(input) {
+      const id = newId();
+      const detail = input.detail ? { ...input.detail, ...(input.sessionId ? { sessionId: input.sessionId } : {}) } : undefined;
+      db.transaction((tx) => {
+        tx.update(t.paceProfiles)
+          .set({ isCurrent: false, ...stamp() })
+          .where(eq(t.paceProfiles.isCurrent, true))
+          .run();
+        tx.insert(t.paceProfiles)
+          .values({ id, vdot: Math.round(input.vdot * 10) / 10, source: input.source, sourceDetailJson: detail ? JSON.stringify(detail) : null, isCurrent: true, ...created() })
+          .run();
+      });
+      return repo.paceProfile()!;
+    },
+
+    sessionTrial(sessionId) {
+      const s = repo.session(sessionId);
+      return s?.endedAt ? trialResult(s.steps) : undefined;
+    },
+
+    paceBump() {
+      const profile = repo.paceProfile();
+      if (!profile) return undefined;
+      const dismissed = db.select().from(t.settings).where(and(eq(t.settings.key, 'paceBumpDismissedAt'), notDeleted(t.settings))).get();
+      const since = Math.max(Date.parse(profile.createdAt), dismissed ? (JSON.parse(dismissed.valueJson) as number) : 0);
+      const rows = db
+        .select({ playerJson: t.sessions.playerJson })
+        .from(t.sessions)
+        .where(and(eq(t.sessions.status, 'saved'), notDeleted(t.sessions), gte(t.sessions.startedAt, since)))
+        .orderBy(desc(t.sessions.startedAt))
+        .limit(20)
+        .all();
+      const sessions = rows.map((r) => {
+        const p = JSON.parse(r.playerJson) as PlayerState;
+        return stepResults(p.steps, p.log);
+      });
+      const to = vdotBumpSuggestion(sessions, profile.vdot);
+      return to === undefined ? undefined : { from: profile.vdot, to };
+    },
+
+    dismissPaceBump() {
+      // Internal key like catalogVersion, so it stays out of Settings.
+      const valueJson = JSON.stringify(now());
+      db.insert(t.settings)
+        .values({ key: 'paceBumpDismissedAt', valueJson, ...stamp() })
+        .onConflictDoUpdate({ target: t.settings.key, set: { valueJson, deletedAt: null, ...stamp() } })
+        .run();
     },
 
     startSession(input) {
@@ -1572,7 +1646,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
 
     settings(): Settings {
       const rows = db.select().from(t.settings).where(notDeleted(t.settings)).all();
-      const stored = Object.fromEntries(rows.map((r) => [r.key, JSON.parse(r.valueJson) as unknown]));
+      const stored = Object.fromEntries(rows.filter((r) => !INTERNAL_SETTING_KEYS.has(r.key)).map((r) => [r.key, JSON.parse(r.valueJson) as unknown]));
       return { ...DEFAULT_SETTINGS, ...stored } as Settings;
     },
 

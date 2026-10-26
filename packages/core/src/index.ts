@@ -14,3 +14,4 @@ export * from './routine';
 export * from './exercise';
 export * from './external';
 export * from './builder';
+export * from './pace';

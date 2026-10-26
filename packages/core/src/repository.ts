@@ -2,6 +2,7 @@ import type { AgendaItem, CompletionDetails, ScheduleSlot, SkipReason } from './
 import type { IsoDate, Weekday } from './dates';
 import type { HrProfileInput, HrZoneBand } from './hr';
 import type { ExternalActivity, PlanMatch } from './external';
+import type { TrialResult } from './pace';
 import type { CuePrefs } from './session/cues';
 import type { HrSample } from './session/heart';
 import type { TreadmillPrefs } from './session/treadmill';
@@ -90,6 +91,22 @@ export interface Routine {
 export interface RoutineDetail extends Routine {
   items: RoutineItems;
   notes?: string;
+}
+
+export interface PaceProfileInput {
+  vdot: number;
+  source: 'trial' | 'race' | 'manual';
+  /** The race or trial it came from. */
+  detail?: { meters: number; seconds: number };
+  sessionId?: string;
+}
+
+export interface PaceProfile {
+  id: string;
+  vdot: number;
+  source: 'trial' | 'race' | 'manual' | 'goal';
+  detail?: { meters: number; seconds: number; sessionId?: string };
+  createdAt: string;
 }
 
 export interface WorkoutInput {
@@ -417,6 +434,17 @@ export interface FitRepository {
   deleteWorkout(id: string): void;
   /** VDOT of the current pace profile, for zonePace() ranges. */
   currentVdot(): number | undefined;
+
+  // Pace profile (M5, spec §6). History is kept; plan workouts store zones, so a new
+  // profile updates every future target at once.
+  paceProfile(): PaceProfile | undefined;
+  paceHistory(): PaceProfile[];
+  setPaceProfile(input: PaceProfileInput): PaceProfile;
+  /** Trial result of a saved session (trialResult over its steps), for "Update your paces?". */
+  sessionTrial(sessionId: string): TrialResult | undefined;
+  /** +1 VDOT prompt from sessions since the current profile and the last dismissal. */
+  paceBump(): { from: number; to: number } | undefined;
+  dismissPaceBump(): void;
 
   // Sessions
   startSession(input: SessionStartInput): string;
