@@ -153,6 +153,12 @@ function toneOf(step: Step): StructureTone {
   return 'easy';
 }
 
+/** Hard efforts get countdown beeps and the clay/amber color: sprints, fast pace, high HR, RPE 7+. */
+export function isHardStep(step: Step): boolean {
+  const tone = toneOf(step);
+  return tone === 'hard' || tone === 'sprint';
+}
+
 /** Proportional colored segments for the signature structure bar. Adjacent same-tone steps merge. */
 export function structureSegments(items: readonly WorkoutItem[], pace?: PaceLookup): StructureSegment[] {
   const steps = flattenSteps(items);

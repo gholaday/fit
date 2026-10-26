@@ -107,6 +107,7 @@ export interface PlanWorkoutRow {
   completedAt?: string;
   details?: CompletionDetails;
   skipReason?: SkipReason;
+  sessionId?: string;
 }
 
 export interface RoutineInfo {
@@ -180,6 +181,7 @@ export function buildAgenda(input: AgendaInput): AgendaItem[] {
     if (pw.completedAt) item.completedAt = pw.completedAt;
     if (pw.details) item.details = pw.details;
     if (pw.skipReason) item.skipReason = pw.skipReason;
+    if (pw.sessionId) item.sessionId = pw.sessionId;
     items.push(item);
   }
 

@@ -1,5 +1,14 @@
 // Inline drizzle-kit's SQL migrations into a TS module so Metro needs no .sql loader.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
+
+// --generate runs drizzle-kit first, passing the remaining args (e.g. --name sessions).
+const args = process.argv.slice(2);
+if (args[0] === '--generate') {
+  execFileSync('drizzle-kit', ['generate', ...args.slice(1)], { stdio: 'inherit', shell: true });
+  // drizzle-kit also writes an expo migrations.js that imports .sql files; we replace it.
+  rmSync('drizzle/migrations.js', { force: true });
+}
 
 const journal = JSON.parse(readFileSync('drizzle/meta/_journal.json', 'utf8'));
 const entries = journal.entries.map((e) => {

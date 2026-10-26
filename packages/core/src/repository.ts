@@ -1,7 +1,11 @@
 import type { AgendaItem, CompletionDetails, ScheduleSlot, SkipReason } from './agenda';
 import type { IsoDate, Weekday } from './dates';
 import type { HrProfileInput, HrZoneBand } from './hr';
+import type { TrackPoint } from './session/geo';
+import type { PlayerState, StepLogEntry } from './session/player';
+import type { StepResult } from './session/track';
 import type { UnitPrefs } from './units';
+import type { SessionMode } from './workout';
 
 /**
  * The contract between screens and storage. The mobile app calls this through its
@@ -85,6 +89,74 @@ export interface Settings {
   onboarded: boolean;
 }
 
+// Sessions (M1): recorded runs. Track points are buffered in memory and written with
+// saveProgress every 5 s in one transaction, together with the player state, so a crash
+// loses at most 5 s and activeSession() can resume or save what was recorded.
+
+export interface SessionStartInput {
+  name: string;
+  mode: SessionMode;
+  /** ISO instant. */
+  startedAt: string;
+  workoutId?: string;
+  /** The plan workout this run completes; marked done (with data) on finish. */
+  planWorkoutId?: string;
+  player: PlayerState;
+}
+
+export interface ActiveSession {
+  id: string;
+  name: string;
+  mode: SessionMode;
+  startedAt: string;
+  workoutId?: string;
+  planWorkoutId?: string;
+  player: PlayerState;
+  distanceM: number;
+  /** Last persisted point, so a resumed recorder can continue the line. */
+  lastPoint?: TrackPoint;
+}
+
+export interface SessionProgress {
+  player: PlayerState;
+  distanceM: number;
+  /** Points since the last save (not the whole track). */
+  points: TrackPoint[];
+}
+
+export interface SessionFinish {
+  endedAt: string;
+  player: PlayerState;
+  distanceM: number;
+  elapsedMs: number;
+  pausedMs: number;
+  rpe?: number;
+  notes?: string;
+}
+
+export interface SessionListItem {
+  id: string;
+  name: string;
+  mode: SessionMode;
+  startedAt: string;
+  distanceM: number;
+  elapsedMs: number;
+}
+
+export interface SessionDetail extends SessionListItem {
+  endedAt?: string;
+  pausedMs: number;
+  avgPaceSecPerKm?: number;
+  rpe?: number;
+  notes?: string;
+  workoutId?: string;
+  planWorkoutId?: string;
+  steps: StepResult[];
+  log: StepLogEntry[];
+  /** Full-resolution track; simplify with simplifyTo() for drawing. */
+  points: TrackPoint[];
+}
+
 /** How a recurring (schedule) item moves. Plan workouts always move "once". */
 export type MoveScope = 'once' | 'schedule';
 
@@ -117,6 +189,16 @@ export interface FitRepository {
   addScheduleEntry(entry: Omit<ScheduleEntry, 'id' | 'position'>): ScheduleEntry;
   updateScheduleEntry(id: string, patch: Partial<Omit<ScheduleEntry, 'id'>>): void;
   removeScheduleEntry(id: string): void;
+
+  // Sessions
+  startSession(input: SessionStartInput): string;
+  saveProgress(id: string, progress: SessionProgress): void;
+  finishSession(id: string, finish: SessionFinish): void;
+  discardSession(id: string): void;
+  activeSession(): ActiveSession | undefined;
+  session(id: string): SessionDetail | undefined;
+  recentSessions(limit: number): SessionListItem[];
+  updateSessionNotes(id: string, patch: { rpe?: number; notes?: string }): void;
 
   // Settings
   settings(): Settings;

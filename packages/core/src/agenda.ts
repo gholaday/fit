@@ -55,6 +55,8 @@ export interface AgendaItem {
   completedAt?: string;
   details?: CompletionDetails;
   skipReason?: SkipReason;
+  /** Recorded session attached (completion level Done + data). */
+  sessionId?: string;
 }
 
 /** Completion level (spec §3), derived from status + what is attached. */

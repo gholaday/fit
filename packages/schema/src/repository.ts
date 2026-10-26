@@ -37,9 +37,15 @@ import {
   type SkipReason,
   type Weekday,
   type WorkoutItem,
+  type ActiveSession,
+  type PlayerState,
+  type SessionDetail,
+  type SessionListItem,
+  type TrackPoint,
   localIsoDate,
+  stepResults,
 } from '@fit/core';
-import { and, asc, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNull, lte, or } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
 import * as t from './sqlite';
 import { STARTER_ROUTINES } from './starter';
@@ -62,6 +68,13 @@ const DEFAULT_SETTINGS: Settings = {
 interface RoutineItems {
   items: { name: string }[];
   estSeconds: number;
+}
+
+function toTrackPoint(r: typeof t.trackPoints.$inferSelect): TrackPoint {
+  const p: TrackPoint = { tOffsetMs: r.tOffsetMs, lat: r.lat, lng: r.lng, accuracy: r.accuracy };
+  if (r.alt !== null) p.alt = r.alt;
+  if (r.speed !== null) p.speed = r.speed;
+  return p;
 }
 
 const notDeleted = <T extends { deletedAt: unknown }>(table: T) => isNull(table.deletedAt as never);
@@ -292,6 +305,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         if (pw.manualNote !== null) details.note = pw.manualNote;
         if (Object.keys(details).length > 0) row.details = details;
         if (pw.skipReason) row.skipReason = pw.skipReason;
+        if (pw.sessionId) row.sessionId = pw.sessionId;
         return row;
       });
 
@@ -593,6 +607,163 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     removeScheduleEntry(id) {
       // Ending (not deleting) keeps past occurrences and their completions.
       db.update(t.weeklySchedule).set({ endsOn: addDays(today(), -1), ...stamp() }).where(eq(t.weeklySchedule.id, id)).run();
+    },
+
+    startSession(input) {
+      const id = newId();
+      const current = (table: typeof t.paceProfiles | typeof t.hrProfiles) =>
+        db.select({ id: table.id }).from(table).where(and(eq(table.isCurrent, true), notDeleted(table))).get()?.id ?? null;
+      db.insert(t.sessions)
+        .values({
+          id,
+          workoutId: input.workoutId ?? null,
+          planWorkoutId: input.planWorkoutId ?? null,
+          name: input.name,
+          mode: input.mode,
+          status: 'active',
+          startedAt: Date.parse(input.startedAt),
+          paceProfileId: current(t.paceProfiles),
+          hrProfileId: current(t.hrProfiles),
+          playerJson: JSON.stringify(input.player),
+          ...created(),
+        })
+        .run();
+      return id;
+    },
+
+    saveProgress(id, progress) {
+      db.transaction((tx) => {
+        tx.update(t.sessions)
+          .set({ playerJson: JSON.stringify(progress.player), distanceM: progress.distanceM, ...stamp() })
+          .where(and(eq(t.sessions.id, id), eq(t.sessions.status, 'active')))
+          .run();
+        for (const p of progress.points) {
+          tx.insert(t.trackPoints)
+            .values({ sessionId: id, tOffsetMs: p.tOffsetMs, lat: p.lat, lng: p.lng, alt: p.alt ?? null, accuracy: p.accuracy, speed: p.speed ?? null })
+            .onConflictDoNothing()
+            .run();
+        }
+      });
+    },
+
+    finishSession(id, finish) {
+      const row = db.select().from(t.sessions).where(eq(t.sessions.id, id)).get();
+      if (!row) throw new Error(`Unknown session ${id}`);
+      const results = stepResults(finish.player.steps, finish.player.log);
+      const activeS = finish.elapsedMs / 1000;
+      const avgPace = finish.distanceM >= 50 ? activeS / (finish.distanceM / 1000) : null;
+      const endedAt = Date.parse(finish.endedAt);
+      db.transaction((tx) => {
+        tx.update(t.sessions)
+          .set({
+            status: 'saved',
+            endedAt,
+            elapsedMs: finish.elapsedMs,
+            pausedMs: finish.pausedMs,
+            distanceM: finish.distanceM,
+            avgPaceSPerKm: avgPace,
+            rpe: finish.rpe ?? null,
+            notes: finish.notes ?? null,
+            playerJson: JSON.stringify(finish.player),
+            ...stamp(),
+          })
+          .where(eq(t.sessions.id, id))
+          .run();
+        finish.player.log.forEach((entry, i) => {
+          const r = results[i]!;
+          tx.insert(t.sessionSteps)
+            .values({
+              id: newId(),
+              sessionId: id,
+              idx: entry.idx,
+              stepJson: JSON.stringify(r.step),
+              startedAtOffsetMs: entry.startOffsetMs,
+              endedAtOffsetMs: entry.endOffsetMs,
+              activeMs: entry.endActiveMs - entry.startActiveMs,
+              distanceM: r.distanceM,
+              avgPaceSPerKm: r.avgPaceSecPerKm ?? null,
+              skipped: entry.skipped,
+              ...created(),
+            })
+            .run();
+        });
+        // A recorded run completes its plan workout (Done + data), upgrading a manual Done too.
+        if (row.planWorkoutId) {
+          tx.update(t.planWorkouts)
+            .set({ status: 'done', completedAt: endedAt, sessionId: id, skipReason: null, ...stamp() })
+            .where(eq(t.planWorkouts.id, row.planWorkoutId))
+            .run();
+        }
+      });
+    },
+
+    discardSession(id) {
+      db.transaction((tx) => {
+        tx.update(t.sessions).set({ status: 'discarded', deletedAt: now(), ...stamp() }).where(eq(t.sessions.id, id)).run();
+        tx.delete(t.trackPoints).where(eq(t.trackPoints.sessionId, id)).run();
+      });
+    },
+
+    activeSession(): ActiveSession | undefined {
+      const row = db.select().from(t.sessions).where(and(eq(t.sessions.status, 'active'), notDeleted(t.sessions))).orderBy(desc(t.sessions.startedAt)).get();
+      if (!row) return undefined;
+      const s: ActiveSession = {
+        id: row.id,
+        name: row.name,
+        mode: row.mode,
+        startedAt: new Date(row.startedAt).toISOString(),
+        player: JSON.parse(row.playerJson) as PlayerState,
+        distanceM: row.distanceM,
+      };
+      if (row.workoutId) s.workoutId = row.workoutId;
+      if (row.planWorkoutId) s.planWorkoutId = row.planWorkoutId;
+      const last = db.select().from(t.trackPoints).where(eq(t.trackPoints.sessionId, row.id)).orderBy(desc(t.trackPoints.tOffsetMs)).limit(1).get();
+      if (last) s.lastPoint = toTrackPoint(last);
+      return s;
+    },
+
+    session(id): SessionDetail | undefined {
+      const row = db.select().from(t.sessions).where(and(eq(t.sessions.id, id), notDeleted(t.sessions))).get();
+      if (!row) return undefined;
+      const player = JSON.parse(row.playerJson) as PlayerState;
+      const points = db.select().from(t.trackPoints).where(eq(t.trackPoints.sessionId, id)).orderBy(asc(t.trackPoints.tOffsetMs)).all().map(toTrackPoint);
+      const detail: SessionDetail = {
+        id: row.id,
+        name: row.name,
+        mode: row.mode,
+        startedAt: new Date(row.startedAt).toISOString(),
+        distanceM: row.distanceM,
+        elapsedMs: row.elapsedMs,
+        pausedMs: row.pausedMs,
+        steps: stepResults(player.steps, player.log),
+        log: player.log,
+        points,
+      };
+      if (row.endedAt) detail.endedAt = new Date(row.endedAt).toISOString();
+      if (row.avgPaceSPerKm !== null) detail.avgPaceSecPerKm = row.avgPaceSPerKm;
+      if (row.rpe !== null) detail.rpe = row.rpe;
+      if (row.notes !== null) detail.notes = row.notes;
+      if (row.workoutId) detail.workoutId = row.workoutId;
+      if (row.planWorkoutId) detail.planWorkoutId = row.planWorkoutId;
+      return detail;
+    },
+
+    recentSessions(limit): SessionListItem[] {
+      return db
+        .select()
+        .from(t.sessions)
+        .where(and(eq(t.sessions.status, 'saved'), notDeleted(t.sessions)))
+        .orderBy(desc(t.sessions.startedAt))
+        .limit(limit)
+        .all()
+        .map((r) => ({ id: r.id, name: r.name, mode: r.mode, startedAt: new Date(r.startedAt).toISOString(), distanceM: r.distanceM, elapsedMs: r.elapsedMs }));
+    },
+
+    updateSessionNotes(id, patch) {
+      const set: Partial<typeof t.sessions.$inferInsert> = { ...stamp() };
+      if (patch.rpe !== undefined) set.rpe = patch.rpe;
+      if (patch.notes !== undefined) set.notes = patch.notes;
+      db.update(t.sessions).set(set).where(eq(t.sessions.id, id)).run();
     },
 
     settings(): Settings {

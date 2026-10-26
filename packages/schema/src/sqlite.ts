@@ -1,4 +1,4 @@
-import { index, integer, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import { index, integer, primaryKey, real, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 /**
  * Local SQLite schema (spec §13), M0 subset. Conventions:
@@ -197,3 +197,69 @@ export const quickLogs = sqliteTable(
   (t) => [index('quick_logs_date').on(t.date)],
 );
 
+
+export const sessions = sqliteTable(
+  'sessions',
+  {
+    id: text('id').primaryKey(),
+    workoutId: text('workout_id'),
+    planWorkoutId: text('plan_workout_id'),
+    name: text('name').notNull(),
+    mode: text('mode', { enum: ['outdoor', 'treadmill', 'timer'] }).notNull(),
+    status: text('status', { enum: ['active', 'saved', 'discarded'] }).notNull(),
+    startedAt: integer('started_at').notNull(),
+    endedAt: integer('ended_at'),
+    elapsedMs: integer('elapsed_ms').notNull().default(0),
+    pausedMs: integer('paused_ms').notNull().default(0),
+    distanceM: real('distance_m').notNull().default(0),
+    avgPaceSPerKm: real('avg_pace_s_per_km'),
+    rpe: integer('rpe'),
+    notes: text('notes'),
+    paceProfileId: text('pace_profile_id'),
+    hrProfileId: text('hr_profile_id'),
+    /** Player state, saved every 5 s while active for crash recovery; final log after. */
+    playerJson: text('player_json').notNull(),
+    summaryJson: text('summary_json'),
+    ...syncColumns,
+  },
+  (t) => [index('sessions_status').on(t.status), index('sessions_started').on(t.startedAt), index('sessions_plan_workout').on(t.planWorkoutId)],
+);
+
+export const sessionSteps = sqliteTable(
+  'session_steps',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id').notNull(),
+    idx: integer('idx').notNull(),
+    /** Snapshot of the planned step, so editing a template never rewrites history. */
+    stepJson: text('step_json').notNull(),
+    startedAtOffsetMs: integer('started_at_offset_ms').notNull(),
+    endedAtOffsetMs: integer('ended_at_offset_ms').notNull(),
+    activeMs: integer('active_ms').notNull(),
+    distanceM: real('distance_m').notNull(),
+    avgPaceSPerKm: real('avg_pace_s_per_km'),
+    treadmillSpeedKph: real('treadmill_speed_kph'),
+    skipped: integer('skipped', { mode: 'boolean' }).notNull(),
+    ...syncColumns,
+  },
+  (t) => [index('session_steps_session').on(t.sessionId, t.idx)],
+);
+
+/**
+ * Raw GPS points, local only. They sync later as one blob per session
+ * (`session_tracks` on the server, spec §17), so no per-row sync columns.
+ */
+export const trackPoints = sqliteTable(
+  'track_points',
+  {
+    sessionId: text('session_id').notNull(),
+    tOffsetMs: integer('t_offset_ms').notNull(),
+    lat: real('lat').notNull(),
+    lng: real('lng').notNull(),
+    alt: real('alt'),
+    accuracy: real('accuracy').notNull(),
+    speed: real('speed'),
+    source: text('source', { enum: ['phone', 'health_connect', 'file'] }).notNull().default('phone'),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.tOffsetMs] })],
+);
