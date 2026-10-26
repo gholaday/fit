@@ -58,7 +58,7 @@ import {
   stepResults,
   volumeKg,
 } from '@fit/core';
-import { and, asc, desc, eq, gte, inArray, isNull, like, lte, ne, or } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, like, lte, ne, or, sql } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
 import * as t from './sqlite';
 
@@ -79,7 +79,11 @@ const DEFAULT_SETTINGS: Settings = {
   cues: DEFAULT_CUE_PREFS,
   autoPause: false,
   autoPauseOnWalks: true,
+  postRunStretch: true,
 };
+
+/** Rows per seed insert; 50 rows of ~24 columns stays far under SQLite's variable limit. */
+const SEED_BATCH = 50;
 
 /** M0 rows stored names only. seedCatalog upgrades them in place, keeping their ids. */
 interface LegacyRoutineItems {
@@ -870,29 +874,39 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
 
     seedCatalog(catalog) {
       db.transaction((tx) => {
-        for (const e of catalog.exercises) {
-          const values = {
-            slug: e.slug,
-            name: e.name,
-            kind: e.kind,
-            musclePrimary: e.musclePrimary,
-            musclesSecondaryJson: JSON.stringify(e.musclesSecondary),
-            equipment: e.equipment,
-            tracking: e.tracking,
-            level: e.level,
-            instructionsJson: JSON.stringify(e.instructions),
-            imageKeysJson: JSON.stringify(e.imageKeys),
-            sides: e.sides,
-            defaultHoldS: e.defaultHoldS ?? null,
-            aliasesJson: JSON.stringify(e.aliases),
-            searchText: searchText(e.name, e.aliases),
-            sourceRef: e.sourceRef,
-            dataVersion: catalog.version,
-          };
-          // Hidden flags are yours; an update never touches them.
+        // Multi-row upserts: one statement per row cost about a minute on Hermes for 876 rows.
+        const rows = catalog.exercises.map((e) => ({
+          id: e.id,
+          slug: e.slug,
+          name: e.name,
+          kind: e.kind,
+          musclePrimary: e.musclePrimary,
+          musclesSecondaryJson: JSON.stringify(e.musclesSecondary),
+          equipment: e.equipment,
+          tracking: e.tracking,
+          level: e.level,
+          instructionsJson: JSON.stringify(e.instructions),
+          imageKeysJson: JSON.stringify(e.imageKeys),
+          sides: e.sides,
+          defaultHoldS: e.defaultHoldS ?? null,
+          aliasesJson: JSON.stringify(e.aliases),
+          searchText: searchText(e.name, e.aliases),
+          sourceRef: e.sourceRef,
+          dataVersion: catalog.version,
+          origin: 'seed' as const,
+          ...created(),
+        }));
+        // Hidden flags are yours; an update never touches them.
+        const columns = getTableColumns(t.exercises);
+        const set = Object.fromEntries(
+          (['slug', 'name', 'kind', 'musclePrimary', 'musclesSecondaryJson', 'equipment', 'tracking', 'level', 'instructionsJson', 'imageKeysJson', 'sides', 'defaultHoldS', 'aliasesJson', 'searchText', 'sourceRef', 'dataVersion', 'deletedAt', 'updatedAt', 'dirty'] as const).map(
+            (k) => [k, sql.raw(`excluded.${columns[k].name}`)],
+          ),
+        );
+        for (let i = 0; i < rows.length; i += SEED_BATCH) {
           tx.insert(t.exercises)
-            .values({ id: e.id, ...values, origin: 'seed', ...created() })
-            .onConflictDoUpdate({ target: t.exercises.id, set: { ...values, deletedAt: null, ...stamp() } })
+            .values(rows.slice(i, i + SEED_BATCH))
+            .onConflictDoUpdate({ target: t.exercises.id, set })
             .run();
         }
         // Seed rows no longer in the catalog are hidden, not deleted, so history still resolves.

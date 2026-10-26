@@ -181,6 +181,8 @@ export interface Settings {
   autoPause: boolean;
   /** Keep auto-pause during walk steps. */
   autoPauseOnWalks: boolean;
+  /** Offer "Post-run stretch?" on fresh run summaries (spec §10). */
+  postRunStretch: boolean;
 }
 
 // Sessions (M1): recorded runs. Track points are buffered in memory and written with
