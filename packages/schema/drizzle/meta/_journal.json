@@ -29,6 +29,13 @@
       "when": 1793044720773,
       "tag": "0003_health",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793057556503,
+      "tag": "0004_stats",
+      "breakpoints": true
     }
   ]
 }

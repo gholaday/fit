@@ -82,6 +82,13 @@ import {
   routineSeconds,
   stepResults,
   volumeKg,
+  cumulativeDistance,
+  personalBests as fastestEfforts,
+  sessionStats,
+  type HistoryItem,
+  type HistoryKind,
+  type RunRow,
+  type SessionStats,
 } from '@fit/core';
 import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, like, lt, lte, ne, or, sql } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
@@ -120,6 +127,21 @@ const ACTIVITY_TITLES: Record<ExternalActivity, string> = {
   stretch: 'Stretch',
   other: 'Workout',
 };
+
+const dayStartMs = (d: IsoDate) => new Date(`${d}T00:00:00`).getTime();
+
+const EXTERNAL_KIND: Record<ExternalActivity, HistoryKind> = {
+  run: 'run',
+  treadmill: 'run',
+  walk: 'walk',
+  hike: 'walk',
+  bike: 'other',
+  swim: 'other',
+  strength: 'strength',
+  stretch: 'stretch',
+  other: 'other',
+};
+const EXTERNAL_RUNS: ExternalActivity[] = ['run', 'treadmill', 'walk', 'hike'];
 
 function toExternal(r: typeof t.externalSessions.$inferSelect): ExternalSession {
   const e: ExternalSession = {
@@ -450,6 +472,27 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
 
   // -------------------------------------------------------------------------
   // Repository
+
+  /** SessionStats for a run, from its step log and (outdoor) track. */
+  const statsFor = (id: string, mode: string, player: PlayerState, distanceM: number): SessionStats => {
+    const points =
+      mode === 'outdoor' ? db.select().from(t.trackPoints).where(eq(t.trackPoints.sessionId, id)).orderBy(asc(t.trackPoints.tOffsetMs)).all().map(toTrackPoint) : [];
+    return sessionStats({ steps: stepResults(player.steps, player.log), distanceM, samples: cumulativeDistance(points), pauses: player.pauses ?? [] });
+  };
+
+  /** Runs saved before stats_json existed get theirs on first use, once. */
+  const backfillStats = () => {
+    const rows = db
+      .select({ id: t.sessions.id, mode: t.sessions.mode, playerJson: t.sessions.playerJson, distanceM: t.sessions.distanceM })
+      .from(t.sessions)
+      .where(and(eq(t.sessions.status, 'saved'), eq(t.sessions.kind, 'run'), isNull(t.sessions.statsJson), notDeleted(t.sessions)))
+      .all();
+    if (rows.length === 0) return;
+    const computed = rows.map((r) => ({ id: r.id, json: JSON.stringify(statsFor(r.id, r.mode, JSON.parse(r.playerJson) as PlayerState, r.distanceM)) }));
+    db.transaction((tx) => {
+      for (const c of computed) tx.update(t.sessions).set({ statsJson: c.json, ...stamp() }).where(eq(t.sessions.id, c.id)).run();
+    });
+  };
 
   const repo: FitRepository = {
     agenda(start, end): AgendaItem[] {
@@ -1128,11 +1171,13 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         .all()
         .map((h) => ({ ...h, source: 'ble' as const }));
       const liveComplete = live.length > 0 && hrGaps(live, endedAt - row.startedAt).length === 0;
+      const stats = statsFor(id, row.mode, finish.player, finish.distanceM);
       db.transaction((tx) => {
         tx.update(t.sessions)
           .set({
             status: 'saved',
             endedAt,
+            statsJson: JSON.stringify(stats),
             ...(liveComplete ? { hrFilledAt: -1 } : {}),
             elapsedMs: finish.elapsedMs,
             pausedMs: finish.pausedMs,
@@ -1266,6 +1311,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
             distanceM: totalM,
             avgPaceSPerKm: totalM >= 50 ? row.elapsedMs / 1000 / (totalM / 1000) : null,
             playerJson: JSON.stringify({ ...player, log }),
+            statsJson: JSON.stringify(statsFor(id, row.mode, { ...player, log }, totalM)),
             ...stamp(),
           })
           .where(eq(t.sessions.id, id))
@@ -1519,6 +1565,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
             routineId: input.routineId ?? null,
             name: input.name,
             mode: 'timer',
+            kind: 'strength',
             status: 'saved',
             startedAt,
             endedAt,
@@ -1846,6 +1893,168 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
           .where(eq(t.sessions.id, sessionId))
           .run();
       });
+    },
+
+    runRows(start, end) {
+      backfillStats();
+      const from = dayStartMs(start);
+      const to = dayStartMs(addDays(end, 1));
+      const rows: RunRow[] = db
+        .select({ id: t.sessions.id, startedAt: t.sessions.startedAt, distanceM: t.sessions.distanceM, elapsedMs: t.sessions.elapsedMs, statsJson: t.sessions.statsJson })
+        .from(t.sessions)
+        .where(and(eq(t.sessions.status, 'saved'), eq(t.sessions.kind, 'run'), notDeleted(t.sessions), gte(t.sessions.startedAt, from), lt(t.sessions.startedAt, to)))
+        .all()
+        .map((r) => ({
+          sessionId: r.id,
+          date: localIsoDate(new Date(r.startedAt)),
+          distanceM: r.distanceM,
+          durationS: Math.round(r.elapsedMs / 1000),
+          ...(r.statsJson ? { stats: JSON.parse(r.statsJson) as SessionStats } : {}),
+        }));
+      const external = db
+        .select()
+        .from(t.externalSessions)
+        .where(
+          and(
+            eq(t.externalSessions.status, 'saved'),
+            inArray(t.externalSessions.activity, EXTERNAL_RUNS),
+            notDeleted(t.externalSessions),
+            gte(t.externalSessions.startedAt, from),
+            lt(t.externalSessions.startedAt, to),
+          ),
+        )
+        .all();
+      for (const e of external) {
+        rows.push({
+          sessionId: e.id,
+          date: localIsoDate(new Date(e.startedAt)),
+          distanceM: e.distanceM ?? 0,
+          durationS: Math.round((e.endedAt - e.startedAt) / 1000),
+          ...(EXTERNAL_KIND[e.activity as ExternalActivity] === 'walk' ? { walk: true } : {}),
+        });
+      }
+      return rows.sort((a, b) => a.date.localeCompare(b.date));
+    },
+
+    personalBests() {
+      backfillStats();
+      const rows = db
+        .select({ id: t.sessions.id, startedAt: t.sessions.startedAt, statsJson: t.sessions.statsJson })
+        .from(t.sessions)
+        .where(and(eq(t.sessions.status, 'saved'), eq(t.sessions.kind, 'run'), eq(t.sessions.mode, 'outdoor'), notDeleted(t.sessions)))
+        .all();
+      return fastestEfforts(
+        rows.flatMap((r) => (r.statsJson ? [{ sessionId: r.id, date: localIsoDate(new Date(r.startedAt)), stats: JSON.parse(r.statsJson) as SessionStats }] : [])),
+      );
+    },
+
+    history(filter) {
+      const before = filter.before ? Date.parse(filter.before) : undefined;
+      const search = filter.search?.trim().toLowerCase();
+      const items: HistoryItem[] = [];
+      const fitKind = filter.kind === 'run' || filter.kind === 'strength' ? filter.kind : filter.kind ? undefined : null;
+      if (filter.source !== 'external' && fitKind !== undefined) {
+        const conds = [eq(t.sessions.status, 'saved'), notDeleted(t.sessions)];
+        if (fitKind) conds.push(eq(t.sessions.kind, fitKind));
+        if (filter.mode) conds.push(eq(t.sessions.mode, filter.mode));
+        if (before !== undefined) conds.push(lt(t.sessions.startedAt, before));
+        if (search) conds.push(sql`instr(lower(${t.sessions.name}), ${search}) > 0`);
+        for (const r of db.select().from(t.sessions).where(and(...conds)).orderBy(desc(t.sessions.startedAt)).limit(filter.limit).all()) {
+          items.push({
+            id: r.id,
+            source: 'fit',
+            kind: r.kind,
+            mode: r.mode,
+            name: r.name,
+            startedAt: new Date(r.startedAt).toISOString(),
+            durationS: Math.round(r.elapsedMs / 1000),
+            ...(r.kind === 'run' ? { distanceM: r.distanceM } : {}),
+          });
+        }
+      }
+      // Watch activities have no mode, except treadmill runs, which match a treadmill filter.
+      if (filter.source !== 'fit' && (!filter.mode || filter.mode === 'treadmill')) {
+        const activities = (Object.keys(EXTERNAL_KIND) as ExternalActivity[]).filter(
+          (a) => (!filter.kind || EXTERNAL_KIND[a] === filter.kind) && (!filter.mode || a === 'treadmill'),
+        );
+        const conds = [eq(t.externalSessions.status, 'saved'), notDeleted(t.externalSessions), inArray(t.externalSessions.activity, activities)];
+        if (before !== undefined) conds.push(lt(t.externalSessions.startedAt, before));
+        if (search) conds.push(sql`instr(lower(${t.externalSessions.title}), ${search}) > 0`);
+        for (const r of db.select().from(t.externalSessions).where(and(...conds)).orderBy(desc(t.externalSessions.startedAt)).limit(filter.limit).all()) {
+          items.push({
+            id: r.id,
+            source: 'external',
+            kind: EXTERNAL_KIND[r.activity as ExternalActivity],
+            ...(r.activity === 'treadmill' ? { mode: 'treadmill' as const } : {}),
+            name: r.title,
+            startedAt: new Date(r.startedAt).toISOString(),
+            durationS: Math.round((r.endedAt - r.startedAt) / 1000),
+            ...(r.distanceM !== null ? { distanceM: r.distanceM } : {}),
+            originPackage: r.originPackage,
+          });
+        }
+      }
+      return items.sort((a, b) => b.startedAt.localeCompare(a.startedAt)).slice(0, filter.limit);
+    },
+
+    dailyMetricsRange(start, end) {
+      return db
+        .select()
+        .from(t.dailyMetrics)
+        .where(and(gte(t.dailyMetrics.date, start), lte(t.dailyMetrics.date, end), notDeleted(t.dailyMetrics)))
+        .orderBy(asc(t.dailyMetrics.date))
+        .all()
+        .map((r) => {
+          const m: DailyMetrics = { date: r.date, source: r.source, syncedAt: new Date(r.syncedAt).toISOString() };
+          if (r.steps !== null) m.steps = r.steps;
+          if (r.restingHr !== null) m.restingHr = r.restingHr;
+          if (r.activeKcal !== null) m.activeKcal = r.activeKcal;
+          if (r.sleepMin !== null) m.sleepMin = r.sleepMin;
+          return m;
+        });
+    },
+
+    strengthDays(start, end) {
+      return db
+        .select({ id: t.sessions.id, startedAt: t.sessions.startedAt, routineId: t.sessions.routineId, summaryJson: t.sessions.summaryJson })
+        .from(t.sessions)
+        .where(
+          and(
+            eq(t.sessions.status, 'saved'),
+            eq(t.sessions.kind, 'strength'),
+            notDeleted(t.sessions),
+            gte(t.sessions.startedAt, dayStartMs(start)),
+            lt(t.sessions.startedAt, dayStartMs(addDays(end, 1))),
+          ),
+        )
+        .orderBy(asc(t.sessions.startedAt))
+        .all()
+        .map((r) => ({
+          sessionId: r.id,
+          date: localIsoDate(new Date(r.startedAt)),
+          ...(r.routineId ? { routineId: r.routineId } : {}),
+          volumeKg: r.summaryJson ? ((JSON.parse(r.summaryJson) as { volumeKg?: number }).volumeKg ?? 0) : 0,
+        }));
+    },
+
+    routineDays(start, end) {
+      return db
+        .select({ routineId: t.routineCompletions.routineId, date: t.routineCompletions.date, detailsJson: t.routineCompletions.detailsJson })
+        .from(t.routineCompletions)
+        .where(
+          and(
+            eq(t.routineCompletions.status, 'done'),
+            gte(t.routineCompletions.date, start),
+            lte(t.routineCompletions.date, end),
+            notDeleted(t.routineCompletions),
+          ),
+        )
+        .orderBy(asc(t.routineCompletions.date))
+        .all()
+        .map((r) => {
+          const minutes = r.detailsJson ? (JSON.parse(r.detailsJson) as CompletionDetails).minutes : undefined;
+          return { routineId: r.routineId, date: r.date, ...(minutes !== undefined ? { minutes } : {}) };
+        });
     },
 
     settings(): Settings {

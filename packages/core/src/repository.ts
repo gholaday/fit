@@ -3,6 +3,7 @@ import type { IsoDate, Weekday } from './dates';
 import type { HrProfileInput, HrZoneBand } from './hr';
 import type { ExternalActivity, PlanMatch } from './external';
 import type { TrialResult } from './pace';
+import type { PersonalBest, RunRow } from './stats';
 import type { CuePrefs } from './session/cues';
 import type { HrSample } from './session/heart';
 import type { TreadmillPrefs } from './session/treadmill';
@@ -286,6 +287,48 @@ export interface DailyMetrics extends DailyMetricsInput {
   syncedAt: string;
 }
 
+export type HistoryKind = 'run' | 'walk' | 'strength' | 'stretch' | 'other';
+
+/** One row of the History list: a session recorded in Fit or a saved watch activity. */
+export interface HistoryItem {
+  id: string;
+  source: 'fit' | 'external';
+  kind: HistoryKind;
+  /** Fit sessions only. */
+  mode?: SessionMode;
+  name: string;
+  startedAt: string;
+  durationS: number;
+  distanceM?: number;
+  /** External sessions: the app that recorded it, e.g. com.garmin.android.apps.connectmobile. */
+  originPackage?: string;
+}
+
+export interface HistoryFilter {
+  kind?: HistoryKind;
+  mode?: SessionMode;
+  source?: 'fit' | 'external';
+  /** Case-insensitive match on the name. */
+  search?: string;
+  /** Paging: only items that started before this ISO time. */
+  before?: string;
+  limit: number;
+}
+
+export interface StrengthDay {
+  sessionId: string;
+  date: IsoDate;
+  routineId?: string;
+  volumeKg: number;
+}
+
+export interface RoutineDay {
+  routineId: string;
+  date: IsoDate;
+  /** From "Done + details", when given. */
+  minutes?: number;
+}
+
 export interface ExternalSessionInput {
   hcRecordId: string;
   originPackage: string;
@@ -555,6 +598,18 @@ export interface FitRepository {
   ignoreExternal(id: string): void;
   /** Undo of a merge: drops the Health Connect HR it added and shows it in the modal instead. */
   undoMerge(externalId: string): void;
+
+  // Stats and history (M9, spec §12)
+  /** Saved runs (Fit and imported run, treadmill, walk and hike) by local date in [start, end], oldest first. */
+  runRows(start: IsoDate, end: IsoDate): RunRow[];
+  /** Fastest 1 km, 1 mi, 5 km, 10 km and half from every outdoor Fit run. */
+  personalBests(): PersonalBest[];
+  /** Newest first. */
+  history(filter: HistoryFilter): HistoryItem[];
+  dailyMetricsRange(start: IsoDate, end: IsoDate): DailyMetrics[];
+  strengthDays(start: IsoDate, end: IsoDate): StrengthDay[];
+  /** Routines marked done, by the occurrence date, in [start, end]. */
+  routineDays(start: IsoDate, end: IsoDate): RoutineDay[];
 
   // Settings
   settings(): Settings;

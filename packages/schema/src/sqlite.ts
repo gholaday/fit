@@ -229,6 +229,9 @@ export const sessions = sqliteTable(
     summaryJson: text('summary_json'),
     /** When Health Connect HR was last added; -1 when none should be (after "Undo", or a gap-free live trace). */
     hrFilledAt: integer('hr_filled_at'),
+    kind: text('kind', { enum: ['run', 'strength'] }).notNull().default('run'),
+    /** Runs: SessionStats (distance by activity, easy pace, best efforts), written at finish. */
+    statsJson: text('stats_json'),
     ...syncColumns,
   },
   (t) => [index('sessions_status').on(t.status), index('sessions_started').on(t.startedAt), index('sessions_plan_workout').on(t.planWorkoutId)],
