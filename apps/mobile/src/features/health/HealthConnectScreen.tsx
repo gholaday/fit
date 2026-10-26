@@ -26,6 +26,7 @@ const READS: readonly { label: string; why: string }[] = [
   { label: 'Steps', why: 'Your daily step goal on Today' },
   { label: 'Resting heart rate', why: 'Shown on Today' },
   { label: 'Active calories', why: 'Stored with workouts and days' },
+  { label: 'Distance', why: 'How far your watch workouts went' },
 ];
 
 export function HealthConnectScreen() {
@@ -147,6 +148,7 @@ export function HealthConnectScreen() {
               </Group>
             </View>
             <View style={{ gap: 8 }}>
+              {status && status.granted < READ_PERMISSIONS.length && <Button label="Allow the remaining data types" kind="outline" size="md" onPress={() => void connect()} />}
               <Button label="Sync now" size="md" disabled={busy} onPress={() => void run(syncHealth, 'Synced with Health Connect')} />
               <Button
                 label="Re-sync last 30 days"

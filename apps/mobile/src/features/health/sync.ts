@@ -5,7 +5,7 @@
  *
  * 1. Changes since the stored token, or the last 30 days without one (or when it expired).
  * 2. Daily steps, resting HR and active calories for the days touched.
- * 3. Exercise sessions, with average and max HR from the same source.
+ * 3. Exercise sessions, with average and max HR, distance and calories from the same source.
  * 4. Health Connect HR for saved phone sessions that still need it.
  * 5. Store the new token and the sync time.
  */
@@ -35,6 +35,7 @@ export const READ_PERMISSIONS: Permission[] = [
   { accessType: 'read', recordType: 'Steps' },
   { accessType: 'read', recordType: 'RestingHeartRate' },
   { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
+  { accessType: 'read', recordType: 'Distance' },
 ];
 
 const CHANGE_TYPES = ['ExerciseSession', 'Steps', 'RestingHeartRate', 'ActiveCaloriesBurned'] as const;
@@ -119,9 +120,11 @@ async function toExternal(rec: RecordResult<'ExerciseSession'>): Promise<Externa
   if (!id || !origin) return undefined;
   const window = between(rec.startTime, rec.endTime);
   const filter = [origin];
-  const [hr, kcal] = await Promise.all([
+  // Each read fails on its own when that permission is missing; the field is then left out.
+  const [hr, kcal, distance] = await Promise.all([
     aggregateRecord({ recordType: 'HeartRate', timeRangeFilter: window, dataOriginFilter: filter }).catch(() => undefined),
     aggregateRecord({ recordType: 'ActiveCaloriesBurned', timeRangeFilter: window, dataOriginFilter: filter }).catch(() => undefined),
+    aggregateRecord({ recordType: 'Distance', timeRangeFilter: window, dataOriginFilter: filter }).catch(() => undefined),
   ]);
   const input: ExternalSessionInput = {
     hcRecordId: id,
@@ -136,6 +139,7 @@ async function toExternal(rec: RecordResult<'ExerciseSession'>): Promise<Externa
     input.avgHr = Math.round(hr.BPM_AVG);
     input.maxHr = Math.round(hr.BPM_MAX);
   }
+  if (distance && distance.DISTANCE.inMeters > 0) input.distanceM = Math.round(distance.DISTANCE.inMeters);
   if (kcal && kcal.ACTIVE_CALORIES_TOTAL.inKilocalories > 0) input.activeKcal = Math.round(kcal.ACTIVE_CALORIES_TOTAL.inKilocalories);
   return input;
 }
