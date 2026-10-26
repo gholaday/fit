@@ -1444,6 +1444,14 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     updateSettings(patch) {
       db.transaction((tx) => {
         for (const [key, value] of Object.entries(patch)) {
+          // undefined clears an optional setting (e.g. forgetting the HR sensor).
+          if (value === undefined) {
+            tx.update(t.settings)
+              .set({ deletedAt: now(), ...stamp() })
+              .where(eq(t.settings.key, key))
+              .run();
+            continue;
+          }
           const valueJson = JSON.stringify(value);
           tx.insert(t.settings)
             .values({ key, valueJson, ...stamp() })
