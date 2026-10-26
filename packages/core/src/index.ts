@@ -8,3 +8,4 @@ export * from './repository';
 export * from './dsl';
 export * from './vdot';
 export * from './plan';
+export * from './schedule';
