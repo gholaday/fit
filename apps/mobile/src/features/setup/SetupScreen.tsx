@@ -32,6 +32,8 @@ export function SetupScreen() {
   const [zones, setZones] = useZonesDraft();
   const [choice, setChoice] = useState<PlanChoice | undefined>(plan?.presetId);
   const [inputs, setInputs] = useState<PlanInputs | undefined>(plan ? { ...plan.inputs } : undefined);
+  // The repo's message for inputs it rejected; editing the inputs clears it.
+  const [rejected, setRejected] = useState<{ inputs: PlanInputs; message: string }>();
   const step = flow[index]!;
   const fullIndex = FULL.indexOf(step);
 
@@ -59,7 +61,13 @@ export function SetupScreen() {
       if (choice && inputs?.presetId !== choice) setInputs(defaultInputs(choice, today));
     }
     if (step === 'details' && inputs) {
-      const created = actions.createPlan(inputs);
+      let created;
+      try {
+        created = actions.createPlan(inputs);
+      } catch (e) {
+        haptic.warn();
+        return setRejected({ inputs, message: e instanceof Error ? e.message : String(e) });
+      }
       haptic.success();
       showSnack({ message: `${created.name} plan created, ${created.weeks} weeks` });
       return finish();
@@ -72,7 +80,7 @@ export function SetupScreen() {
     else if (router.canGoBack()) router.back();
   };
 
-  const problem = step === 'details' && inputs ? inputsProblem(inputs) : step === 'zones' ? zones.error : step === 'pick' && !choice ? 'Pick a plan' : undefined;
+  const problem = step === 'details' && inputs ? (inputsProblem(inputs) ?? (rejected?.inputs === inputs ? rejected.message : undefined)) :step === 'zones' ? zones.error : step === 'pick' && !choice ? 'Pick a plan' : undefined;
   const cta = step === 'details' ? 'Create plan' : step === 'pick' ? (choice === 'none' ? 'Finish' : 'Next: run days') : step === 'zones' && only ? 'Save' : 'Continue';
   const canBack = index > 0 || router.canGoBack();
 

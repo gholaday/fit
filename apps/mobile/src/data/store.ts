@@ -265,10 +265,8 @@ export const actions = {
   },
 
   createPlan(inputs: PlanInputs): PlanSummary {
-    const s = useFit.getState();
-    const current = repo.activePlan(s.today);
-    if (current) repo.abandonPlan(current.id);
-    const plan = repo.createPlan(inputs, s.today);
+    // Throws for invalid inputs; the repo abandons the current plan in the same transaction.
+    const plan = repo.createPlan(inputs, useFit.getState().today);
     reload();
     return plan;
   },
