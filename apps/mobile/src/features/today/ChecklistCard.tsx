@@ -1,10 +1,12 @@
 import { type AgendaItem, formatDistance, formatMinutes } from '@fit/core';
+import { router } from 'expo-router';
 import { memo } from 'react';
 import { Pressable, View } from 'react-native';
 import { useItem, usePlan, useRoutines, useUnits } from '@/data/store';
 import { markDoneNow, openItemSheet } from '@/features/items/ItemSheet';
 import { itemSubtitle } from '@/features/items/meta';
 import { clockTime } from '@/lib/format';
+import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, IconButton, LaneTile, StructureBar, T } from '@/ui/primitives';
@@ -47,16 +49,27 @@ function HeroRunCard({ item }: { item: AgendaItem }) {
       {item.structure && item.structure.length > 0 && <StructureBar segments={item.structure} />}
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Button
-          label="Done"
+          label="Start"
           size="md"
           style={{ flex: 1 }}
+          accessibilityHint="Opens the run with GPS recording"
+          onPress={() => {
+            haptic.commit();
+            router.push({ pathname: '/run', params: { key: item.key } });
+          }}
+          icon={<Icons.play size={16} color={p.onPrimary} />}
+        />
+        <Button
+          label="Done"
+          size="md"
+          kind="outline"
+          style={{ width: 96 }}
           accessibilityHint="Hold for details"
           onPress={() => markDoneNow(item)}
           onLongPress={() => openItemSheet(item.key, 'details')}
           delayLongPress={350}
-          icon={<Icons.check size={18} color={p.onPrimary} />}
+          icon={<Icons.check size={18} color={p.text} />}
         />
-        <Button label="More" size="md" kind="outline" style={{ width: 96 }} onPress={() => openItemSheet(item.key)} />
       </View>
     </Pressable>
   );
@@ -104,8 +117,15 @@ function ResolvedRow({ item }: { item: AgendaItem }) {
   const routines = useRoutines();
   const units = useUnits();
   const done = item.status === 'done';
+  const sessionId = item.sessionId;
   return (
-    <Pressable accessibilityRole="button" accessibilityHint="Opens actions" onPress={() => openItemSheet(item.key)} style={s.resolved}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityHint={sessionId ? 'Opens the run summary' : 'Opens actions'}
+      onPress={() => (sessionId ? router.push({ pathname: '/summary/[id]', params: { id: sessionId } }) : openItemSheet(item.key))}
+      onLongPress={sessionId ? () => openItemSheet(item.key) : undefined}
+      style={s.resolved}
+    >
       <LaneTile lane={item.lane} faded />
       <View style={{ flex: 1 }}>
         <T v="bodyMedium" tone="secondary">
@@ -120,6 +140,7 @@ function ResolvedRow({ item }: { item: AgendaItem }) {
         <T v="captionMedium" color={done ? p.success : p.textTertiary}>
           {done ? 'Done' : 'Skipped'}
         </T>
+        {sessionId && <Icons.chevronRight size={14} color={p.textTertiary} />}
       </View>
     </Pressable>
   );

@@ -1,0 +1,9 @@
+expo.modules.audiofocus.audio-focus-pngs-0 D:\Projects\Apps\fit-app\apps\mobile\modules\audio-focus\android\build\generated\res\pngs\release
+expo.modules.audiofocus.audio-focus-updated_navigation_xml-1 D:\Projects\Apps\fit-app\apps\mobile\modules\audio-focus\android\build\generated\updated_navigation_xml\release
+expo.modules.audiofocus.audio-focus-mergeReleaseResources-2 D:\Projects\Apps\fit-app\apps\mobile\modules\audio-focus\android\build\intermediates\incremental\release\mergeReleaseResources\merged.dir
+expo.modules.audiofocus.audio-focus-mergeReleaseResources-3 D:\Projects\Apps\fit-app\apps\mobile\modules\audio-focus\android\build\intermediates\incremental\release\mergeReleaseResources\stripped.dir
+expo.modules.audiofocus.audio-focus-release-4 D:\Projects\Apps\fit-app\apps\mobile\modules\audio-focus\android\build\intermediates\merged_res\release\mergeReleaseResources
+expo.modules.audiofocus.audio-focus-release-5 D:\Projects\Apps\fit-app\apps\mobile\modules\audio-focus\android\build\intermediates\packaged_res\release\packageReleaseResources
+expo.modules.audiofocus.audio-focus-main-6 D:\Projects\Apps\fit-app\apps\mobile\modules\audio-focus\android\src\main\res
+expo.modules.audiofocus.audio-focus-release-7 D:\Projects\Apps\fit-app\apps\mobile\modules\audio-focus\android\src\release\res
+gradleHome-0 C:\Users\Garrett\.gradle

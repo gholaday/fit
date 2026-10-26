@@ -83,6 +83,14 @@ export function SettingsScreen() {
           </Group>
         </Section>
 
+        <Section title="Recording">
+          <Group>
+            <Row label="Permissions and diagnostics" sub="GPS, background access, battery limits" onPress={() => router.push('/diagnostics')} last>
+              <Icons.chevronRight size={18} color={p.textTertiary} />
+            </Row>
+          </Group>
+        </Section>
+
         <Section title="Coming later">
           <Group>
             <Row label="Health Connect" sub="Steps, resting heart rate and Garmin sessions" />

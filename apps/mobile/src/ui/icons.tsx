@@ -4,8 +4,10 @@
  */
 import type { Lane } from '@fit/core';
 import type { QuickLogType } from '@fit/core';
+import IconAntennaBars5 from '@tabler/icons-react-native/IconAntennaBars5';
 import IconArrowsExchange from '@tabler/icons-react-native/IconArrowsExchange';
 import IconBarbell from '@tabler/icons-react-native/IconBarbell';
+import IconBattery from '@tabler/icons-react-native/IconBattery';
 import IconBell from '@tabler/icons-react-native/IconBell';
 import IconBike from '@tabler/icons-react-native/IconBike';
 import IconCalendar from '@tabler/icons-react-native/IconCalendar';
@@ -15,17 +17,30 @@ import IconCheck from '@tabler/icons-react-native/IconCheck';
 import IconChevronLeft from '@tabler/icons-react-native/IconChevronLeft';
 import IconChevronRight from '@tabler/icons-react-native/IconChevronRight';
 import IconClock from '@tabler/icons-react-native/IconClock';
+import IconCurrentLocation from '@tabler/icons-react-native/IconCurrentLocation';
 import IconDots from '@tabler/icons-react-native/IconDots';
+import IconFlag from '@tabler/icons-react-native/IconFlag';
+import IconHeart from '@tabler/icons-react-native/IconHeart';
 import IconInfoCircle from '@tabler/icons-react-native/IconInfoCircle';
 import IconListDetails from '@tabler/icons-react-native/IconListDetails';
+import IconLock from '@tabler/icons-react-native/IconLock';
+import IconLockOpen from '@tabler/icons-react-native/IconLockOpen';
+import IconMap from '@tabler/icons-react-native/IconMap';
 import IconMountain from '@tabler/icons-react-native/IconMountain';
+import IconPlayerPauseFilled from '@tabler/icons-react-native/IconPlayerPauseFilled';
+import IconPlayerPlayFilled from '@tabler/icons-react-native/IconPlayerPlayFilled';
+import IconPlayerSkipForwardFilled from '@tabler/icons-react-native/IconPlayerSkipForwardFilled';
+import IconPlayerStopFilled from '@tabler/icons-react-native/IconPlayerStopFilled';
 import IconPlus from '@tabler/icons-react-native/IconPlus';
+import IconRoute from '@tabler/icons-react-native/IconRoute';
 import IconRun from '@tabler/icons-react-native/IconRun';
 import IconSettings from '@tabler/icons-react-native/IconSettings';
 import IconStretching from '@tabler/icons-react-native/IconStretching';
 import IconSun from '@tabler/icons-react-native/IconSun';
 import IconSwimming from '@tabler/icons-react-native/IconSwimming';
 import IconTrash from '@tabler/icons-react-native/IconTrash';
+import IconVolume from '@tabler/icons-react-native/IconVolume';
+import IconVolumeOff from '@tabler/icons-react-native/IconVolumeOff';
 import IconWalk from '@tabler/icons-react-native/IconWalk';
 import IconX from '@tabler/icons-react-native/IconX';
 import type { ComponentType } from 'react';
@@ -70,6 +85,21 @@ export const Icons = {
   mountain: wrap(IconMountain),
   bike: wrap(IconBike),
   swimming: wrap(IconSwimming),
+  lock: wrap(IconLock),
+  lockOpen: wrap(IconLockOpen),
+  map: wrap(IconMap),
+  route: wrap(IconRoute),
+  flag: wrap(IconFlag),
+  heart: wrap(IconHeart),
+  volume: wrap(IconVolume),
+  volumeOff: wrap(IconVolumeOff),
+  signal: wrap(IconAntennaBars5),
+  location: wrap(IconCurrentLocation),
+  battery: wrap(IconBattery),
+  pause: wrap(IconPlayerPauseFilled),
+  play: wrap(IconPlayerPlayFilled),
+  skip: wrap(IconPlayerSkipForwardFilled),
+  stop: wrap(IconPlayerStopFilled),
 } as const;
 
 export const LANE_ICON: Record<Lane, TablerIcon> = {

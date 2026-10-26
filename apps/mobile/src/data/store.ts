@@ -182,6 +182,9 @@ export function dismissSnack(id?: number): void {
 
 export const actions = {
   /** Recompute "today" (app resume, midnight). */
+  /** Re-read after a write made outside these actions (a recorded run finishing). */
+  reload,
+
   refreshToday(): void {
     const today = localIsoDate(new Date());
     const s = useFit.getState();

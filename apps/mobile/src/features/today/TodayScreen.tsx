@@ -75,6 +75,9 @@ export function TodayScreen() {
         ) : (
           items.map((i) => <ChecklistCard key={i.key} itemKey={i.key} hero={i.key === heroKey} />)
         )}
+
+        <Button label="Free run" kind="quiet" size="md" style={{ marginTop: 4 }} icon={<Icons.run size={18} color={p.text} />} onPress={() => router.push('/run')} />
+
       </Animated.ScrollView>
 
       <Animated.View pointerEvents="none" style={[s.slimWrap, { paddingTop: insets.top + 4 }, slimStyle]}>

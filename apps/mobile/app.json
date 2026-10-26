@@ -17,7 +17,10 @@
       },
       "predictiveBackGestureEnabled": false,
       "package": "com.gholaday.fit",
-      "versionCode": 1
+      "versionCode": 1,
+      "permissions": [
+        "android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"
+      ]
     },
     "web": {
       "output": "static",
@@ -76,7 +79,26 @@
         }
       ],
       "expo-sqlite",
-      "expo-secure-store"
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ],
+      "@maplibre/maplibre-react-native",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "buildArchs": ["arm64-v8a"],
+            "enableMinifyInReleaseBuilds": true,
+            "enableShrinkResourcesInReleaseBuilds": true,
+            "extraProguardRules": "-keep class * extends expo.modules.interfaces.taskManager.TaskConsumer { *; }"
+          }
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true,
