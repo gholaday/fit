@@ -35,6 +35,8 @@ export interface PlayerState {
   stepStartOffsetMs: number;
   stepStartDistanceM: number;
   log: StepLogEntry[];
+  /** Wall-clock [start, end] offsets of every pause, for splits and replay gaps. */
+  pauses: [number, number][];
 }
 
 export type PlayerEvent =
@@ -60,6 +62,7 @@ export function createPlayer(items: readonly WorkoutItem[]): PlayerState {
     stepStartOffsetMs: 0,
     stepStartDistanceM: 0,
     log: [],
+    pauses: [],
   };
 }
 
@@ -126,7 +129,13 @@ export function playerReducer(s: PlayerState, e: PlayerEvent): PlayerState {
       return s.status === 'active' ? { ...s, status: 'paused', pausedAt: e.t } : s;
     case 'resume':
       if (s.status !== 'paused' || s.pausedAt === undefined) return s;
-      return { ...s, status: 'active', pausedMs: s.pausedMs + (e.t - s.pausedAt), pausedAt: undefined };
+      return {
+        ...s,
+        status: 'active',
+        pausedMs: s.pausedMs + (e.t - s.pausedAt),
+        pausedAt: undefined,
+        pauses: [...s.pauses, [offsetAt(s, s.pausedAt), offsetAt(s, e.t)]],
+      };
     case 'tick':
       return s.status === 'active' ? autoAdvance(s, e.t, e.distanceM) : s;
     case 'skip':
@@ -139,6 +148,9 @@ export function playerReducer(s: PlayerState, e: PlayerEvent): PlayerState {
     case 'finish': {
       if (s.status === 'finished' || s.status === 'ready') return s;
       let state = s.status === 'active' ? autoAdvance(s, e.t, e.distanceM) : s;
+      if (state.status === 'paused' && state.pausedAt !== undefined) {
+        state = { ...state, pauses: [...state.pauses, [offsetAt(state, state.pausedAt), offsetAt(state, e.t)]] };
+      }
       if (state.status === 'finished') return state;
       // The current step closes as completed (it was in progress); the rest never ran.
       state = advance(state, activeMs(state, e.t), offsetAt(state, e.t), e.distanceM, false);

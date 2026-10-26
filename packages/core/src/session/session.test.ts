@@ -51,6 +51,7 @@ describe('player', () => {
     p = playerReducer(p, { type: 'resume', t: sec(160) });
     p = playerReducer(p, { type: 'tick', t: sec(300), distanceM: 0 });
     expect(p.stepIdx).toBe(0); // only 240 s active
+    expect(p.pauses).toEqual([[100_000, 160_000]]);
     p = playerReducer(p, { type: 'tick', t: sec(60 + 300 + 240), distanceM: 500 });
     expect(p.stepIdx).toBe(5); // into the 400 m run, which starts at 500 m
     p = playerReducer(p, { type: 'tick', t: sec(700), distanceM: 899 });

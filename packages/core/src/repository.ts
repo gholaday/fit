@@ -1,6 +1,7 @@
 import type { AgendaItem, CompletionDetails, ScheduleSlot, SkipReason } from './agenda';
 import type { IsoDate, Weekday } from './dates';
 import type { HrProfileInput, HrZoneBand } from './hr';
+import type { CuePrefs } from './session/cues';
 import type { TrackPoint } from './session/geo';
 import type { PlayerState, StepLogEntry } from './session/player';
 import type { StepResult } from './session/track';
@@ -87,6 +88,13 @@ export interface Settings {
   stepGoal: number;
   easyBy: 'pace' | 'hr';
   onboarded: boolean;
+  /** Voice cues on or off (spec §5 Audio cues). */
+  voice: boolean;
+  cues: CuePrefs;
+  /** Auto-pause outdoors (spec §5). */
+  autoPause: boolean;
+  /** Keep auto-pause during walk steps. */
+  autoPauseOnWalks: boolean;
 }
 
 // Sessions (M1): recorded runs. Track points are buffered in memory and written with
@@ -153,6 +161,8 @@ export interface SessionDetail extends SessionListItem {
   planWorkoutId?: string;
   steps: StepResult[];
   log: StepLogEntry[];
+  /** Wall-clock pause ranges; pass to splits() and mark as gaps in replay. */
+  pauses: [number, number][];
   /** Full-resolution track; simplify with simplifyTo() for drawing. */
   points: TrackPoint[];
 }

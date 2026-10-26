@@ -43,6 +43,7 @@ import {
   type SessionDetail,
   type SessionListItem,
   type TrackPoint,
+  DEFAULT_CUE_PREFS,
   localIsoDate,
   stepResults,
 } from '@fit/core';
@@ -64,6 +65,10 @@ const DEFAULT_SETTINGS: Settings = {
   stepGoal: 8000,
   easyBy: 'pace',
   onboarded: false,
+  voice: true,
+  cues: DEFAULT_CUE_PREFS,
+  autoPause: false,
+  autoPauseOnWalks: true,
 };
 
 interface RoutineItems {
@@ -750,6 +755,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         pausedMs: row.pausedMs,
         steps: stepResults(player.steps, player.log),
         log: player.log,
+        pauses: player.pauses ?? [],
         points,
       };
       if (row.endedAt) detail.endedAt = new Date(row.endedAt).toISOString();
