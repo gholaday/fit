@@ -1,5 +1,3 @@
-import { Placeholder } from '@/ui/Placeholder';
+import { StatsScreen } from '@/features/stats/StatsScreen';
 
-export default function Stats() {
-  return <Placeholder title="Stats" body="Weekly minutes, plan completion and trends will be shown here. Not available yet." />;
-}
+export default StatsScreen;

@@ -59,6 +59,7 @@ export default function RootLayout() {
         <Stack.Screen name="hr-sensor" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="health-connect" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="pace" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="history" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="activity/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="run" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen name="summary/[id]" options={{ animation: 'fade' }} />
