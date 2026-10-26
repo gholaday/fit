@@ -71,7 +71,7 @@ import {
   stepResults,
   volumeKg,
 } from '@fit/core';
-import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, like, lte, ne, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, like, lt, lte, ne, or, sql } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
 import * as t from './sqlite';
 
@@ -1421,6 +1421,18 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         .select()
         .from(t.externalSessions)
         .where(and(eq(t.externalSessions.status, 'new'), notDeleted(t.externalSessions)))
+        .orderBy(asc(t.externalSessions.startedAt))
+        .all()
+        .map(toExternal);
+    },
+
+    externalSessions(start, end) {
+      const from = new Date(`${start}T00:00:00`).getTime();
+      const to = new Date(`${addDays(end, 1)}T00:00:00`).getTime();
+      return db
+        .select()
+        .from(t.externalSessions)
+        .where(and(eq(t.externalSessions.status, 'saved'), notDeleted(t.externalSessions), gte(t.externalSessions.startedAt, from), lt(t.externalSessions.startedAt, to)))
         .orderBy(asc(t.externalSessions.startedAt))
         .all()
         .map(toExternal);

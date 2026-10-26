@@ -446,6 +446,8 @@ export interface FitRepository {
   /** Replaces the session's Health Connect samples. Empty input is a no-op, so the next sync retries. */
   addHealthHr(sessionId: string, samples: readonly { time: string; bpm: number }[]): void;
   pendingExternal(): ExternalSession[];
+  /** Saved watch activities whose local start date is in [start, end], oldest first. */
+  externalSessions(start: IsoDate, end: IsoDate): ExternalSession[];
   externalSession(id: string): ExternalSession | undefined;
   planMatch(externalId: string): PlanMatch;
   saveExternal(id: string, save: ExternalSave): void;
