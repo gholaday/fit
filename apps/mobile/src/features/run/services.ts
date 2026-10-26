@@ -13,6 +13,8 @@ const PATTERNS: Record<Haptic, number[]> = {
   countdown: [0, 70],
   // Long.
   finish: [0, 700],
+  // One soft pulse: "Back in zone two."
+  zone: [0, 120],
 };
 
 export const cueHaptic = (h: Haptic): void => Vibration.vibrate(PATTERNS[h]);
