@@ -335,7 +335,7 @@ function step(tIn: number): void {
   const belt = useRun.getState().speedKph;
   const paceSecPerKm = treadmill() ? (belt ? 3600 / belt : undefined) : rollingPace(samples, t);
   const snap = snapshot(player, t, distanceM);
-  const r = cuesFor(cue, { snap, t, distanceM, currentPace: paceSecPerKm }, { unit: unit(), prefs: useFit.getState().settings.cues ?? DEFAULT_CUE_PREFS, paceRange: paceRangeFor });
+  const r = cuesFor(cue, { snap, t, distanceM, currentPace: paceSecPerKm }, { unit: unit(), prefs: useFit.getState().settings.cues ?? DEFAULT_CUE_PREFS, paceRange: paceRangeFor, treadmill: treadmill() });
   cue = r.state;
   for (const c of r.cues) {
     if (c.haptic) cueHaptic(c.haptic);
