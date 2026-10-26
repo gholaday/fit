@@ -27,7 +27,8 @@ export interface RouteGeometry {
   line: Feature<LineString>;
   start: Feature<Point>;
   finish: Feature<Point>;
-  markers: FeatureCollection<Point, { label: string }>;
+  /** `at` is the marker's fraction of the route, so replay shows only the ones reached. */
+  markers: FeatureCollection<Point, { label: string; at: number }>;
   /** [west, south, east, north]. */
   bounds: [number, number, number, number];
   /** Step colors by distance fraction, first stop at 0. */
@@ -76,6 +77,7 @@ export function buildRoute(session: SessionDetail, p: Palette, unit: DistanceUni
   // Mile (or km) markers at each whole unit, interpolated between samples.
   const unitM = unit === 'mi' ? METERS_PER_MILE : 1000;
   const markers: RouteGeometry['markers'] = { type: 'FeatureCollection', features: [] };
+  const totalM = dist[dist.length - 1]?.distanceM ?? 0;
   let next = unitM;
   for (let i = 1; i < dist.length; i++) {
     const a = dist[i - 1]!;
@@ -83,7 +85,7 @@ export function buildRoute(session: SessionDetail, p: Palette, unit: DistanceUni
     while (b.distanceM >= next) {
       const f = b.distanceM > a.distanceM ? (next - a.distanceM) / (b.distanceM - a.distanceM) : 0;
       const pos = positionAt(session.points, a.tOffsetMs + f * (b.tOffsetMs - a.tOffsetMs));
-      if (pos) markers.features.push({ type: 'Feature', properties: { label: String(Math.round(next / unitM)) }, geometry: { type: 'Point', coordinates: [pos.lng, pos.lat] } });
+      if (pos) markers.features.push({ type: 'Feature', properties: { label: String(Math.round(next / unitM)), at: totalM > 0 ? next / totalM : 1 }, geometry: { type: 'Point', coordinates: [pos.lng, pos.lat] } });
       next += unitM;
     }
   }

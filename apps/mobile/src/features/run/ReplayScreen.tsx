@@ -32,8 +32,10 @@ const SPEEDS = ['10', '30', '60', '120'] as const;
 type Speed = (typeof SPEEDS)[number];
 /** Map and readout refresh. */
 const FRAME_MS = 50;
-/** Camera re-centers this often while following, easing over the same time. */
-const FOLLOW_MS = 400;
+/** While following, the camera eases this often toward a point that trails the marker. */
+const FOLLOW_MS = 250;
+/** Share of the gap to the marker the camera closes per step: lower is a slower, softer follow. */
+const FOLLOW_EASE = 0.3;
 const PACE_WINDOW_MS = 30_000;
 
 export function ReplayScreen() {
@@ -111,20 +113,29 @@ function Replay({ session }: { session: SessionDetail }) {
 
   const here = useMemo(() => markerAt(session, t), [session, t]);
 
-  // Camera: follow the marker, or frame the whole route.
+  // Camera: follow the marker, or frame the whole route. Following glides toward the marker
+  // (each step closes part of the gap, over a little longer than the step) so the map drifts
+  // after the trail instead of jumping with it.
   const lastFollow = useRef(0);
+  const camCenter = useRef<[number, number]>(here.lngLat);
   useEffect(() => {
     if (!follow) return;
     const now = Date.now();
-    if (now - lastFollow.current < FOLLOW_MS) return;
+    if (playing && now - lastFollow.current < FOLLOW_MS) return;
     lastFollow.current = now;
-    void camera.current?.easeTo({ center: here.lngLat, duration: playing ? FOLLOW_MS : 250, easing: 'linear' });
+    const [x, y] = camCenter.current;
+    const k = playing ? FOLLOW_EASE : 1;
+    camCenter.current = [x + (here.lngLat[0] - x) * k, y + (here.lngLat[1] - y) * k];
+    void camera.current?.easeTo({ center: camCenter.current, duration: playing ? FOLLOW_MS + 100 : 400, easing: playing ? 'linear' : 'ease' });
   }, [follow, here, playing]);
   const toggleFollow = () => {
     haptic.tick();
     const next = !follow;
     setFollow(next);
-    if (next) void camera.current?.easeTo({ center: here.lngLat, zoom: 15.5, duration: 500 });
+    if (next) {
+      camCenter.current = here.lngLat;
+      void camera.current?.easeTo({ center: here.lngLat, zoom: 15.5, duration: 500 });
+    }
     else void camera.current?.fitBounds(route.bounds, { padding: { top: 80, right: 40, bottom: 280, left: 40 }, duration: 500 });
   };
 

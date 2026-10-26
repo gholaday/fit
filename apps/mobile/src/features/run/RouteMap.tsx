@@ -16,6 +16,7 @@ import { haptic } from '@/lib/haptics';
 import { type Palette, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Chip, T } from '@/ui/primitives';
+import type { FilterSpecification } from '@maplibre/maplibre-gl-style-spec';
 import { buildRoute, type ColorStop, gradient, MAP_FONT, MAP_STYLE, nearestDrawn, pausedBefore, RAMP_COLORS, type RouteGeometry, valueStops } from './route';
 
 const HEIGHT = 240;
@@ -23,6 +24,8 @@ const FT_PER_M = 3.28084;
 const LABEL: Record<RouteColorBy, string> = { step: 'Step', pace: 'Pace', hr: 'HR', elevation: 'Elevation' };
 
 const neutralColor = (p: Palette) => (p.scheme === 'dark' ? '#5A5D66' : '#B9BAC0');
+/** Replay draws the route onto nothing: the part not reached yet is fully transparent. */
+const CLEAR = 'rgba(0, 0, 0, 0)';
 
 /** `replay` off for routes that are not recorded sessions (a watch run's GPX file). */
 export default function RouteMap({ session, replay = true }: { session: SessionDetail; replay?: boolean }) {
@@ -158,10 +161,12 @@ function Legend({ by, range, unit }: { by: Exclude<RouteColorBy, 'step'>; range:
 }
 
 /**
- * The colored route, markers and endpoints. `stops` overrides the step colors. `upTo` draws
- * the trail to that fraction over a faint full route.
+ * The colored route, markers and endpoints. `stops` overrides the step colors. With `upTo`
+ * (replay) only the trail to that fraction is drawn, with the mile markers and finish it has
+ * reached; the rest of the route stays hidden.
  */
 export const RouteLayers = memo(function RouteLayers({ route, p, upTo, stops }: { route: RouteGeometry; p: Palette; upTo?: number; stops?: readonly ColorStop[] }) {
+  const reached: FilterSpecification | undefined = upTo === undefined ? undefined : ['<=', ['get', 'at'], upTo];
   return (
     <>
       <GeoJSONSource id="route" data={route.line} lineMetrics>
@@ -169,20 +174,22 @@ export const RouteLayers = memo(function RouteLayers({ route, p, upTo, stops }: 
           type="line"
           id="route-casing"
           layout={{ 'line-cap': 'round', 'line-join': 'round' }}
-          paint={{ 'line-color': p.surface, 'line-width': 8, 'line-opacity': upTo === undefined ? 0.9 : 0.6 }}
+          paint={upTo === undefined ? { 'line-color': p.surface, 'line-width': 8, 'line-opacity': 0.9 } : { 'line-width': 8, 'line-opacity': 0.9, 'line-gradient': gradient([{ at: 0, color: p.surface }], upTo, CLEAR) }}
         />
-        <Layer type="line" id="route-line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-width': 4.5, 'line-gradient': gradient(stops ?? route.stops, upTo, neutralColor(p)) }} />
+        <Layer type="line" id="route-line" layout={{ 'line-cap': 'round', 'line-join': 'round' }} paint={{ 'line-width': 4.5, 'line-gradient': gradient(stops ?? route.stops, upTo, upTo === undefined ? neutralColor(p) : CLEAR) }} />
       </GeoJSONSource>
       <GeoJSONSource id="markers" data={route.markers}>
-        <Layer type="circle" id="marker-dot" paint={{ 'circle-radius': 9, 'circle-color': p.surface, 'circle-stroke-color': p.text, 'circle-stroke-width': 1.5 }} />
+        <Layer type="circle" id="marker-dot" filter={reached} paint={{ 'circle-radius': 9, 'circle-color': p.surface, 'circle-stroke-color': p.text, 'circle-stroke-width': 1.5 }} />
       </GeoJSONSource>
       {/* Labels need glyphs from the tile server. Their own source, so the dots still draw when glyphs can't load. */}
       <GeoJSONSource id="marker-labels" data={route.markers}>
-        <Layer type="symbol" id="marker-label" layout={{ 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true, 'text-ignore-placement': true }} paint={{ 'text-color': p.text }} />
+        <Layer type="symbol" id="marker-label" filter={reached} layout={{ 'text-field': ['get', 'label'], 'text-font': MAP_FONT, 'text-size': 10, 'text-allow-overlap': true, 'text-ignore-placement': true }} paint={{ 'text-color': p.text }} />
       </GeoJSONSource>
-      <GeoJSONSource id="finish" data={route.finish}>
-        <Layer type="circle" id="finish-dot" paint={{ 'circle-radius': 6, 'circle-color': p.text, 'circle-stroke-color': p.surface, 'circle-stroke-width': 2 }} />
-      </GeoJSONSource>
+      {(upTo === undefined || upTo >= 0.999) && (
+        <GeoJSONSource id="finish" data={route.finish}>
+          <Layer type="circle" id="finish-dot" paint={{ 'circle-radius': 6, 'circle-color': p.text, 'circle-stroke-color': p.surface, 'circle-stroke-width': 2 }} />
+        </GeoJSONSource>
+      )}
       <GeoJSONSource id="start" data={route.start}>
         <Layer type="circle" id="start-dot" paint={{ 'circle-radius': 6, 'circle-color': p.success, 'circle-stroke-color': p.surface, 'circle-stroke-width': 2 }} />
       </GeoJSONSource>
