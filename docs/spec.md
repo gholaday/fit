@@ -997,14 +997,13 @@ POST /api/sync
 | **M1** | **GPS recording + map/replay** | Phone records a 30-min outdoor run with screen off, no gaps (foreground service, battery-optimization exemption); workout screen that follows each step's target (pace, HR, effort), cues; summary with map + replay. *This is the default way to run, so it moves up.* |
 | M1.5 | Strength + guided stretching | Exercise catalog import (our schema, overrides, images, starter stretch routines) seeded into SQLite. Workouts + the Plan tab's weekly schedule, Hevy-style logging with last-time values and rest timer. Stretch routines on the schedule with reminders and the **guided player**; post-run stretch reminder. |
 | M2 | Heart rate: Bluetooth + Health Connect | Pair the Venu 3 broadcast, auto-connect on Start, live HR + HR ring, save HR with the session; new-activity modal; **merge watch HR into phone sessions**; import watch-only runs and link them to the plan; HR stats; resting HR + steps on Today. Routes for watch-only runs from Health Connect if Garmin writes them, otherwise GPX/FIT import. |
-| M2.5 | Neon sync | `fit` schema in Neon, shared Drizzle schema + parity test, `apps/api` sync endpoint on Vercel (`/api/sync`), push/pull with cursor, token auth, restore-from-cloud |
 | M3 | Session player (full) | Treadmill + timer modes, sprint/interval cues, pace nudges, crash recovery, auto-pause |
 | M4 | Workout builder + library | Build, save, start any walk/run/sprint/Z2 combo |
 | M5 | Pace profile | Time-trial workout, VDOT calc, pace zones |
 | M6 | Plan engine (full) | All presets, wizard, calendar view, adaptation rules |
 | M9 | Stats + history | Charts, PBs, adherence, steps |
 | M10 | Live HR extras | Off-zone voice cues, HR-driven run/walk auto-switching |
-| M11 | Polish | Backup/export, notifications, settings, diagnostics, design pass |
+| M11 | Polish + Neon sync | Backup/export, notifications, settings, diagnostics, design pass. Neon sync (moved from M2.5): `fit` schema in Neon, shared Drizzle schema + parity test, `apps/api` sync endpoint on Vercel (`/api/sync`), push/pull with cursor, token auth, restore-from-cloud |
 
 Every milestone after M0 is additive: the app is usable for planning and checking off from M0 on, and each later piece only adds data or convenience.
 
