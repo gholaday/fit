@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
+import { repo } from '@/data';
 import { actions, showSnack, useFit, useUnits } from '@/data/store';
 import { evaluate, startMove } from '@/features/move/moveFlow';
 import { Note } from '@/features/move/MoveFlowHost';
@@ -120,6 +121,19 @@ function Actions({ item }: { item: AgendaItem }) {
         )}
       </View>
       <Button label="Move to another day" kind="quiet" onPress={() => go('move')} />
+      {item.lane === 'run' && item.source.type === 'plan_workout' && (
+        <Button
+          label="Save to library"
+          kind="quiet"
+          onPress={() => {
+            close();
+            repo.duplicateWorkout(item.refId, item.title);
+            actions.reload();
+            haptic.success();
+            showSnack({ message: `${item.title} saved to your library` });
+          }}
+        />
+      )}
     </View>
   );
 }

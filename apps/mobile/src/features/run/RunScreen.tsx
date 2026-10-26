@@ -1,7 +1,7 @@
 /**
  * The run route: pre-start, countdown and in-run share one screen so the transition into
  * the run is a state change, not a navigation. Opened with `?key=` for a run card on
- * Today, or with no params for a free run.
+ * Today, `?workoutId=` for a library workout, or with no params for a free run.
  */
 import type { SessionMode } from '@fit/core';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
@@ -23,7 +23,10 @@ const KEEP_AWAKE_TAG = 'run';
 /** The workout's default mode. Treadmill records like Timer until treadmill distance lands (M3). */
 const supported = (mode: SessionMode | undefined): SessionMode => mode ?? 'outdoor';
 
-function setupFor(key: string | undefined) {
+function setupFor(key: string | undefined, workoutId: string | undefined) {
+  // From the library (or the builder's Start now): the workout itself, not a plan item.
+  const fromLibrary = workoutId ? repo.workout(workoutId) : undefined;
+  if (fromLibrary) return { name: fromLibrary.name, mode: supported(fromLibrary.defaultMode), items: fromLibrary.items, workoutId: fromLibrary.id };
   const item = key ? useFit.getState().items[key] : undefined;
   if (!item) return { name: FREE_RUN, mode: 'outdoor' as const, items: [] };
   const workout = repo.workout(item.refId);
@@ -38,7 +41,7 @@ function setupFor(key: string | undefined) {
 
 export function RunScreen() {
   const p = usePalette();
-  const { key } = useLocalSearchParams<{ key?: string }>();
+  const { key, workoutId } = useLocalSearchParams<{ key?: string; workoutId?: string }>();
   const phase = useRun((r) => r.phase);
   const sessionId = useRun((r) => r.sessionId);
   const [ending, setEnding] = useState(false);
@@ -48,8 +51,8 @@ export function RunScreen() {
   // Load the workout once. Coming back to a run in progress keeps it as it is.
   useEffect(() => {
     const r = useRun.getState().phase;
-    if (r !== 'active' && r !== 'paused') prepareRun(setupFor(key));
-  }, [key]);
+    if (r !== 'active' && r !== 'paused') prepareRun(setupFor(key, workoutId));
+  }, [key, workoutId]);
 
   // The screen stays on for the whole run; the user can still turn it off with the power button.
   useEffect(() => {

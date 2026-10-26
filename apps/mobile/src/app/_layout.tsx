@@ -61,6 +61,8 @@ export default function RootLayout() {
         <Stack.Screen name="replay/[id]" options={{ animation: 'fade', gestureEnabled: false }} />
         <Stack.Screen name="routine/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="routine/edit" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="workout/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="workout/edit" options={{ animation: 'slide_from_bottom' }} />
         <Stack.Screen name="exercises" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="exercise/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="exercise/new" options={{ animation: 'slide_from_bottom' }} />

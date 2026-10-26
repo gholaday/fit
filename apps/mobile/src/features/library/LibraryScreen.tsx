@@ -1,19 +1,19 @@
 /**
- * Library tab (mockup Library): your workouts and stretch routines (starters included,
- * duplicate to edit), search across routines and the exercise catalog, and New.
+ * Library tab (mockup Library): run workouts, strength workouts and stretch routines
+ * (starters included, duplicate to edit), search across them and the exercise catalog, and New.
  */
-import type { ExerciseSummary, Routine } from '@fit/core';
+import { type ExerciseSummary, type Lane, type Routine, type WorkoutSummary, formatDistance, formatMinutes } from '@fit/core';
 import { router } from 'expo-router';
 import { memo, useDeferredValue, useMemo, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
-import { useFit, useRoutines } from '@/data/store';
+import { useFit, useRoutines, useUnits, useWorkouts } from '@/data/store';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Sheet } from '@/ui/Sheet';
-import { Button, LaneTile, T } from '@/ui/primitives';
+import { Button, LaneTile, StructureBar, T } from '@/ui/primitives';
 import { ExerciseRow } from './ExerciseRow';
 import { routineDays, routineSub } from './labels';
 import { StatusShade } from '@/ui/StatusShade';
@@ -40,6 +40,7 @@ export function LibraryScreen() {
   const strength = routines.filter((r) => r.kind === 'strength' && shown(r));
   const stretch = routines.filter((r) => r.kind === 'stretch' && shown(r));
   const yours = stretch.filter((r) => r.origin === 'custom').length;
+  const runs = useWorkouts().filter((w) => !lower || w.name.toLowerCase().includes(lower));
 
   return (
     <View style={s.screen}>
@@ -67,6 +68,13 @@ export function LibraryScreen() {
             </Pressable>
           )}
         </View>
+
+        <Section title="Runs" meta={String(runs.length)}>
+          {runs.map((w) => (
+            <RunRow key={w.id} workout={w} />
+          ))}
+          {runs.length === 0 && !q && <Empty text="No run workouts yet. Tap New to build one." />}
+        </Section>
 
         <Section title="Workouts" meta={String(strength.length)}>
           {strength.map((r) => (
@@ -112,6 +120,7 @@ export function LibraryScreen() {
 
       <Sheet visible={creating} onClose={() => setCreating(false)} title="New">
         <View style={{ gap: 8 }}>
+          <NewOption title="Run workout" sub="Steps with time or distance and a target each" lane="run" onPress={() => go(setCreating, '/workout/edit')} />
           <NewOption title="Workout" sub="Strength exercises with sets, reps and weight" lane="workout" onPress={() => go(setCreating, { pathname: '/routine/edit', params: { kind: 'strength' } })} />
           <NewOption title="Stretch routine" sub="Moves with hold times, guided" lane="stretch" onPress={() => go(setCreating, { pathname: '/routine/edit', params: { kind: 'stretch' } })} />
           <NewOption title="Exercise" sub="Add one the catalog does not have" lane="workout" onPress={() => go(setCreating, '/exercise/new')} />
@@ -181,7 +190,33 @@ const RoutineRow = memo(function RoutineRow({ routine, days }: { routine: Routin
   );
 });
 
-function NewOption({ title, sub, lane, onPress }: { title: string; sub: string; lane: 'workout' | 'stretch'; onPress: () => void }) {
+const RunRow = memo(function RunRow({ workout: w }: { workout: WorkoutSummary }) {
+  const s = useStyles();
+  const unit = useUnits().distance;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => {
+        haptic.tap();
+        router.push({ pathname: '/workout/[id]', params: { id: w.id } });
+      }}
+      style={({ pressed }) => [s.row, pressed && { opacity: 0.7 }]}
+    >
+      <LaneTile lane="run" size={34} />
+      <View style={{ flex: 1, gap: 4 }}>
+        <T v="bodyStrong" numberOfLines={1}>
+          {w.name}
+        </T>
+        <T v="caption" tone="secondary" numberOfLines={1} num>
+          {w.estMeters > 0 ? `${formatMinutes(w.estSeconds)}, about ${formatDistance(w.estMeters, unit)}` : formatMinutes(w.estSeconds)}
+        </T>
+        <StructureBar segments={w.structure} height={4} />
+      </View>
+    </Pressable>
+  );
+});
+
+function NewOption({ title, sub, lane, onPress }: { title: string; sub: string; lane: Lane; onPress: () => void }) {
   const s = useStyles();
   return (
     <Pressable

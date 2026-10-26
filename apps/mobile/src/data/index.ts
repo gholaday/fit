@@ -1,4 +1,4 @@
-import type { FitRepository } from '@fit/core';
+import type { FitRepository, IdGen } from '@fit/core';
 import { createSqliteRepository, migrations, tables } from '@fit/schema';
 import { drizzle } from 'drizzle-orm/expo-sqlite';
 import { openDatabaseSync } from 'expo-sqlite';
@@ -25,7 +25,12 @@ function randomByteFraction(): number {
 }
 
 /** The one repository the app talks to. Ready on import, so the store reads on the first frame. */
-export const repo: FitRepository = createSqliteRepository(db, { clock: () => new Date(), newId: monotonicFactory(randomByteFraction) });
+const ulid = monotonicFactory(randomByteFraction);
+
+/** Ids for things the UI creates before saving (builder steps). Same generator as the repository. */
+export const newId: IdGen = () => ulid();
+
+export const repo: FitRepository = createSqliteRepository(db, { clock: () => new Date(), newId });
 
 /**
  * drizzle's expo-sqlite `migrate` is async only because it reads migration files. Ours are

@@ -21,6 +21,7 @@ import {
   type SessionListItem,
   type Settings,
   type SkipReason,
+  type WorkoutSummary,
   addDays,
   localIsoDate,
   startOfWeek,
@@ -53,6 +54,8 @@ export interface FitState {
   weekLogs: readonly QuickLog[];
   /** Latest recorded sessions, newest first; Today lists the ones no plan item claims. */
   recentRuns: readonly SessionListItem[];
+  /** Run workouts in the library, most recently edited first. */
+  workouts: readonly WorkoutSummary[];
   /** Saved watch activities that started today. */
   todayExternal: readonly ExternalSession[];
   snack: Snack | undefined;
@@ -95,6 +98,7 @@ function read(today: IsoDate, windowStart: IsoDate, windowEnd: IsoDate, prev?: F
   const schedule = repo.schedule();
   const runs = repo.recentSessions(20);
   const external = repo.externalSessions(today, today);
+  const workouts = repo.workoutLibrary();
   return {
     today,
     windowStart,
@@ -108,6 +112,7 @@ function read(today: IsoDate, windowStart: IsoDate, windowEnd: IsoDate, prev?: F
     schedule: prev && sameSchedule(prev.schedule, schedule) ? prev.schedule : schedule,
     weekLogs: repo.quickLogs(monday, addDays(monday, 6)),
     recentRuns: prev && JSON.stringify(prev.recentRuns) === JSON.stringify(runs) ? prev.recentRuns : runs,
+    workouts: prev && JSON.stringify(prev.workouts) === JSON.stringify(workouts) ? prev.workouts : workouts,
     todayExternal: prev && JSON.stringify(prev.todayExternal) === JSON.stringify(external) ? prev.todayExternal : external,
   };
 }
@@ -139,6 +144,7 @@ export const useSnack = () => useFit((s) => s.snack);
 export const useRecentRuns = () => useFit((s) => s.recentRuns);
 export const useWeekLogs = () => useFit((s) => s.weekLogs);
 export const useTodayExternal = () => useFit((s) => s.todayExternal);
+export const useWorkouts = () => useFit((s) => s.workouts);
 
 export function getItems(start: IsoDate, end: IsoDate): AgendaItem[] {
   const s = useFit.getState();
