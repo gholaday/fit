@@ -1,0 +1,10 @@
+name: Post-run
+kind: stretch
+transitionS: 8
+items:
+  - slug: quad-stretch
+  - slug: standing-hamstring-and-calf-stretch
+  - slug: standing-gastrocnemius-calf-stretch
+  - slug: standing-hip-flexors
+  - slug: it-band-and-glute-stretch
+  - slug: runners-stretch

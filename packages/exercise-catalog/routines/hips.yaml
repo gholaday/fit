@@ -1,0 +1,10 @@
+name: Hips
+kind: stretch
+transitionS: 8
+items:
+  - slug: standing-hip-circles
+  - slug: kneeling-hip-flexor
+  - slug: lying-glute
+  - slug: adductor-groin
+  - slug: seated-glute
+  - slug: the-straddle

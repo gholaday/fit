@@ -1,0 +1,11 @@
+name: Evening wind-down
+kind: stretch
+transitionS: 8
+items:
+  - slug: childs-pose
+    holdS: 45
+  - slug: lying-glute
+  - slug: knee-across-the-body
+  - slug: seated-floor-hamstring-stretch
+  - slug: calf-stretch-hands-against-wall
+  - slug: hug-knees-to-chest

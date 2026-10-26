@@ -1,0 +1,10 @@
+name: Desk reset
+kind: stretch
+transitionS: 6
+items:
+  - slug: chin-to-chest-stretch
+  - slug: side-neck-stretch
+  - slug: chest-and-front-of-shoulder-stretch
+  - slug: chair-upper-body-stretch
+  - slug: standing-lateral-stretch
+  - slug: shoulder-circles

@@ -1,0 +1,9 @@
+name: Legs
+kind: strength
+restS: 90
+items:
+  - { slug: barbell-squat, sets: 3, reps: 5, restS: 150 }
+  - { slug: romanian-deadlift, sets: 3, reps: 8, restS: 120 }
+  - { slug: barbell-walking-lunge, sets: 3, reps: 10 }
+  - { slug: lying-leg-curls, sets: 3, reps: 12, restS: 60 }
+  - { slug: standing-calf-raises, sets: 3, reps: 15, restS: 60 }

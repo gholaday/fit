@@ -1,0 +1,10 @@
+name: Morning wake-up
+kind: stretch
+transitionS: 8
+items:
+  - slug: cat-stretch
+  - slug: kneeling-hip-flexor
+  - slug: hamstring-stretch
+  - slug: worlds-greatest-stretch
+  - slug: torso-rotation
+  - slug: standing-toe-touches

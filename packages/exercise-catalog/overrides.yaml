@@ -1,0 +1,41 @@
+# Curation applied on every import (spec §9 step 3). Keys are our slugs.
+rename:
+  barbell-bench-press-medium-grip: Bench press
+  standing-military-press: Overhead press
+  incline-dumbbell-press: Incline dumbbell press
+  side-lateral-raise: Lateral raise
+  triceps-pushdown: Triceps pushdown
+  pushups: Push-up
+  pullups: Pull-up
+  bent-over-barbell-row: Barbell row
+  wide-grip-lat-pulldown: Lat pulldown
+  barbell-squat: Back squat
+  barbell-walking-lunge: Walking lunge
+  lying-leg-curls: Leg curl
+  standing-calf-raises: Calf raise
+  cat-stretch: Cat-cow
+  childs-pose: Child's pose
+  lying-glute: Figure-4 stretch
+  worlds-greatest-stretch: World's greatest stretch
+  kneeling-hip-flexor: Hip flexor stretch
+aliases:
+  romanian-deadlift: [RDL]
+  barbell-bench-press-medium-grip: [Flat bench, Barbell bench]
+  standing-military-press: [OHP, Military press]
+  lying-glute: [Pigeon]
+  cat-stretch: [Cat cow]
+  standing-overhead-barbell-triceps-extension: [Skull crusher]
+sides:
+  kneeling-hip-flexor: both
+  lying-glute: both
+  knee-across-the-body: both
+  quad-stretch: both
+  standing-hip-flexors: both
+  it-band-and-glute-stretch: both
+  runners-stretch: both
+  side-neck-stretch: both
+  standing-lateral-stretch: both
+  worlds-greatest-stretch: both
+  cat-stretch: none
+  childs-pose: none
+hide: []

@@ -1,0 +1,10 @@
+name: Lower back
+kind: stretch
+transitionS: 8
+items:
+  - slug: cat-stretch
+  - slug: childs-pose
+  - slug: pelvic-tilt-into-bridge
+  - slug: knee-across-the-body
+  - slug: hug-knees-to-chest
+  - slug: spinal-stretch

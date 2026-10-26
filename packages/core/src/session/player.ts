@@ -46,7 +46,11 @@ export type PlayerEvent =
   | { type: 'tick'; t: number; distanceM: number }
   | { type: 'skip'; t: number; distanceM: number }
   | { type: 'lap'; t: number; distanceM: number }
-  | { type: 'finish'; t: number; distanceM: number };
+  | { type: 'finish'; t: number; distanceM: number }
+  /** Stay longer: add seconds to the current time step (stretch +15 s). */
+  | { type: 'extend'; t: number; seconds: number }
+  /** Go to any step (previous, overview jump). The current step is logged as skipped. */
+  | { type: 'jump'; t: number; distanceM: number; idx: number };
 
 /** A free run is one open run step: no target, ends when you tap End. */
 export const FREE_RUN_STEP: Step = { id: 'free', activity: 'run', duration: { type: 'open' }, target: { type: 'none' } };
@@ -144,6 +148,18 @@ export function playerReducer(s: PlayerState, e: PlayerEvent): PlayerState {
       const settled = s.status === 'active' ? autoAdvance(s, e.t, e.distanceM) : s;
       if (settled.status === 'finished') return settled;
       return advance(settled, activeMs(settled, e.t), offsetAt(settled, e.t), e.distanceM, e.type === 'skip');
+    }
+    case 'extend': {
+      const step = s.steps[s.stepIdx];
+      if (!step || step.duration.type !== 'time' || s.status === 'finished' || s.status === 'ready') return s;
+      const steps = [...s.steps];
+      steps[s.stepIdx] = { ...step, duration: { type: 'time', seconds: step.duration.seconds + e.seconds } };
+      return { ...s, steps };
+    }
+    case 'jump': {
+      if ((s.status !== 'active' && s.status !== 'paused') || e.idx < 0 || e.idx >= s.steps.length || e.idx === s.stepIdx) return s;
+      const closed = advance(s, activeMs(s, e.t), offsetAt(s, e.t), e.distanceM, true);
+      return { ...closed, status: s.status, stepIdx: e.idx };
     }
     case 'finish': {
       if (s.status === 'finished' || s.status === 'ready') return s;

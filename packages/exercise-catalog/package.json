@@ -1,0 +1,28 @@
+{
+  "name": "@fit/exercise-catalog",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./catalog.json": "./catalog.json"
+  },
+  "scripts": {
+    "build:catalog": "tsx src/build.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "sharp": "^0.35.5",
+    "tsx": "^4.23.15",
+    "ulid": "^3.0.2",
+    "vitest": "^5.0.5",
+    "yaml": "^2.9.1"
+  },
+  "dependencies": {
+    "@fit/core": "workspace:*"
+  }
+}

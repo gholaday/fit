@@ -6,6 +6,8 @@ import type { TrackPoint } from './session/geo';
 import type { PlayerState, StepLogEntry } from './session/player';
 import type { StepResult } from './session/track';
 import type { UnitPrefs } from './units';
+import type { Catalog, Equipment, Exercise, ExerciseKind, Muscle, Tracking } from './exercise';
+import type { LoggedSet, RoutineItems } from './routine';
 import type { SessionMode, Workout } from './workout';
 
 /**
@@ -78,6 +80,72 @@ export interface Routine {
   /** Exercise count for strength, move count for stretch. */
   itemCount: number;
   estSeconds: number;
+  /** Starters ship with the catalog and are read-only; duplicate to edit. */
+  origin: 'starter' | 'custom';
+}
+
+export interface RoutineDetail extends Routine {
+  items: RoutineItems;
+  notes?: string;
+}
+
+export interface RoutineInput {
+  name: string;
+  items: RoutineItems;
+  notes?: string;
+}
+
+export interface ExerciseSummary {
+  id: string;
+  slug: string;
+  name: string;
+  kind: ExerciseKind;
+  musclePrimary: Muscle;
+  equipment: Equipment;
+  tracking: Tracking;
+  sides: 'both' | 'none';
+  defaultHoldS?: number;
+  /** Thumbnail key ("cat-stretch"), absent for custom exercises. */
+  thumbKey?: string;
+  custom: boolean;
+}
+
+export interface ExerciseFilter {
+  kind?: ExerciseKind;
+  muscle?: Muscle;
+  equipment?: Equipment;
+  /** Matches name and aliases, case-insensitive. */
+  query?: string;
+  includeHidden?: boolean;
+}
+
+export interface CustomExerciseInput {
+  name: string;
+  kind: ExerciseKind;
+  musclePrimary: Muscle;
+  equipment: Equipment;
+  tracking: Tracking;
+  sides?: 'both' | 'none';
+  defaultHoldS?: number;
+  note?: string;
+}
+
+export interface StrengthSessionInput {
+  name: string;
+  routineId?: string;
+  /** Agenda key of the scheduled occurrence this completes. */
+  scheduleKey?: string;
+  startedAt: string;
+  endedAt: string;
+  sets: (LoggedSet & { completedAt: string })[];
+  rpe?: number;
+  notes?: string;
+}
+
+export interface ExerciseHistoryEntry {
+  sessionId: string;
+  date: IsoDate;
+  sets: LoggedSet[];
 }
 
 export interface ScheduleEntry {
@@ -232,6 +300,31 @@ export interface FitRepository {
   session(id: string): SessionDetail | undefined;
   recentSessions(limit: number): SessionListItem[];
   updateSessionNotes(id: string, patch: { rpe?: number; notes?: string }): void;
+
+  // Exercise catalog (M1.5). Seed after first paint, only when CATALOG_VERSION differs.
+  catalogVersion(): string | undefined;
+  /** Upserts seed exercises (keeps hidden flags and custom rows) and starter routines in one transaction. */
+  seedCatalog(catalog: Catalog): void;
+  exercises(filter?: ExerciseFilter): ExerciseSummary[];
+  exercise(id: string): (Exercise & { custom: boolean; hidden: boolean; note?: string }) | undefined;
+  addCustomExercise(input: CustomExerciseInput): ExerciseSummary;
+  setExerciseHidden(id: string, hidden: boolean): void;
+
+  // Routine library
+  routine(id: string): RoutineDetail | undefined;
+  createRoutine(input: RoutineInput): string;
+  /** Throws for starter routines. */
+  updateRoutine(id: string, input: RoutineInput): void;
+  duplicateRoutine(id: string, name: string): string;
+  /** Soft-deletes and ends its schedule entries, keeping past completions. */
+  deleteRoutine(id: string): void;
+
+  // Strength logging
+  /** Sets from the most recent saved session that included each exercise, for prefill. */
+  lastSets(exerciseIds: readonly string[]): Record<string, LoggedSet[]>;
+  /** Saves the session and its sets, and marks the scheduled occurrence done (Done + data). */
+  saveStrengthSession(input: StrengthSessionInput): string;
+  exerciseHistory(exerciseId: string, limit: number): ExerciseHistoryEntry[];
 
   // Settings
   settings(): Settings;

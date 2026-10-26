@@ -1,0 +1,10 @@
+name: Push
+kind: strength
+restS: 90
+items:
+  - { slug: barbell-bench-press-medium-grip, sets: 3, reps: 8, restS: 120 }
+  - { slug: standing-military-press, sets: 3, reps: 8, restS: 120 }
+  - { slug: incline-dumbbell-press, sets: 3, reps: 10 }
+  - { slug: side-lateral-raise, sets: 3, reps: 12, restS: 60 }
+  - { slug: triceps-pushdown, sets: 3, reps: 12, restS: 60 }
+  - { slug: pushups, sets: 2, reps: 15, restS: 60 }

@@ -17,6 +17,10 @@ export interface CompletionDetails {
   distanceM?: number;
   rpe?: number;
   note?: string;
+  /** Guided stretch: "How did it feel?" 1-5. */
+  feel?: number;
+  /** Stretch moves checked off individually (item indexes), when not done as a whole. */
+  itemsDone?: number[];
 }
 
 export type AgendaSource =

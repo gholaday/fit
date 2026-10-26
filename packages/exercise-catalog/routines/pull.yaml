@@ -1,0 +1,9 @@
+name: Pull
+kind: strength
+restS: 90
+items:
+  - { slug: pullups, sets: 3, reps: 6, restS: 120 }
+  - { slug: bent-over-barbell-row, sets: 3, reps: 8, restS: 120 }
+  - { slug: wide-grip-lat-pulldown, sets: 3, reps: 10 }
+  - { slug: face-pull, sets: 3, reps: 15, restS: 60 }
+  - { slug: barbell-curl, sets: 3, reps: 10, restS: 60 }

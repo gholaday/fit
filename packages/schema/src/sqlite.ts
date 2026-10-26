@@ -130,6 +130,8 @@ export const routines = sqliteTable('routines', {
   itemsJson: text('items_json').notNull(),
   notes: text('notes'),
   origin: text('origin', { enum: ['starter', 'custom'] }).notNull(),
+  /** Catalog slug for starter routines, so re-seeding updates them in place. */
+  starterSlug: text('starter_slug'),
   ...syncColumns,
 });
 
@@ -204,6 +206,8 @@ export const sessions = sqliteTable(
     id: text('id').primaryKey(),
     workoutId: text('workout_id'),
     planWorkoutId: text('plan_workout_id'),
+    /** Strength sessions: the routine that was logged. */
+    routineId: text('routine_id'),
     name: text('name').notNull(),
     mode: text('mode', { enum: ['outdoor', 'treadmill', 'timer'] }).notNull(),
     status: text('status', { enum: ['active', 'saved', 'discarded'] }).notNull(),
@@ -262,4 +266,50 @@ export const trackPoints = sqliteTable(
     source: text('source', { enum: ['phone', 'health_connect', 'file'] }).notNull().default('phone'),
   },
   (t) => [primaryKey({ columns: [t.sessionId, t.tOffsetMs] })],
+);
+
+export const exercises = sqliteTable(
+  'exercises',
+  {
+    id: text('id').primaryKey(),
+    slug: text('slug').notNull(),
+    name: text('name').notNull(),
+    kind: text('kind', { enum: ['strength', 'stretch', 'cardio', 'plyometric'] }).notNull(),
+    musclePrimary: text('muscle_primary').notNull(),
+    musclesSecondaryJson: text('muscles_secondary_json').notNull(),
+    equipment: text('equipment').notNull(),
+    tracking: text('tracking', { enum: ['weight_reps', 'reps', 'time', 'distance'] }).notNull(),
+    level: text('level').notNull(),
+    instructionsJson: text('instructions_json').notNull(),
+    imageKeysJson: text('image_keys_json').notNull(),
+    sides: text('sides', { enum: ['both', 'none'] }).notNull(),
+    defaultHoldS: integer('default_hold_s'),
+    aliasesJson: text('aliases_json').notNull(),
+    /** Lowercased name and aliases, for search without functions in the query. */
+    searchText: text('search_text').notNull(),
+    origin: text('origin', { enum: ['seed', 'custom'] }).notNull(),
+    sourceRef: text('source_ref'),
+    dataVersion: text('data_version'),
+    note: text('note'),
+    hidden: integer('hidden', { mode: 'boolean' }).notNull().default(false),
+    ...syncColumns,
+  },
+  (t) => [uniqueIndex('exercises_slug').on(t.slug), index('exercises_kind').on(t.kind, t.hidden)],
+);
+
+export const strengthSets = sqliteTable(
+  'strength_sets',
+  {
+    id: text('id').primaryKey(),
+    sessionId: text('session_id').notNull(),
+    exerciseId: text('exercise_id').notNull(),
+    setIdx: integer('set_idx').notNull(),
+    type: text('type', { enum: ['normal', 'warmup'] }).notNull().default('normal'),
+    reps: integer('reps').notNull(),
+    weightKg: real('weight_kg'),
+    durationS: integer('duration_s'),
+    completedAt: integer('completed_at').notNull(),
+    ...syncColumns,
+  },
+  (t) => [index('strength_sets_session').on(t.sessionId), index('strength_sets_exercise').on(t.exerciseId, t.completedAt)],
 );

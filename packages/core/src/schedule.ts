@@ -124,6 +124,7 @@ export interface CompletionRow {
   completedAt?: string;
   details?: CompletionDetails;
   skipReason?: SkipReason;
+  sessionId?: string;
 }
 
 export interface AgendaInput {
@@ -209,6 +210,7 @@ export function buildAgenda(input: AgendaInput): AgendaItem[] {
     if (c?.completedAt) item.completedAt = c.completedAt;
     if (c?.details) item.details = c.details;
     if (c?.skipReason) item.skipReason = c.skipReason;
+    if (c?.sessionId) item.sessionId = c.sessionId;
     items.push(item);
   }
 
