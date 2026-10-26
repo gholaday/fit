@@ -34,7 +34,9 @@ export function sourceLabel(profile: PaceProfile, unit: DistanceUnit): string {
 function change(next: number, before: number, unit: DistanceUnit): string {
   const d = Math.round(paceToUnit(next, unit) - paceToUnit(before, unit));
   if (d === 0) return 'Same';
-  return `${Math.abs(d)} s ${d < 0 ? 'faster' : 'slower'}`;
+  const a = Math.abs(d);
+  const amount = a < 60 ? `${a} s` : a % 60 === 0 ? `${a / 60} min` : `${Math.floor(a / 60)} min ${a % 60} s`;
+  return `${amount} ${d < 0 ? 'faster' : 'slower'}`;
 }
 
 /** Zone paces for a VDOT; with `before`, each row also says how much it moved. */
