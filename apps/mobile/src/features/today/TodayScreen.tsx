@@ -1,21 +1,22 @@
-import { addDays } from '@fit/core';
+import { type Lane, addDays, formatClock, formatDistance, formatMinutes, localIsoDate } from '@fit/core';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { RefreshControl, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
-import { useDayKeys, useFit, useSettings, useToday } from '@/data/store';
+import { useDayKeys, useFit, useRecentRuns, useSettings, useToday, useWeekLogs } from '@/data/store';
 import { openActivities, syncedLabel, useHealth } from '@/features/health/state';
 import { syncHealth } from '@/features/health/sync';
-import { QuickLogSheet } from '@/features/quicklog/QuickLogSheet';
+import { QuickLogSheet, quickLogLabel } from '@/features/quicklog/QuickLogSheet';
 import { haptic } from '@/lib/haptics';
 import { longDate } from '@/lib/format';
 import { createStyles, usePalette } from '@/theme';
-import { Icons } from '@/ui/icons';
+import { Icons, QUICK_LOG_ICON } from '@/ui/icons';
 import { Button, IconButton, T } from '@/ui/primitives';
 import { ChecklistCard } from './ChecklistCard';
 import { DayWidget, SlimBar } from './DayWidget';
+import { type DoneActivity, DoneActivityCard } from './DoneActivityCard';
 import { summarizeDay } from './daySummary';
 import { WeekStrip } from './WeekStrip';
 
@@ -33,6 +34,29 @@ export function TodayScreen() {
   const items = useFit(useShallow((st) => keys.map((k) => st.items[k]!)));
   const tomorrowItems = useFit(useShallow((st) => (st.byDate[addDays(today, 1)] ?? []).map((k) => st.items[k]!)));
   const summary = summarizeDay(items, tomorrowItems, new Date().getHours(), settings.units);
+  // Everything else done today, under the checklist: runs no plan item claims and quick logs.
+  const recent = useRecentRuns();
+  const weekLogs = useWeekLogs();
+  const unit = settings.units.distance;
+  const claimed = new Set(items.map((i) => i.sessionId));
+  const done: DoneActivity[] = [
+    ...recent
+      .filter((r) => localIsoDate(new Date(r.startedAt)) === today && !claimed.has(r.id))
+      .reverse()
+      .map((r) => {
+        const time = formatClock(Math.round(r.elapsedMs / 1000));
+        return { key: r.id, title: r.name, detail: r.distanceM > 20 ? `${formatDistance(r.distanceM, unit, 2)}, ${time}` : time, lane: 'run' as const, icon: Icons.run, onPress: () => router.push({ pathname: '/summary/[id]', params: { id: r.id } }) };
+      }),
+    ...weekLogs
+      .filter((l) => l.date === today)
+      .map((l) => ({
+        key: l.id,
+        title: quickLogLabel(l.activityType),
+        detail: l.distanceM ? `${formatDistance(l.distanceM, unit, 2)}, ${formatMinutes(l.minutes * 60)}` : formatMinutes(l.minutes * 60),
+        lane: (l.activityType === 'lift' ? 'workout' : l.activityType === 'stretch' ? 'stretch' : 'run') as Lane,
+        icon: QUICK_LOG_ICON[l.activityType],
+      })),
+  ];
   const heroKey = items.find((i) => i.lane === 'run' && i.status === 'pending')?.key;
   const [quickLog, setQuickLog] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
@@ -100,7 +124,7 @@ export function TodayScreen() {
           />
         )}
 
-        {items.length === 0 ? (
+        {items.length === 0 && done.length === 0 ? (
           <View style={s.empty}>
             <T v="bodyMedium" tone="secondary">
               Nothing planned today
@@ -112,6 +136,9 @@ export function TodayScreen() {
         ) : (
           items.map((i) => <ChecklistCard key={i.key} itemKey={i.key} hero={i.key === heroKey} />)
         )}
+        {done.map((a) => (
+          <DoneActivityCard key={a.key} activity={a} />
+        ))}
 
         <Button label="Free run" kind="quiet" size="md" style={{ marginTop: 4 }} icon={<Icons.run size={18} color={p.text} />} onPress={() => router.push('/run')} />
 

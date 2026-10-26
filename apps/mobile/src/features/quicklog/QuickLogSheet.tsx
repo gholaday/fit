@@ -21,6 +21,8 @@ const TYPES: readonly { value: QuickLogType; label: string }[] = [
   { value: 'other', label: 'Other' },
 ];
 
+export const quickLogLabel = (type: QuickLogType) => TYPES.find((t) => t.value === type)!.label;
+
 const DEFAULT_MINUTES: Record<QuickLogType, number> = { walk: 30, hike: 90, bike: 45, swim: 30, run: 30, lift: 45, stretch: 15, other: 30 };
 
 /** Unplanned activity: type, date, minutes, optional distance and note. Never changes the plan. */
