@@ -931,14 +931,19 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
           .set({ playerJson: JSON.stringify(progress.player), distanceM: progress.distanceM, ...stamp() })
           .where(and(eq(t.sessions.id, id), eq(t.sessions.status, 'active')))
           .run();
-        for (const p of progress.points) {
+        // One multi-row insert each: building a statement per row is the cost on Hermes.
+        for (let i = 0; i < progress.points.length; i += HR_BATCH) {
           tx.insert(t.trackPoints)
-            .values({ sessionId: id, tOffsetMs: p.tOffsetMs, lat: p.lat, lng: p.lng, alt: p.alt ?? null, accuracy: p.accuracy, speed: p.speed ?? null })
+            .values(progress.points.slice(i, i + HR_BATCH).map((p) => ({ sessionId: id, tOffsetMs: p.tOffsetMs, lat: p.lat, lng: p.lng, alt: p.alt ?? null, accuracy: p.accuracy, speed: p.speed ?? null })))
             .onConflictDoNothing()
             .run();
         }
-        for (const h of progress.hr ?? []) {
-          tx.insert(t.hrSamples).values({ sessionId: id, tOffsetMs: h.tOffsetMs, bpm: h.bpm, source: 'ble' }).onConflictDoNothing().run();
+        const hr = progress.hr ?? [];
+        for (let i = 0; i < hr.length; i += HR_BATCH) {
+          tx.insert(t.hrSamples)
+            .values(hr.slice(i, i + HR_BATCH).map((h) => ({ sessionId: id, tOffsetMs: h.tOffsetMs, bpm: h.bpm, source: 'ble' as const })))
+            .onConflictDoNothing()
+            .run();
         }
       });
     },
