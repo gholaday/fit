@@ -8,7 +8,10 @@ import {
   presetInfo,
   rescheduleEntry,
   startOfWeek,
+  structureSegments,
   totalMeters,
+  totalSeconds,
+  type WorkoutInput,
   WORKOUT_ITEMS_SCHEMA_VERSION,
   z2Minutes,
   zonePace,
@@ -760,6 +763,66 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       const workout: Workout = { id: w.id, name: w.name, kind: w.kind, defaultMode: w.defaultMode, items: (JSON.parse(w.itemsJson) as { items: WorkoutItem[] }).items };
       if (w.notes) workout.notes = w.notes;
       return workout;
+    },
+
+    workoutLibrary() {
+      const pace = paceLookup();
+      return db
+        .select()
+        .from(t.workouts)
+        .where(and(eq(t.workouts.isTemplate, true), notDeleted(t.workouts)))
+        .orderBy(desc(t.workouts.updatedAt))
+        .all()
+        .map((w) => {
+          const items = (JSON.parse(w.itemsJson) as { items: WorkoutItem[] }).items;
+          return {
+            id: w.id,
+            name: w.name,
+            defaultMode: w.defaultMode,
+            estSeconds: totalSeconds(items, pace),
+            estMeters: totalMeters(items, pace),
+            structure: structureSegments(items, pace),
+            updatedAt: new Date(w.updatedAt).toISOString(),
+          };
+        });
+    },
+
+    saveWorkout(input, id) {
+      const values = {
+        name: input.name.trim(),
+        kind: 'run' as const,
+        defaultMode: input.defaultMode,
+        itemsJson: JSON.stringify({ schemaVersion: WORKOUT_ITEMS_SCHEMA_VERSION, items: input.items }),
+        notes: input.notes?.trim() || null,
+        isTemplate: input.template,
+      };
+      if (id) {
+        db.update(t.workouts)
+          .set({ ...values, ...stamp() })
+          .where(eq(t.workouts.id, id))
+          .run();
+        return id;
+      }
+      const newWorkoutId = newId();
+      db.insert(t.workouts)
+        .values({ id: newWorkoutId, ...values, ...created() })
+        .run();
+      return newWorkoutId;
+    },
+
+    duplicateWorkout(id, name) {
+      const w = repo.workout(id);
+      if (!w) throw new Error(`Unknown workout ${id}`);
+      const input: WorkoutInput = { name, items: w.items, defaultMode: w.defaultMode, template: true };
+      if (w.notes) input.notes = w.notes;
+      return repo.saveWorkout(input);
+    },
+
+    deleteWorkout(id) {
+      db.update(t.workouts)
+        .set({ deletedAt: now(), ...stamp() })
+        .where(and(eq(t.workouts.id, id), eq(t.workouts.isTemplate, true)))
+        .run();
     },
 
     currentVdot() {

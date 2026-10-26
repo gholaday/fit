@@ -11,7 +11,7 @@ import type { StepResult } from './session/track';
 import type { UnitPrefs } from './units';
 import type { Catalog, Equipment, Exercise, ExerciseKind, Muscle, Tracking } from './exercise';
 import type { LoggedSet, RoutineItems } from './routine';
-import type { SessionMode, Workout } from './workout';
+import type { SessionMode, StructureSegment, Workout, WorkoutItem } from './workout';
 
 /**
  * The contract between screens and storage. The mobile app calls this through its
@@ -90,6 +90,25 @@ export interface Routine {
 export interface RoutineDetail extends Routine {
   items: RoutineItems;
   notes?: string;
+}
+
+export interface WorkoutInput {
+  name: string;
+  items: WorkoutItem[];
+  defaultMode: SessionMode;
+  notes?: string;
+  template: boolean;
+}
+
+export interface WorkoutSummary {
+  id: string;
+  name: string;
+  defaultMode: SessionMode;
+  /** From the current pace profile, or rough defaults without one. */
+  estSeconds: number;
+  estMeters: number;
+  structure: StructureSegment[];
+  updatedAt: string;
 }
 
 export interface RoutineInput {
@@ -385,6 +404,17 @@ export interface FitRepository {
 
   // Workouts and paces
   workout(id: string): Workout | undefined;
+  /** Saved run workouts (templates), most recently edited first (spec §4, M4). */
+  workoutLibrary(): WorkoutSummary[];
+  /**
+   * Creates (no id) or updates a workout. `template: false` stores a one-off for "Start now"
+   * without saving, so the session still links to its workout. Returns the id.
+   */
+  saveWorkout(input: WorkoutInput, id?: string): string;
+  /** Copies any workout (a plan workout too) into the library. */
+  duplicateWorkout(id: string, name: string): string;
+  /** Soft-deletes a template; past sessions keep their step snapshots. */
+  deleteWorkout(id: string): void;
   /** VDOT of the current pace profile, for zonePace() ranges. */
   currentVdot(): number | undefined;
 
