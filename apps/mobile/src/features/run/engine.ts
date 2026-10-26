@@ -39,6 +39,7 @@ import {
 import { create } from 'zustand';
 import { repo } from '@/data';
 import { actions, useFit } from '@/data/store';
+import { syncHealth } from '@/features/health/sync';
 import { holdSensor, setHrSink, useHrLive } from '@/features/hr/live';
 import { cueHaptic, services } from './services';
 
@@ -382,6 +383,8 @@ export async function finishRun(): Promise<string | undefined> {
       pausedMs: player.pausedMs,
     });
     actions.reload();
+    // A watch that recorded the same run may already have synced.
+    void syncHealth();
   }
   dropHr();
   services.speaker?.stop();

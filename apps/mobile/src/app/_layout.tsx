@@ -7,6 +7,7 @@ import { actions } from '@/data/store';
 import { usePalette } from '@/theme';
 import { ActivityModalHost } from '@/features/health/ActivityModal';
 import { reloadHealth } from '@/features/health/state';
+import { syncHealth } from '@/features/health/sync';
 import { ItemSheetHost } from '@/features/items/ItemSheet';
 import { MoveFlowHost } from '@/features/move/MoveFlowHost';
 // Defines the background location task; must load at startup, before any run.
@@ -25,6 +26,7 @@ export default function RootLayout() {
     const t = setTimeout(() => {
       void seedCatalogIfNeeded();
       reloadHealth();
+      void syncHealth();
       stop = startReminderSync();
     }, 300);
     return () => {
@@ -36,7 +38,9 @@ export default function RootLayout() {
   // "Today" changes at midnight and while the app sits in the background.
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
-      if (state === 'active') actions.refreshToday();
+      if (state !== 'active') return;
+      actions.refreshToday();
+      void syncHealth();
     });
     return () => sub.remove();
   }, []);
@@ -50,6 +54,7 @@ export default function RootLayout() {
         <Stack.Screen name="setup" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="diagnostics" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="hr-sensor" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="health-connect" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="run" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen name="summary/[id]" options={{ animation: 'fade' }} />
         <Stack.Screen name="replay/[id]" options={{ animation: 'fade', gestureEnabled: false }} />

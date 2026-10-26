@@ -98,6 +98,9 @@ export function SettingsScreen() {
 
         <Section title="Recording">
           <Group>
+            <Row label="Health Connect" sub="Steps, resting heart rate and Garmin workouts" onPress={() => router.push('/health-connect')}>
+              <Icons.chevronRight size={18} color={p.textTertiary} />
+            </Row>
             <Row label="Heart rate sensor" sub={settings.hrSensor ? settings.hrSensor.name : 'None, tap to pair'} onPress={() => router.push('/hr-sensor')}>
               <Icons.chevronRight size={18} color={p.textTertiary} />
             </Row>
@@ -109,7 +112,6 @@ export function SettingsScreen() {
 
         <Section title="Coming later">
           <Group>
-            <Row label="Health Connect" sub="Steps, resting heart rate and Garmin sessions" />
             <Row label="Backup and export" sub="Sync to the cloud and export your data" last />
           </Group>
         </Section>

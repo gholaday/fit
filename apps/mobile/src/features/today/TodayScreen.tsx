@@ -1,12 +1,13 @@
 import { addDays } from '@fit/core';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { RefreshControl, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { useDayKeys, useFit, useSettings, useToday } from '@/data/store';
 import { openActivities, syncedLabel, useHealth } from '@/features/health/state';
+import { syncHealth } from '@/features/health/sync';
 import { QuickLogSheet } from '@/features/quicklog/QuickLogSheet';
 import { haptic } from '@/lib/haptics';
 import { longDate } from '@/lib/format';
@@ -34,6 +35,11 @@ export function TodayScreen() {
   const summary = summarizeDay(items, tomorrowItems, new Date().getHours(), settings.units);
   const heroKey = items.find((i) => i.lane === 'run' && i.status === 'pending')?.key;
   const [quickLog, setQuickLog] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const refresh = () => {
+    setRefreshing(true);
+    void syncHealth().finally(() => setRefreshing(false));
+  };
   const metrics = useHealth((h) => h.metrics);
   const lastSyncedAt = useHealth((h) => h.lastSyncedAt);
   const pendingCount = useHealth((h) => h.pending.length);
@@ -49,7 +55,7 @@ export function TodayScreen() {
 
   return (
     <View style={s.screen}>
-      <Animated.ScrollView onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} showsVerticalScrollIndicator={false}>
+      <Animated.ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} progressViewOffset={insets.top} />} onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
           <View style={{ flex: 1 }}>
             <T v="label" tone="secondary">
