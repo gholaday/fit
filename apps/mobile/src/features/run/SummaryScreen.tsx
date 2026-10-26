@@ -8,7 +8,8 @@ import { lazy, Suspense, useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
-import { actions, showSnack, useHrProfile, useUnits } from '@/data/store';
+import { actions, showSnack, useHrProfile, usePaceBump, useUnits, useVdot } from '@/data/store';
+import { PaceBumpCard, TrialCard } from '@/features/pace/paces';
 import { haptic } from '@/lib/haptics';
 import { createStyles, toneColor, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -44,6 +45,10 @@ export function SummaryScreen() {
   const insets = useSafeAreaInsets();
   const unit = useUnits().distance;
   const zones = useHrProfile()?.zones;
+  const vdot = useVdot();
+  const bump = usePaceBump();
+  // A time trial (or the plans' 5K retest) in this run, for "Update your paces?".
+  const [trial] = useState(() => (session ? repo.sessionTrial(session.id) : undefined));
   // Stats over the merged trace, once; the zones only change in Settings.
   const [hr] = useState(() => (session && session.hr.length > 1 ? hrStats(session.hr, zones ?? [], { endMs: session.endedAt ? Date.parse(session.endedAt) - Date.parse(session.startedAt) : (session.hr[session.hr.length - 1]?.tOffsetMs ?? 0), pauses: session.pauses, log: session.log }) : undefined));
 
@@ -100,6 +105,9 @@ export function SummaryScreen() {
           {hasDistance && <Stat value={metersToUnit(session.distanceM, unit).toFixed(2)} label={unit === 'mi' ? 'Miles' : 'Kilometers'} />}
           {hasDistance && <Stat value={pace(avgPace, unit)} label={`Pace /${unit}`} />}
         </View>
+
+        {trial && <TrialCard sessionId={session.id} trial={trial} current={vdot} />}
+        {bump && !trial && <PaceBumpCard bump={bump} />}
 
         {hr && <HrCard session={session} stats={hr} zones={zones} />}
 

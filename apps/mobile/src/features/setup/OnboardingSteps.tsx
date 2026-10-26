@@ -69,7 +69,7 @@ export function defaultHeartInput(existing: HrProfileInput | undefined): HrProfi
   return { method: DEFAULT_HR_METHOD, age: DEFAULT_AGE, maxHr: estimateMaxHr(DEFAULT_AGE), maxHrSource: 'estimated' };
 }
 
-const RACES: readonly { meters: number; label: string; seconds: number }[] = [
+export const RACES: readonly { meters: number; label: string; seconds: number }[] = [
   { meters: 1609.344, label: '1 mi', seconds: 9 * 60 },
   { meters: 5000, label: '5K', seconds: 30 * 60 },
   { meters: 10000, label: '10K', seconds: 62 * 60 },

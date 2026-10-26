@@ -2,7 +2,7 @@ import { ZONE_NAMES, zoneBand } from '@fit/core';
 import { router } from 'expo-router';
 import { ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { actions, useHrProfile, usePlan, useSettings, useToday } from '@/data/store';
+import { actions, useHrProfile, usePlan, useSettings, useToday, useVdot } from '@/data/store';
 import { haptic } from '@/lib/haptics';
 import { monthDay, thousands } from '@/lib/format';
 import { createStyles, usePalette } from '@/theme';
@@ -16,6 +16,7 @@ export function SettingsScreen() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const settings = useSettings();
+  const vdot = useVdot();
   const hr = useHrProfile();
   const plan = usePlan();
   const today = useToday();
@@ -76,6 +77,9 @@ export function SettingsScreen() {
               sub={hr && z2 ? `${METHOD_LABEL[hr.method]}, Zone 2 ${ZONE_NAMES[2].toLowerCase()} ${z2.minBpm}-${z2.maxBpm} bpm` : 'Not set'}
               onPress={() => router.push({ pathname: '/setup', params: { only: 'zones' } })}
             >
+              <Icons.chevronRight size={18} color={p.textTertiary} />
+            </Row>
+            <Row label="Pace profile" sub={vdot !== undefined ? `VDOT ${vdot.toFixed(1)}, sets every pace target` : 'Not set, enter a race or run a time trial'} onPress={() => router.push('/pace')}>
               <Icons.chevronRight size={18} color={p.textTertiary} />
             </Row>
             <Row label="Running plan" sub={plan ? (today < plan.startDate ? `${plan.name}, starts ${monthDay(plan.startDate)}` : `${plan.name}, week ${plan.currentWeek} of ${plan.weeks}`) : 'None'} onPress={() => router.push({ pathname: '/setup', params: { only: 'plan' } })}>

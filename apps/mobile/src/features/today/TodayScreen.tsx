@@ -5,7 +5,8 @@ import { RefreshControl, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
-import { useDayKeys, useFit, useRecentRuns, useSettings, useToday, useTodayExternal, useWeekLogs } from '@/data/store';
+import { useDayKeys, useFit, usePaceBump, useRecentRuns, useSettings, useToday, useTodayExternal, useWeekLogs } from '@/data/store';
+import { PaceBumpCard } from '@/features/pace/paces';
 import { ACTIVITY_ICON, ACTIVITY_LABEL } from '@/features/health/ActivityModal';
 import { openActivities, syncedLabel, useHealth } from '@/features/health/state';
 import { syncHealth } from '@/features/health/sync';
@@ -83,6 +84,7 @@ export function TodayScreen() {
   const metrics = useHealth((h) => h.metrics);
   const lastSyncedAt = useHealth((h) => h.lastSyncedAt);
   const pendingCount = useHealth((h) => h.pending.length);
+  const bump = usePaceBump();
 
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler((e) => {
@@ -126,6 +128,7 @@ export function TodayScreen() {
             </View>
           </View>
         )}
+        {bump && <PaceBumpCard bump={bump} />}
         {pendingCount > 0 && (
           <Button
             label={`New activities (${pendingCount})`}

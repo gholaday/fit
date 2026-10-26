@@ -54,6 +54,9 @@ export interface FitState {
   weekLogs: readonly QuickLog[];
   /** Latest recorded sessions, newest first; Today lists the ones no plan item claims. */
   recentRuns: readonly SessionListItem[];
+  /** Current VDOT, and the +1 suggestion when quality sessions beat their targets. */
+  vdot: number | undefined;
+  paceBump: { from: number; to: number } | undefined;
   /** Run workouts in the library, most recently edited first. */
   workouts: readonly WorkoutSummary[];
   /** Saved watch activities that started today. */
@@ -99,6 +102,7 @@ function read(today: IsoDate, windowStart: IsoDate, windowEnd: IsoDate, prev?: F
   const runs = repo.recentSessions(20);
   const external = repo.externalSessions(today, today);
   const workouts = repo.workoutLibrary();
+  const bump = repo.paceBump();
   return {
     today,
     windowStart,
@@ -112,6 +116,8 @@ function read(today: IsoDate, windowStart: IsoDate, windowEnd: IsoDate, prev?: F
     schedule: prev && sameSchedule(prev.schedule, schedule) ? prev.schedule : schedule,
     weekLogs: repo.quickLogs(monday, addDays(monday, 6)),
     recentRuns: prev && JSON.stringify(prev.recentRuns) === JSON.stringify(runs) ? prev.recentRuns : runs,
+    vdot: repo.currentVdot(),
+    paceBump: prev?.paceBump && bump && prev.paceBump.from === bump.from && prev.paceBump.to === bump.to ? prev.paceBump : bump,
     workouts: prev && JSON.stringify(prev.workouts) === JSON.stringify(workouts) ? prev.workouts : workouts,
     todayExternal: prev && JSON.stringify(prev.todayExternal) === JSON.stringify(external) ? prev.todayExternal : external,
   };
@@ -145,6 +151,8 @@ export const useRecentRuns = () => useFit((s) => s.recentRuns);
 export const useWeekLogs = () => useFit((s) => s.weekLogs);
 export const useTodayExternal = () => useFit((s) => s.todayExternal);
 export const useWorkouts = () => useFit((s) => s.workouts);
+export const useVdot = () => useFit((s) => s.vdot);
+export const usePaceBump = () => useFit((s) => s.paceBump);
 
 export function getItems(start: IsoDate, end: IsoDate): AgendaItem[] {
   const s = useFit.getState();

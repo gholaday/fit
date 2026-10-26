@@ -2,12 +2,13 @@
  * Library tab (mockup Library): run workouts, strength workouts and stretch routines
  * (starters included, duplicate to edit), search across them and the exercise catalog, and New.
  */
-import { type ExerciseSummary, type Lane, type Routine, type WorkoutSummary, formatDistance, formatMinutes } from '@fit/core';
+import { type ExerciseSummary, type Lane, type Routine, TIME_TRIALS, type WorkoutSummary, formatDistance, formatMinutes, parseWorkout, structureSegments, totalSeconds } from '@fit/core';
 import { router } from 'expo-router';
 import { memo, useDeferredValue, useMemo, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { repo } from '@/data';
+import { newId, repo } from '@/data';
+import { startTrial, type TimeTrial } from '@/features/pace/paces';
 import { useFit, useRoutines, useUnits, useWorkouts } from '@/data/store';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
@@ -41,6 +42,7 @@ export function LibraryScreen() {
   const stretch = routines.filter((r) => r.kind === 'stretch' && shown(r));
   const yours = stretch.filter((r) => r.origin === 'custom').length;
   const runs = useWorkouts().filter((w) => !lower || w.name.toLowerCase().includes(lower));
+  const trials = TIME_TRIALS.filter((t) => !lower || t.name.toLowerCase().includes(lower));
 
   return (
     <View style={s.screen}>
@@ -69,11 +71,14 @@ export function LibraryScreen() {
           )}
         </View>
 
-        <Section title="Runs" meta={String(runs.length)}>
+        <Section title="Runs" meta={trials.length > 0 ? `${runs.length} yours, ${trials.length} time trials` : String(runs.length)}>
           {runs.map((w) => (
             <RunRow key={w.id} workout={w} />
           ))}
           {runs.length === 0 && !q && <Empty text="No run workouts yet. Tap New to build one." />}
+          {trials.map((t) => (
+            <TrialRow key={t.id} trial={t} />
+          ))}
         </Section>
 
         <Section title="Workouts" meta={String(strength.length)}>
@@ -213,6 +218,27 @@ const RunRow = memo(function RunRow({ workout: w }: { workout: WorkoutSummary })
         <StructureBar segments={w.structure} height={4} />
       </View>
     </Pressable>
+  );
+});
+
+/** Built-in time trials: read-only, Start only. They set your paces when you finish. */
+const TrialRow = memo(function TrialRow({ trial }: { trial: TimeTrial }) {
+  const s = useStyles();
+  const p = usePalette();
+  // Parsed once for the estimate and the bar; the start parses again with fresh ids.
+  const [items] = useState(() => parseWorkout(trial.dsl, newId));
+  return (
+    <View style={s.row}>
+      <LaneTile lane="run" size={34} />
+      <View style={{ flex: 1, gap: 4 }}>
+        <T v="bodyStrong" numberOfLines={1}>
+          {trial.name}
+        </T>
+        <T v="caption" tone="secondary" numberOfLines={1}>{`About ${formatMinutes(totalSeconds(items))}, sets your paces`}</T>
+        <StructureBar segments={structureSegments(items)} height={4} />
+      </View>
+      <Button label="Start" size="sm" kind="outline" icon={<Icons.play size={12} color={p.text} />} onPress={() => startTrial(trial)} />
+    </View>
   );
 });
 
