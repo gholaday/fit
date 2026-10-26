@@ -8,7 +8,7 @@ import { memo, useDeferredValue, useMemo, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
-import { useFit, useRoutines, useUnits, useWorkouts } from '@/data/store';
+import { useDataVersion, useFit, useRoutines, useUnits, useWorkouts } from '@/data/store';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -28,12 +28,13 @@ export function LibraryScreen() {
   const [creating, setCreating] = useState(false);
   const q = useDeferredValue(query.trim());
 
-  // Routines change identity when the store reloads (after seeding or edits), so counts follow.
+  // The store's version changes on every reload (after seeding or edits), so counts follow.
+  const version = useDataVersion();
   const counts = useMemo(() => {
     const all = repo.exercises({});
     return { total: all.length, custom: all.filter((e) => e.custom).length };
-  }, [routines]);
-  const matches = useMemo<ExerciseSummary[]>(() => (q ? repo.exercises({ query: q }).slice(0, 30) : []), [q, routines]);
+  }, [version]);
+  const matches = useMemo<ExerciseSummary[]>(() => (q ? repo.exercises({ query: q }).slice(0, 30) : []), [q, version]);
 
   const lower = q.toLowerCase();
   const shown = (r: Routine) => !lower || r.name.toLowerCase().includes(lower);

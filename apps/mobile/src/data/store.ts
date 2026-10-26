@@ -58,13 +58,47 @@ export interface FitState {
   workouts: readonly WorkoutSummary[];
   /** Saved watch activities that started today. */
   todayExternal: readonly ExternalSession[];
+  /**
+   * Bumped on every read. Rows keep their identity across reloads, so screens that query the
+   * repository directly (exercise search) depend on this to see edits made elsewhere.
+   */
+  version: number;
   snack: Snack | undefined;
 }
 
 const EMPTY: readonly string[] = [];
 
-function sameItem(a: AgendaItem, b: AgendaItem): boolean {
-  return a === b || JSON.stringify(a) === JSON.stringify(b);
+/**
+ * `next`, reusing `prev` and its unchanged parts wherever they are deep-equal, so a re-read
+ * keeps the references selectors compare and untouched subscribers do not re-render.
+ */
+function share<T>(prev: T | undefined, next: T): T {
+  if (prev === next || prev === undefined) return next;
+  if (Array.isArray(prev) && Array.isArray(next)) {
+    const out = next.map((v, i) => share(prev[i], v));
+    return (out.length === prev.length && out.every((v, i) => v === prev[i]) ? prev : out) as T;
+  }
+  if (isPlainObject(prev) && isPlainObject(next)) {
+    // Like JSON equality, a key set to undefined (optimistic patches) equals a missing key.
+    const out: Record<string, unknown> = {};
+    let same = definedKeys(prev) === definedKeys(next);
+    for (const k of Object.keys(next)) {
+      out[k] = share(prev[k], next[k]);
+      if (out[k] !== prev[k]) same = false;
+    }
+    return (same ? prev : out) as T;
+  }
+  return next;
+}
+
+function definedKeys(o: Record<string, unknown>): number {
+  let n = 0;
+  for (const k in o) if (o[k] !== undefined) n++;
+  return n;
+}
+
+function isPlainObject(v: unknown): v is Record<string, unknown> {
+  return typeof v === 'object' && v !== null && Object.getPrototypeOf(v) === Object.prototype;
 }
 
 function sameKeys(a: readonly string[] | undefined, b: readonly string[]): boolean {
@@ -84,8 +118,7 @@ function read(today: IsoDate, windowStart: IsoDate, windowEnd: IsoDate, prev?: F
   const items: Record<string, AgendaItem> = {};
   const dayKeys: Record<IsoDate, string[]> = {};
   for (const item of list) {
-    const old = prev?.items[item.key];
-    items[item.key] = old && sameItem(old, item) ? old : item;
+    items[item.key] = share(prev?.items[item.key], item);
     (dayKeys[item.date] ??= []).push(item.key);
   }
   const byDate: Record<IsoDate, readonly string[]> = {};
@@ -105,20 +138,17 @@ function read(today: IsoDate, windowStart: IsoDate, windowEnd: IsoDate, prev?: F
     windowEnd,
     items,
     byDate,
-    plan: prev?.plan && plan && JSON.stringify(prev.plan) === JSON.stringify(plan) ? prev.plan : plan,
-    settings: repo.settings(),
-    hrProfile: repo.currentHrProfile(),
-    routines: repo.routines(),
-    schedule: prev && sameSchedule(prev.schedule, schedule) ? prev.schedule : schedule,
-    weekLogs: repo.quickLogs(monday, addDays(monday, 6)),
-    recentRuns: prev && JSON.stringify(prev.recentRuns) === JSON.stringify(runs) ? prev.recentRuns : runs,
-    workouts: prev && JSON.stringify(prev.workouts) === JSON.stringify(workouts) ? prev.workouts : workouts,
-    todayExternal: prev && JSON.stringify(prev.todayExternal) === JSON.stringify(external) ? prev.todayExternal : external,
+    plan: share(prev?.plan, plan),
+    settings: share(prev?.settings, repo.settings()),
+    hrProfile: share(prev?.hrProfile, repo.currentHrProfile()),
+    routines: share(prev?.routines, repo.routines()),
+    schedule: share(prev?.schedule, schedule),
+    weekLogs: share(prev?.weekLogs, repo.quickLogs(monday, addDays(monday, 6))),
+    recentRuns: share(prev?.recentRuns, runs),
+    workouts: share(prev?.workouts, workouts),
+    todayExternal: share(prev?.todayExternal, external),
+    version: (prev?.version ?? 0) + 1,
   };
-}
-
-function sameSchedule(a: readonly ScheduleEntry[], b: readonly ScheduleEntry[]): boolean {
-  return a === b || JSON.stringify(a) === JSON.stringify(b);
 }
 
 const firstToday = localIsoDate(new Date());
@@ -145,6 +175,7 @@ export const useRecentRuns = () => useFit((s) => s.recentRuns);
 export const useWeekLogs = () => useFit((s) => s.weekLogs);
 export const useTodayExternal = () => useFit((s) => s.todayExternal);
 export const useWorkouts = () => useFit((s) => s.workouts);
+export const useDataVersion = () => useFit((s) => s.version);
 
 export function getItems(start: IsoDate, end: IsoDate): AgendaItem[] {
   const s = useFit.getState();

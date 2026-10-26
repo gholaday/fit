@@ -10,7 +10,7 @@ import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
-import { useRoutines } from '@/data/store';
+import { useDataVersion } from '@/data/store';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, Chip, IconButton, T } from '@/ui/primitives';
@@ -25,7 +25,7 @@ export function ExerciseListScreen() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const { pick } = useLocalSearchParams<{ pick?: 'strength' | 'stretch' }>();
-  const routines = useRoutines();
+  const version = useDataVersion();
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState<ExerciseKind | undefined>(pick);
   const [muscle, setMuscle] = useState<Muscle>();
@@ -33,7 +33,7 @@ export function ExerciseListScreen() {
   const [picked, setPicked] = useState<ExerciseSummary[]>([]);
   const q = useDeferredValue(query.trim());
 
-  const list = useMemo(() => repo.exercises({ kind, muscle, equipment, query: q || undefined }), [kind, muscle, equipment, q, routines]);
+  const list = useMemo(() => repo.exercises({ kind, muscle, equipment, query: q || undefined }), [kind, muscle, equipment, q, version]);
 
   const toggle = useCallback((e: ExerciseSummary) => setPicked((cur) => (cur.some((x) => x.id === e.id) ? cur.filter((x) => x.id !== e.id) : [...cur, e])), []);
   const open = useCallback((e: ExerciseSummary) => router.push({ pathname: '/exercise/[id]', params: { id: e.id } }), []);
