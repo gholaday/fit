@@ -5,7 +5,7 @@ import { actions, showSnack, useToday, useUnits } from '@/data/store';
 import { useFormStyles } from '@/features/items/ItemSheet';
 import { shortDate } from '@/lib/format';
 import { usePalette } from '@/theme';
-import { Button, Group, IconButton, Row, Stepper, T } from '@/ui/primitives';
+import { Button, Group, IconButton, Row, Stepper, T, NumStepper } from '@/ui/primitives';
 import { Icons, QUICK_LOG_ICON } from '@/ui/icons';
 import { Sheet } from '@/ui/Sheet';
 import { haptic } from '@/lib/haptics';
@@ -48,7 +48,7 @@ function Form({ onClose }: { onClose: () => void }) {
   const [date, setDate] = useState(today);
   const [minutes, setMinutes] = useState(DEFAULT_MINUTES.walk);
   const [touchedMinutes, setTouchedMinutes] = useState(false);
-  const [distance, setDistance] = useState('');
+  const [distance, setDistance] = useState(0);
   const [note, setNote] = useState('');
 
   const pick = (t: QuickLogType) => {
@@ -61,13 +61,12 @@ function Form({ onClose }: { onClose: () => void }) {
     setMinutes(Math.max(5, minutes + delta));
   };
   const save = () => {
-    const d = Number(distance.replace(',', '.'));
     const label = TYPES.find((t) => t.value === kind)!.label;
     actions.addQuickLog({
       date,
       activityType: kind,
       minutes,
-      distanceM: distance.trim() !== '' && Number.isFinite(d) && d > 0 ? unitToMeters(d, units.distance) : undefined,
+      distanceM: distance > 0 ? unitToMeters(distance, units.distance) : undefined,
       note: note.trim() || undefined,
     });
     haptic.commit();
@@ -127,12 +126,7 @@ function Form({ onClose }: { onClose: () => void }) {
           <Stepper value={formatMinutes(minutes * 60)} minusLabel="Less time" plusLabel="More time" onMinus={() => step(-5)} onPlus={() => step(5)} />
         </Row>
         <Row label="Distance">
-          <View style={f.inputWrap}>
-            <TextInput value={distance} onChangeText={setDistance} keyboardType="decimal-pad" placeholder="Optional" placeholderTextColor={p.textTertiary} style={[f.input, { width: 104, textAlign: 'right' }]} accessibilityLabel={`Distance in ${units.distance}`} />
-            <T v="body" tone="secondary">
-              {units.distance}
-            </T>
-          </View>
+          <NumStepper label="Distance" value={distance} min={0} max={100} step={0.1} format={(n) => (n === 0 ? 'None' : `${n.toFixed(1)} ${units.distance}`)} onChange={setDistance} />
         </Row>
         <View style={{ padding: 16, gap: 8 }}>
           <T v="bodyMedium">Note</T>

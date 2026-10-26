@@ -83,15 +83,15 @@ export function SummaryScreen() {
         ) : (
           <View style={[s.mapSlot, s.center]}>
             <T v="caption" tone="tertiary">
-              {session.mode === 'timer' ? 'Timer run, no route' : 'No route recorded'}
+              {session.mode === 'outdoor' ? 'No route recorded' : session.mode === 'treadmill' ? 'Treadmill run, no route' : 'Timer run, no route'}
             </T>
           </View>
         )}
 
         <View style={s.hero}>
           <Stat value={formatClock(Math.round(session.elapsedMs / 1000))} label="Time" />
-          {session.mode !== 'timer' && <Stat value={metersToUnit(session.distanceM, unit).toFixed(2)} label={unit === 'mi' ? 'Miles' : 'Kilometers'} />}
-          {session.mode !== 'timer' && <Stat value={pace(avgPace, unit)} label={`Pace /${unit}`} />}
+          {session.mode === 'outdoor' && <Stat value={metersToUnit(session.distanceM, unit).toFixed(2)} label={unit === 'mi' ? 'Miles' : 'Kilometers'} />}
+          {session.mode === 'outdoor' && <Stat value={pace(avgPace, unit)} label={`Pace /${unit}`} />}
         </View>
 
         {session.steps.length > 1 && (
@@ -112,7 +112,7 @@ export function SummaryScreen() {
                   <T v="bodyStrong" num>
                     {formatClock(Math.round(r.durationS))}
                   </T>
-                  {session.mode !== 'timer' && (
+                  {session.mode === 'outdoor' && (
                     <T v="caption" tone="secondary" num>
                       {r.avgPaceSecPerKm !== undefined ? `${formatDistance(r.distanceM, unit, 2)}, ${pace(r.avgPaceSecPerKm, unit)} /${unit}` : formatDistance(r.distanceM, unit, 2)}
                     </T>

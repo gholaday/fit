@@ -1,5 +1,6 @@
 import type { BottomTabBarProps } from 'expo-router/tabs';
 import { Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from './icons';
 import { T } from './primitives';
@@ -13,11 +14,13 @@ const ICONS = {
 } as const;
 
 /** Bottom tabs as in the mockups: icon over label, hairline on top. */
-export function TabBar({ state, descriptors, navigateToTab, insets }: BottomTabBarProps) {
+export function TabBar({ state, descriptors, navigateToTab }: BottomTabBarProps) {
   const s = useStyles();
+  // Clear Android's navigation bar or gesture handle, plus breathing room above it.
+  const insets = useSafeAreaInsets();
   const p = usePalette();
   return (
-    <View style={[s.bar, { paddingBottom: Math.max(insets.bottom, 12) }]} accessibilityRole="tablist">
+    <View style={[s.bar, { paddingBottom: insets.bottom + 10 }]} accessibilityRole="tablist">
       {state.routes.map((route, i) => {
         const on = state.index === i;
         const color = on ? p.text : p.textTertiary;

@@ -1,5 +1,5 @@
 import type { Lane, StructureSegment } from '@fit/core';
-import { memo, type ReactNode } from 'react';
+import { memo, type ReactNode, useEffect, useRef } from 'react';
 import { Pressable, type PressableProps, type StyleProp, Text, type TextProps, type TextStyle, View, type ViewStyle } from 'react-native';
 import { createStyles, laneColor, toneColor, usePalette } from '@/theme';
 import { type } from '@/theme/type';
@@ -34,7 +34,7 @@ interface ButtonProps extends Omit<PressableProps, 'style' | 'children'> {
   style?: StyleProp<ViewStyle>;
 }
 
-export function Button({ label, kind = 'primary', size = 'lg', icon, style, disabled, ...rest }: ButtonProps) {
+export function Button({ label, kind = 'primary', size = 'lg', icon, style, disabled, onPress, ...rest }: ButtonProps) {
   const s = useButtonStyles();
   const p = usePalette();
   const fg = kind === 'primary' ? p.onPrimary : p.text;
@@ -46,6 +46,10 @@ export function Button({ label, kind = 'primary', size = 'lg', icon, style, disa
       hitSlop={size === 'sm' ? 6 : 0}
       style={({ pressed }) => [s.base, s[size], s[kind], (pressed || disabled) && { opacity: disabled ? 0.4 : 0.7 }, style]}
       {...rest}
+      onPress={(e) => {
+        onPress?.(e);
+        haptic.tap();
+      }}
     >
       {icon}
       <T v={size === 'sm' ? 'label' : kind === 'primary' ? 'bodyStrong' : 'bodyMedium'} color={fg}>
@@ -73,7 +77,7 @@ interface IconButtonProps extends Omit<PressableProps, 'style' | 'children'> {
   style?: StyleProp<ViewStyle>;
 }
 
-export function IconButton({ label, children, size = 36, bg = 'surface', style, ...rest }: IconButtonProps) {
+export function IconButton({ label, children, size = 36, bg = 'surface', style, onPress, ...rest }: IconButtonProps) {
   const p = usePalette();
   const backgroundColor = bg === 'surface' ? p.surface : bg === 'inset' ? p.inset : 'transparent';
   return (
@@ -83,6 +87,10 @@ export function IconButton({ label, children, size = 36, bg = 'surface', style, 
       hitSlop={Math.max(0, (44 - size) / 2)}
       style={({ pressed }) => [{ width: size, height: size, borderRadius: size / 2, backgroundColor, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 }, style]}
       {...rest}
+      onPress={(e) => {
+        onPress?.(e);
+        haptic.tap();
+      }}
     >
       {children}
     </Pressable>
@@ -170,7 +178,14 @@ export function Row({ label, sub, children, last, onPress }: { label: string; su
   );
   if (!onPress) return body;
   return (
-    <Pressable accessibilityRole="button" onPress={onPress} style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}>
+    <Pressable
+      accessibilityRole="button"
+      onPress={() => {
+        onPress();
+        haptic.tap();
+      }}
+      style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
+    >
       {body}
     </Pressable>
   );
@@ -191,14 +206,34 @@ export function Stepper({ value, onMinus, onPlus, minusLabel, plusLabel, width =
 
 function StepButton({ label, glyph, onPress }: { label: string; glyph: string; onPress: () => void }) {
   const p = usePalette();
+  // Hold to repeat: after a short delay the step repeats, so big changes need no typing.
+  const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const latest = useRef(onPress);
+  useEffect(() => {
+    latest.current = onPress;
+  });
+  const stop = () => {
+    clearTimeout(timer.current);
+    clearInterval(timer.current);
+    timer.current = undefined;
+  };
+  useEffect(() => stop, []);
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
       onPress={() => {
         haptic.tick();
-        onPress();
+        latest.current();
       }}
+      onLongPress={() => {
+        timer.current = setInterval(() => {
+          haptic.tick();
+          latest.current();
+        }, 90);
+      }}
+      delayLongPress={350}
+      onPressOut={stop}
       hitSlop={5}
       style={({ pressed }) => ({ width: 34, height: 34, borderRadius: 10, backgroundColor: p.inset, alignItems: 'center', justifyContent: 'center', opacity: pressed ? 0.6 : 1 })}
     >
@@ -206,6 +241,40 @@ function StepButton({ label, glyph, onPress }: { label: string; glyph: string; o
         {glyph}
       </T>
     </Pressable>
+  );
+}
+
+/** Stepper over a number, clamped to [min, max]. Replaces typed number fields. */
+export function NumStepper({
+  value,
+  onChange,
+  min,
+  max,
+  step = 1,
+  format = String,
+  label,
+  width = 82,
+}: {
+  value: number;
+  onChange: (n: number) => void;
+  min: number;
+  max: number;
+  step?: number;
+  format?: (n: number) => string;
+  /** What the number is, for screen readers: "Max heart rate". */
+  label: string;
+  width?: number;
+}) {
+  const clamp = (n: number) => Math.min(max, Math.max(min, Math.round(n / step) * step));
+  return (
+    <Stepper
+      value={format(value)}
+      width={width}
+      minusLabel={`Lower ${label.toLowerCase()}`}
+      plusLabel={`Raise ${label.toLowerCase()}`}
+      onMinus={() => onChange(clamp(value - step))}
+      onPlus={() => onChange(clamp(value + step))}
+    />
   );
 }
 

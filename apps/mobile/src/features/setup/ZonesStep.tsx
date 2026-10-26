@@ -1,10 +1,9 @@
-import { type HrMethod, type HrProfileInput, type HrZoneBand, ZONE_NAMES, computeZones, estimateMaxHr } from '@fit/core';
+import { DEFAULT_HR_METHOD, type HrMethod, type HrProfileInput, type HrZoneBand, ZONE_NAMES, computeZones, estimateMaxHr } from '@fit/core';
 import { type ReactNode, cloneElement, isValidElement, useState } from 'react';
 import { View } from 'react-native';
 import { useHrProfile } from '@/data/store';
 import { createStyles, usePalette } from '@/theme';
-import { Chip, Group, Row, Segmented, T } from '@/ui/primitives';
-import { NumField } from '@/ui/NumField';
+import { Chip, Group, NumStepper, Row, Segmented, T } from '@/ui/primitives';
 
 const METHODS: readonly { value: HrMethod; label: string }[] = [
   { value: 'hrr', label: 'HR reserve' },
@@ -38,7 +37,7 @@ export function draftZones(input: HrProfileInput): ZonesDraft {
 export function useZonesDraft(): [ZonesDraft, (input: HrProfileInput) => void] {
   const existing = useHrProfile();
   const [draft, setDraft] = useState(() =>
-    draftZones(existing ? { method: existing.method, maxHr: existing.maxHr, maxHrSource: existing.maxHrSource, restingHr: existing.restingHr, lthr: existing.lthr, age: existing.age, mafAdjust: existing.mafAdjust } : { method: 'hrr', age: 35, maxHr: estimateMaxHr(35), maxHrSource: 'estimated', restingHr: 60 }),
+    draftZones(existing ? { method: existing.method, maxHr: existing.maxHr, maxHrSource: existing.maxHrSource, restingHr: existing.restingHr, lthr: existing.lthr, age: existing.age, mafAdjust: existing.mafAdjust } : { method: DEFAULT_HR_METHOD, age: 35, maxHr: estimateMaxHr(35), maxHrSource: 'estimated', restingHr: 60 }),
   );
   return [draft, (input) => setDraft(draftZones(input))];
 }
@@ -48,9 +47,9 @@ export function ZonesStep({ draft, onChange }: { draft: ZonesDraft; onChange: (i
   const p = usePalette();
   const i = draft.input;
   const set = (patch: Partial<HrProfileInput>) => onChange({ ...i, ...patch });
-  const setAge = (age: number | undefined) => {
-    // An estimated max follows age; a max you typed stays put.
-    if (i.maxHrSource !== 'measured' && age) set({ age, maxHr: estimateMaxHr(age), maxHrSource: 'estimated' });
+  const setAge = (age: number) => {
+    // An estimated max follows age; a max you set stays put.
+    if (i.maxHrSource !== 'measured') set({ age, maxHr: estimateMaxHr(age), maxHrSource: 'estimated' });
     else set({ age });
   };
   const usesMax = i.method === 'hrr' || i.method === 'max';
@@ -58,25 +57,25 @@ export function ZonesStep({ draft, onChange }: { draft: ZonesDraft; onChange: (i
   if (i.method !== 'lthr')
     rows.push(
       <Row key="age" label="Age" sub={i.method === 'maf' ? 'Sets your MAF number' : 'Used to estimate max heart rate'}>
-        <NumField label="Age in years" value={i.age} onCommit={setAge} />
+        <NumStepper label="Age" value={i.age ?? 35} min={13} max={90} format={(n) => `${n} yr`} onChange={setAge} />
       </Row>,
     );
   if (i.method === 'hrr')
     rows.push(
       <Row key="rest" label="Resting heart rate" sub="Morning, before getting up">
-        <NumField label="Resting heart rate in bpm" value={i.restingHr} onCommit={(restingHr) => set({ restingHr })} />
+        <NumStepper label="Resting heart rate" value={i.restingHr ?? 60} min={30} max={110} format={(n) => `${n} bpm`} onChange={(restingHr) => set({ restingHr })} />
       </Row>,
     );
   if (usesMax)
     rows.push(
-      <Row key="max" label="Max heart rate" sub={i.maxHrSource === 'measured' ? 'Entered by you' : 'Estimated from age, edit if you know it'}>
-        <NumField label="Max heart rate in bpm" value={i.maxHr} onCommit={(maxHr) => set({ maxHr, maxHrSource: maxHr ? 'measured' : undefined })} />
+      <Row key="max" label="Max heart rate" sub={i.maxHrSource === 'measured' ? 'Set by you' : 'Estimated from age, change it if you know it'}>
+        <NumStepper label="Max heart rate" value={i.maxHr ?? estimateMaxHr(i.age ?? 35)} min={120} max={220} format={(n) => `${n} bpm`} onChange={(maxHr) => set({ maxHr, maxHrSource: 'measured' })} />
       </Row>,
     );
   if (i.method === 'lthr')
     rows.push(
       <Row key="lthr" label="Threshold heart rate" sub="Average of the last 20 minutes of a 30-minute test">
-        <NumField label="Threshold heart rate in bpm" value={i.lthr} onCommit={(lthr) => set({ lthr })} />
+        <NumStepper label="Threshold heart rate" value={i.lthr ?? 165} min={100} max={210} format={(n) => `${n} bpm`} onChange={(lthr) => set({ lthr })} />
       </Row>,
     );
   if (i.method === 'maf')

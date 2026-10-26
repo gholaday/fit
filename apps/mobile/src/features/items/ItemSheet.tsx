@@ -9,7 +9,7 @@ import { Note } from '@/features/move/MoveFlowHost';
 import { monthDay, weekdayShort } from '@/lib/format';
 import { createStyles, usePalette } from '@/theme';
 import { type as typeRamp } from '@/theme/type';
-import { Button, Chip, Group, LaneTile, Row, Stepper, T } from '@/ui/primitives';
+import { Button, Chip, Group, LaneTile, Row, Stepper, T, NumStepper } from '@/ui/primitives';
 import { Sheet } from '@/ui/Sheet';
 import { dayName, isPast, plannedLine } from './meta';
 import { haptic } from '@/lib/haptics';
@@ -147,14 +147,13 @@ function Details({ item }: { item: AgendaItem }) {
   const s = useFormStyles();
   const p = usePalette();
   const [minutes, setMinutes] = useState(item.details?.minutes ?? Math.max(1, Math.round(item.estSeconds / 60)));
-  const [distance, setDistance] = useState(item.details?.distanceM ? metersToUnit(item.details.distanceM, units.distance).toFixed(2) : '');
+  const [distance, setDistance] = useState(item.details?.distanceM ? Math.round(metersToUnit(item.details.distanceM, units.distance) * 10) / 10 : 0);
   const [rpe, setRpe] = useState<number | undefined>(item.details?.rpe);
   const [note, setNote] = useState(item.details?.note ?? '');
   const save = () => {
-    const d = Number(distance.replace(',', '.'));
     const details = {
       minutes,
-      distanceM: distance.trim() !== '' && Number.isFinite(d) && d > 0 ? unitToMeters(d, units.distance) : undefined,
+      distanceM: distance > 0 ? unitToMeters(distance, units.distance) : undefined,
       rpe,
       note: note.trim() || undefined,
     };
@@ -171,12 +170,7 @@ function Details({ item }: { item: AgendaItem }) {
           <Stepper value={formatMinutes(minutes * 60)} minusLabel="Less time" plusLabel="More time" onMinus={() => setMinutes(Math.max(1, minutes - 5))} onPlus={() => setMinutes(minutes + 5)} />
         </Row>
         <Row label="Distance">
-          <View style={s.inputWrap}>
-            <TextInput value={distance} onChangeText={setDistance} keyboardType="decimal-pad" placeholder="Optional" placeholderTextColor={p.textTertiary} style={[s.input, { width: 104, textAlign: 'right' }]} accessibilityLabel={`Distance in ${units.distance}`} />
-            <T v="body" tone="secondary">
-              {units.distance}
-            </T>
-          </View>
+          <NumStepper label="Distance" value={distance} min={0} max={100} step={0.1} format={(n) => (n === 0 ? 'None' : `${n.toFixed(1)} ${units.distance}`)} onChange={setDistance} />
         </Row>
         <View style={{ padding: 16, gap: 10 }}>
           <T v="bodyMedium">Effort, RPE 1-10</T>

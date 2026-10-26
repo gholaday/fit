@@ -20,8 +20,8 @@ import { PreStart } from './PreStart';
 
 const KEEP_AWAKE_TAG = 'run';
 
-/** Treadmill recording is M3; until then a treadmill workout opens in Timer mode. */
-const supported = (mode: SessionMode | undefined): SessionMode => (mode === 'timer' || mode === 'treadmill' ? 'timer' : 'outdoor');
+/** The workout's default mode. Treadmill records like Timer until treadmill distance lands (M3). */
+const supported = (mode: SessionMode | undefined): SessionMode => mode ?? 'outdoor';
 
 function setupFor(key: string | undefined) {
   const item = key ? useFit.getState().items[key] : undefined;

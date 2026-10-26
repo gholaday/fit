@@ -1,33 +1,40 @@
-import { type PlanInputs, type UnitPrefs } from '@fit/core';
+import { type HrProfileInput, type PlanInputs, type UnitPrefs } from '@fit/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
+import Animated, { FadeInLeft, FadeInRight } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { actions, showSnack, usePlan, useSettings, useToday } from '@/data/store';
+import { actions, showSnack, useHrProfile, usePlan, useSettings, useToday } from '@/data/store';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, IconButton, Segmented, T } from '@/ui/primitives';
 import { type PlanChoice, PlanDetailsStep, PlanPickStep, defaultInputs, inputsProblem } from './PlanSteps';
 import { ZonesStep, useZonesDraft } from './ZonesStep';
+import { defaultFitness, defaultHeartInput, FitnessStep, HeartStep } from './OnboardingSteps';
 import { haptic } from '@/lib/haptics';
 
-type Step = 'units' | 'zones' | 'pick' | 'details';
-const FULL: readonly Step[] = ['units', 'zones', 'pick', 'details'];
+type Step = 'units' | 'heart' | 'zones' | 'pick' | 'fitness' | 'details';
+const FULL: readonly Step[] = ['units', 'heart', 'pick', 'fitness', 'details'];
+/** Step changes slide in on the UI thread; Reanimated follows the system reduce-motion setting. */
+const SLIDE_MS = 220;
 
 /**
- * First-launch setup (units, heart rate zones, running plan). Also opened from Settings
- * with `only=zones` or `only=plan` to change one part.
+ * First-launch setup (units, max heart rate, running plan, starting fitness). Also opened
+ * from Settings with `only=zones` (full zone editor) or `only=plan` to change one part.
  */
 export function SetupScreen() {
   const s = useStyles();
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const { only } = useLocalSearchParams<{ only?: 'zones' | 'plan' }>();
-  const flow: readonly Step[] = only === 'zones' ? ['zones'] : only === 'plan' ? ['pick', 'details'] : FULL;
+  const flow: readonly Step[] = only === 'zones' ? ['zones'] : only === 'plan' ? ['pick', 'fitness', 'details'] : FULL;
   const settings = useSettings();
   const today = useToday();
   const plan = usePlan();
   const [index, setIndex] = useState(0);
+  const [forward, setForward] = useState(true);
+  const existingHr = useHrProfile();
+  const [heart, setHeart] = useState<HrProfileInput>(() => defaultHeartInput(existingHr));
   const [units, setUnits] = useState<UnitPrefs>(settings.units);
   const [zones, setZones] = useZonesDraft();
   const [choice, setChoice] = useState<PlanChoice | undefined>(plan?.presetId);
@@ -35,7 +42,6 @@ export function SetupScreen() {
   // The repo's message for inputs it rejected; editing the inputs clears it.
   const [rejected, setRejected] = useState<{ inputs: PlanInputs; message: string }>();
   const step = flow[index]!;
-  const fullIndex = FULL.indexOf(step);
 
   const finish = () => {
     if (!only) actions.updateSettings({ onboarded: true });
@@ -45,6 +51,7 @@ export function SetupScreen() {
 
   const next = () => {
     if (step === 'units') actions.updateSettings({ units });
+    if (step === 'heart') actions.saveHrProfile(heart);
     if (step === 'zones') {
       actions.saveHrProfile(zones.input);
       if (only) {
@@ -58,7 +65,8 @@ export function SetupScreen() {
         if (only) actions.abandonPlan();
         return finish();
       }
-      if (choice && inputs?.presetId !== choice) setInputs(defaultInputs(choice, today));
+      if (choice && inputs?.presetId !== choice) setInputs({ ...defaultInputs(choice, today), fitness: inputs?.fitness ?? defaultFitness(units.distance) });
+      else if (inputs && !inputs.fitness) setInputs({ ...inputs, fitness: defaultFitness(units.distance) });
     }
     if (step === 'details' && inputs) {
       let created;
@@ -72,16 +80,20 @@ export function SetupScreen() {
       showSnack({ message: `${created.name} plan created, ${created.weeks} weeks` });
       return finish();
     }
+    setForward(true);
     setIndex(index + 1);
   };
 
   const back = () => {
-    if (index > 0) setIndex(index - 1);
+    if (index > 0) {
+      setForward(false);
+      setIndex(index - 1);
+    }
     else if (router.canGoBack()) router.back();
   };
 
   const problem = step === 'details' && inputs ? (inputsProblem(inputs) ?? (rejected?.inputs === inputs ? rejected.message : undefined)) :step === 'zones' ? zones.error : step === 'pick' && !choice ? 'Pick a plan' : undefined;
-  const cta = step === 'details' ? 'Create plan' : step === 'pick' ? (choice === 'none' ? 'Finish' : 'Next: run days') : step === 'zones' && only ? 'Save' : 'Continue';
+  const cta = step === 'details' ? 'Create plan' : step === 'pick' ? (choice === 'none' ? 'Finish' : 'Continue') : step === 'fitness' ? 'Next: run days' : step === 'zones' && only ? 'Save' : 'Continue';
   const canBack = index > 0 || router.canGoBack();
 
   return (
@@ -95,18 +107,22 @@ export function SetupScreen() {
           <View style={{ width: 40 }} />
         )}
         <View style={s.bars}>
-          {FULL.map((st, i) => (
-            <View key={st} style={[s.bar, { backgroundColor: i <= fullIndex ? p.primary : p.border }]} />
+          {flow.map((st, i) => (
+            <View key={st} style={[s.bar, { backgroundColor: i <= index ? p.primary : p.border }]} />
           ))}
         </View>
-        <T v="caption" tone="secondary">{`${fullIndex + 1} of 4`}</T>
+        <T v="caption" tone="secondary">{`${index + 1} of ${flow.length}`}</T>
       </View>
 
       <ScrollView contentContainerStyle={s.body} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-        {step === 'units' && <UnitsStep units={units} onChange={setUnits} />}
-        {step === 'zones' && <ZonesStep draft={zones} onChange={setZones} />}
-        {step === 'pick' && <PlanPickStep choice={choice} onChoose={setChoice} />}
-        {step === 'details' && inputs && <PlanDetailsStep inputs={inputs} onChange={setInputs} today={today} />}
+        <Animated.View key={step} entering={(forward ? FadeInRight : FadeInLeft).duration(SLIDE_MS)}>
+          {step === 'units' && <UnitsStep units={units} onChange={setUnits} />}
+          {step === 'heart' && <HeartStep input={heart} onChange={setHeart} />}
+          {step === 'zones' && <ZonesStep draft={zones} onChange={setZones} />}
+          {step === 'pick' && <PlanPickStep choice={choice} onChoose={setChoice} />}
+          {step === 'fitness' && inputs?.fitness && <FitnessStep fitness={inputs.fitness} unit={units.distance} onChange={(fitness) => setInputs({ ...inputs, fitness })} />}
+          {step === 'details' && inputs && <PlanDetailsStep inputs={inputs} onChange={setInputs} today={today} />}
+        </Animated.View>
       </ScrollView>
 
       <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>

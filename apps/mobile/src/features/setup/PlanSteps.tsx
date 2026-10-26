@@ -1,8 +1,7 @@
-import { type IsoDate, type PlanInputs, type PlanPresetId, type Weekday, addDays, startOfWeek } from '@fit/core';
-import { useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
-import { useFormStyles } from '@/features/items/ItemSheet';
-import { mmss, parseMmss, shortDate, weekdayLetter, weekdayShort } from '@/lib/format';
+import { type IsoDate, type PlanInputs, type PlanPresetId, type Weekday, addDays } from '@fit/core';
+import { Pressable, View } from 'react-native';
+import { shortDate, weekdayLetter, weekdayShort } from '@/lib/format';
+import { TimeWheel } from '@/ui/Wheel';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Chip, Group, IconButton, Row, Segmented, T } from '@/ui/primitives';
@@ -87,12 +86,12 @@ function Section({ title, options, choice, onChoose }: { title: string; options:
 
 const ALL_DAYS: readonly Weekday[] = [1, 2, 3, 4, 5, 6, 7];
 
+/** Plans start this week: a fitness plan today, a 5K race 8 weeks out. */
 export function defaultInputs(presetId: PlanPresetId, today: IsoDate): PlanInputs {
-  const nextMonday = addDays(startOfWeek(today), 7);
   if (presetId === '5k-8wk') {
-    return { presetId, raceDate: addDays(nextMonday, 8 * 7 - 2), daysPerWeek: 3, preferredDays: [2, 4, 6], longRunDay: 6, goalSeconds: 25 * 60 + 30, easyBy: 'pace', treadmill: 'none' };
+    return { presetId, raceDate: addDays(today, 8 * 7), daysPerWeek: 3, preferredDays: [2, 4, 6], longRunDay: 6, goalSeconds: 25 * 60 + 30, easyBy: 'pace', treadmill: 'none' };
   }
-  return { presetId, startDate: nextMonday, daysPerWeek: 4, preferredDays: [2, 4, 5, 7], longRunDay: 7, easyBy: 'hr', treadmill: 'none' };
+  return { presetId, startDate: today, daysPerWeek: 4, preferredDays: [2, 4, 5, 7], longRunDay: 7, easyBy: 'hr', treadmill: 'none' };
 }
 
 export function inputsProblem(i: PlanInputs): string | undefined {
@@ -104,15 +103,14 @@ export function inputsProblem(i: PlanInputs): string | undefined {
 
 export function PlanDetailsStep({ inputs, onChange, today }: { inputs: PlanInputs; onChange: (i: PlanInputs) => void; today: IsoDate }) {
   const p = usePalette();
-  const f = useFormStyles();
   const race = inputs.presetId === '5k-8wk';
   const range = race ? [3, 4, 5] : [3, 4, 5, 6];
   const set = (patch: Partial<PlanInputs>) => onChange({ ...inputs, ...patch });
-  const [goalText, setGoalText] = useState(inputs.goalSeconds ? mmss(inputs.goalSeconds) : '');
   const dateValue = race ? inputs.raceDate! : inputs.startDate!;
   const shiftDate = (days: number) => {
     const next = addDays(dateValue, days);
-    if (next <= today) return;
+    // A fitness plan can start today; a race has to be after it.
+    if (race ? next <= today : next < today) return;
     haptic.tick();
     set(race ? { raceDate: next } : { startDate: next });
   };
@@ -142,29 +140,20 @@ export function PlanDetailsStep({ inputs, onChange, today }: { inputs: PlanInput
             </IconButton>
           </View>
         </Row>
-        {race && (
-          <Row label="Goal time" sub="Sets your training paces">
-            <TextInput
-              value={goalText}
-              onChangeText={setGoalText}
-              onEndEditing={() => {
-                const s = parseMmss(goalText);
-                if (s) set({ goalSeconds: s });
-                setGoalText(s ? mmss(s) : inputs.goalSeconds ? mmss(inputs.goalSeconds) : '');
-              }}
-              keyboardType="numbers-and-punctuation"
-              placeholder="25:30"
-              placeholderTextColor={p.textTertiary}
-              accessibilityLabel="Goal time, minutes and seconds"
-              style={[f.input, { width: 84, textAlign: 'center', fontWeight: '600', fontVariant: ['tabular-nums'] }]}
-            />
-          </Row>
-        )}
         <View style={{ padding: 16, gap: 10 }}>
           <T v="bodyMedium">Runs per week</T>
           <Segmented look="inset" options={range.map((n) => ({ value: String(n), label: `${n} days` }))} value={String(inputs.daysPerWeek)} onChange={(v) => set({ daysPerWeek: Number(v) })} />
         </View>
       </Group>
+
+      {race && (
+        <View style={{ gap: 8 }}>
+          <T v="labelStrong" tone="secondary">
+            Goal time
+          </T>
+          <TimeWheel label="Goal time" seconds={inputs.goalSeconds ?? 25 * 60 + 30} minMinutes={14} maxMinutes={60} onChange={(goalSeconds) => set({ goalSeconds })} />
+        </View>
+      )}
 
       <View style={{ gap: 8 }}>
         <T v="labelStrong" tone="secondary">
@@ -222,21 +211,6 @@ export function PlanDetailsStep({ inputs, onChange, today }: { inputs: PlanInput
         </View>
       )}
 
-      <View style={{ gap: 8 }}>
-        <T v="labelStrong" tone="secondary">
-          Treadmill
-        </T>
-        <Segmented
-          look="inset"
-          options={[
-            { value: 'none', label: 'None' },
-            { value: 'some', label: 'Some days' },
-            { value: 'mostly', label: 'Mostly' },
-          ]}
-          value={inputs.treadmill}
-          onChange={(treadmill) => set({ treadmill })}
-        />
-      </View>
     </View>
   );
 }
