@@ -26,8 +26,8 @@ import {
   validateItems,
 } from '@fit/core';
 import { router, useLocalSearchParams } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { BackHandler, Pressable, TextInput, View } from 'react-native';
 // The gesture-handler ScrollView, so a drag on a grip wins over scrolling.
 import { ScrollView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -155,6 +155,15 @@ export function BuilderScreen() {
     if (dirty) setLeaving(true);
     else router.back();
   };
+  // Android back asks too, so a draft is never dropped without the prompt.
+  useEffect(() => {
+    if (!dirty) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setLeaving(true);
+      return true;
+    });
+    return () => sub.remove();
+  }, [dirty]);
 
   return (
     <View style={s.screen}>
