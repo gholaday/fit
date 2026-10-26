@@ -17,7 +17,7 @@ import { Button, T } from '@/ui/primitives';
 import { Sheet } from '@/ui/Sheet';
 import { closeActivities, markHandled, reloadHealth, useHealth } from './state';
 
-const ACTIVITY_LABEL: Record<ExternalActivity, string> = {
+export const ACTIVITY_LABEL: Record<ExternalActivity, string> = {
   run: 'Run',
   treadmill: 'Treadmill run',
   walk: 'Walk',
@@ -29,7 +29,7 @@ const ACTIVITY_LABEL: Record<ExternalActivity, string> = {
   other: 'Activity',
 };
 
-const ACTIVITY_ICON = {
+export const ACTIVITY_ICON = {
   run: QUICK_LOG_ICON.run,
   treadmill: QUICK_LOG_ICON.run,
   walk: QUICK_LOG_ICON.walk,

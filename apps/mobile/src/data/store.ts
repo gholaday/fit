@@ -8,6 +8,7 @@
 import {
   type AgendaItem,
   type CompletionDetails,
+  type ExternalSession,
   type HrProfile,
   type HrProfileInput,
   type IsoDate,
@@ -52,6 +53,8 @@ export interface FitState {
   weekLogs: readonly QuickLog[];
   /** Latest recorded sessions, newest first; Today lists the ones no plan item claims. */
   recentRuns: readonly SessionListItem[];
+  /** Saved watch activities that started today. */
+  todayExternal: readonly ExternalSession[];
   snack: Snack | undefined;
 }
 
@@ -91,6 +94,7 @@ function read(today: IsoDate, windowStart: IsoDate, windowEnd: IsoDate, prev?: F
   const plan = repo.activePlan(today);
   const schedule = repo.schedule();
   const runs = repo.recentSessions(20);
+  const external = repo.externalSessions(today, today);
   return {
     today,
     windowStart,
@@ -104,6 +108,7 @@ function read(today: IsoDate, windowStart: IsoDate, windowEnd: IsoDate, prev?: F
     schedule: prev && sameSchedule(prev.schedule, schedule) ? prev.schedule : schedule,
     weekLogs: repo.quickLogs(monday, addDays(monday, 6)),
     recentRuns: prev && JSON.stringify(prev.recentRuns) === JSON.stringify(runs) ? prev.recentRuns : runs,
+    todayExternal: prev && JSON.stringify(prev.todayExternal) === JSON.stringify(external) ? prev.todayExternal : external,
   };
 }
 
@@ -133,6 +138,7 @@ export const useHrProfile = () => useFit((s) => s.hrProfile);
 export const useSnack = () => useFit((s) => s.snack);
 export const useRecentRuns = () => useFit((s) => s.recentRuns);
 export const useWeekLogs = () => useFit((s) => s.weekLogs);
+export const useTodayExternal = () => useFit((s) => s.todayExternal);
 
 export function getItems(start: IsoDate, end: IsoDate): AgendaItem[] {
   const s = useFit.getState();

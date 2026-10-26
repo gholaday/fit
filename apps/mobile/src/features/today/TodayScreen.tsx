@@ -5,7 +5,8 @@ import { RefreshControl, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
-import { useDayKeys, useFit, useRecentRuns, useSettings, useToday, useWeekLogs } from '@/data/store';
+import { useDayKeys, useFit, useRecentRuns, useSettings, useToday, useTodayExternal, useWeekLogs } from '@/data/store';
+import { ACTIVITY_ICON, ACTIVITY_LABEL } from '@/features/health/ActivityModal';
 import { openActivities, syncedLabel, useHealth } from '@/features/health/state';
 import { syncHealth } from '@/features/health/sync';
 import { QuickLogSheet, quickLogLabel } from '@/features/quicklog/QuickLogSheet';
@@ -34,9 +35,11 @@ export function TodayScreen() {
   const items = useFit(useShallow((st) => keys.map((k) => st.items[k]!)));
   const tomorrowItems = useFit(useShallow((st) => (st.byDate[addDays(today, 1)] ?? []).map((k) => st.items[k]!)));
   const summary = summarizeDay(items, tomorrowItems, new Date().getHours(), settings.units);
-  // Everything else done today, under the checklist: runs no plan item claims and quick logs.
+  // Everything else done today, under the checklist: runs and watch activities no plan item
+  // claims, and quick logs.
   const recent = useRecentRuns();
   const weekLogs = useWeekLogs();
+  const watch = useTodayExternal();
   const unit = settings.units.distance;
   const claimed = new Set(items.map((i) => i.sessionId));
   const done: DoneActivity[] = [
@@ -46,6 +49,18 @@ export function TodayScreen() {
       .map((r) => {
         const time = formatClock(Math.round(r.elapsedMs / 1000));
         return { key: r.id, title: r.name, detail: r.distanceM > 20 ? `${formatDistance(r.distanceM, unit, 2)}, ${time}` : time, lane: 'run' as const, icon: Icons.run, onPress: () => router.push({ pathname: '/summary/[id]', params: { id: r.id } }) };
+      }),
+    ...watch
+      .filter((x) => !x.linkedPlanKey)
+      .map((x) => {
+        const minutes = formatMinutes((Date.parse(x.endedAt) - Date.parse(x.startedAt)) / 1000);
+        return {
+          key: x.id,
+          title: x.title || ACTIVITY_LABEL[x.activity],
+          detail: x.distanceM ? `${formatDistance(x.distanceM, unit, 2)}, ${minutes}` : minutes,
+          lane: (x.activity === 'strength' ? 'workout' : x.activity === 'stretch' ? 'stretch' : 'run') as Lane,
+          icon: ACTIVITY_ICON[x.activity],
+        };
       }),
     ...weekLogs
       .filter((l) => l.date === today)
