@@ -12,7 +12,7 @@ Two Claude sessions work in this folder at the same time. Stay inside the paths 
 ## Rules
 - Keep `pnpm typecheck`, `pnpm lint`, `pnpm test` green. Tests only in `packages/*` (Vitest, table-driven, fixed clock). No UI tests.
 - Commit only your own paths: `git add <your paths>` then commit. Never `git add -A`. Never rewrite history.
-- Add mobile dependencies with `npx expo install <pkg>` from `apps/mobile`; tell the lead when you do (lockfile is shared).
+- Add mobile dependencies with `npx expo install <pkg>` from `apps/mobile`, agreed with the lead first. Commit `pnpm-lock.yaml` in the same commit as the `package.json` change (CI uses `--frozen-lockfile`) and tell the lead.
 - Copy rules from `docs/design.md` apply to every UI string: no middle dots, no em/en dashes, no emoji, no exclamation marks, units always shown.
 - Storage units are SI (meters, seconds, kg). Convert to miles/pounds only for display.
 
