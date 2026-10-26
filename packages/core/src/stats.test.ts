@@ -1,5 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { adherenceByWeek, bestEfforts, dayStreak, periodTotals, personalBests, sessionStats, weekStreak, type RunRow, type SessionStats } from './stats';
+import {
+  adherenceByWeek,
+  bestEfforts,
+  dayStreak,
+  decoupling,
+  distanceInRange,
+  learnedZone2Pace,
+  periodTotals,
+  personalBests,
+  sessionStats,
+  weekStreak,
+  type RunRow,
+  type SessionStats,
+} from './stats';
 import type { StepResult } from './session/track';
 import type { Step } from './workout';
 
@@ -45,11 +58,33 @@ describe('sessionStats', () => {
       samples: [],
       pauses: [],
     });
-    expect(s).toEqual({ runM: 1900, walkM: 300, sprintM: 200, easyM: 1000, easyS: 360, bests: [] });
+    expect(s).toEqual({ v: 2, runM: 1900, walkM: 300, sprintM: 200, easyM: 1000, easyS: 360, bests: [] });
   });
 });
 
-const stats = (over: Partial<SessionStats> = {}): SessionStats => ({ runM: 0, walkM: 0, sprintM: 0, easyM: 0, easyS: 0, bests: [], ...over });
+describe('heart rate progress', () => {
+  // 50 min at 3 m/s; HR 135 for the first half, 145 for the second (still Zone 2 up to 145).
+  const samples = Array.from({ length: 301 }, (_, i) => ({ tOffsetMs: i * 10_000, distanceM: i * 30 }));
+  const hr = samples.map((s) => ({ tOffsetMs: s.tOffsetMs, bpm: s.tOffsetMs < 1_500_000 ? 135 : 145 }));
+
+  it('pace in a range counts only while HR is inside it', () => {
+    expect(distanceInRange(samples, hr, 128, 140)).toEqual({ m: 4500, s: 1500 });
+  });
+
+  it('decoupling compares speed per beat across halves, only for 40 min or more', () => {
+    // (1/135 - 1/145) / (1/135) = 6.9%
+    expect(decoupling(samples, hr, 0, 3_000_000)).toBe(6.9);
+    expect(decoupling(samples, hr, 0, 2_000_000)).toBeUndefined();
+  });
+
+  it('learned Zone 2 pace is the median of the last six qualifying runs, after three', () => {
+    const row = (date: string, secPerKm: number): RunRow => ({ sessionId: date, date, distanceM: 0, durationS: 0, stats: stats({ z2PaceM: 2000, z2PaceS: secPerKm * 2 }) });
+    expect(learnedZone2Pace([row('2026-10-01', 400), row('2026-10-02', 420)])).toBeUndefined();
+    expect(learnedZone2Pace([row('2026-10-01', 400), row('2026-10-02', 420), row('2026-10-03', 380)])).toBe(400);
+  });
+});
+
+const stats = (over: Partial<SessionStats> = {}): SessionStats => ({ v: 2, runM: 0, walkM: 0, sprintM: 0, easyM: 0, easyS: 0, bests: [], ...over });
 
 describe('aggregates', () => {
   it('buckets runs by week, zero-filled, with imported walks as walking', () => {

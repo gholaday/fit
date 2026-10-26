@@ -37,6 +37,22 @@ export interface PlayerState {
   log: StepLogEntry[];
   /** Wall-clock [start, end] offsets of every pause, for splits and replay gaps. */
   pauses: [number, number][];
+  /** HR-driven run/walk steps (spec §7 Run/Walk mode): the open phase and every closed one. */
+  runWalk?: { open?: RunWalkOpen; segments: RunWalkSegment[] };
+}
+
+export type RunWalkPhase = 'run' | 'walk';
+
+interface RunWalkOpen {
+  phase: RunWalkPhase;
+  stepIdx: number;
+  startActiveMs: number;
+  startDistanceM: number;
+}
+
+export interface RunWalkSegment extends RunWalkOpen {
+  endActiveMs: number;
+  endDistanceM: number;
 }
 
 export type PlayerEvent =
@@ -50,7 +66,9 @@ export type PlayerEvent =
   /** Stay longer: add seconds to the current time step (stretch +15 s). */
   | { type: 'extend'; t: number; seconds: number }
   /** Go to any step (previous, overview jump). The current step is logged as skipped. */
-  | { type: 'jump'; t: number; distanceM: number; idx: number };
+  | { type: 'jump'; t: number; distanceM: number; idx: number }
+  /** Run/walk switch from runWalkPhase(); closes the open phase and starts this one. */
+  | { type: 'phase'; t: number; distanceM: number; phase: RunWalkPhase };
 
 /** A free run is one open run step: no target, ends when you tap End. */
 export const FREE_RUN_STEP: Step = { id: 'free', activity: 'run', duration: { type: 'open' }, target: { type: 'none' } };
@@ -79,6 +97,13 @@ export function activeMs(s: PlayerState, t: number): number {
 
 const offsetAt = (s: PlayerState, t: number) => (s.startedAt === undefined ? 0 : t - s.startedAt);
 
+/** Ends the open run/walk phase, if any; a step change or finish always ends it. */
+function closePhase(s: PlayerState, endActiveMs: number, endDistanceM: number): PlayerState {
+  const open = s.runWalk?.open;
+  if (!open) return s;
+  return { ...s, runWalk: { segments: [...s.runWalk!.segments, { ...open, endActiveMs, endDistanceM }] } };
+}
+
 /** Close the current step and open the next (or finish). */
 function advance(s: PlayerState, endActiveMs: number, endOffsetMs: number, distanceM: number, skipped: boolean): PlayerState {
   const entry: StepLogEntry = {
@@ -92,7 +117,7 @@ function advance(s: PlayerState, endActiveMs: number, endOffsetMs: number, dista
     skipped,
   };
   const next = s.stepIdx + 1;
-  const base = { ...s, log: [...s.log, entry] };
+  const base = { ...closePhase(s, endActiveMs, distanceM), log: [...s.log, entry] };
   if (next >= s.steps.length) return { ...base, status: 'finished', pausedAt: undefined };
   return { ...base, stepIdx: next, stepStartActiveMs: endActiveMs, stepStartOffsetMs: endOffsetMs, stepStartDistanceM: distanceM };
 }
@@ -160,6 +185,15 @@ export function playerReducer(s: PlayerState, e: PlayerEvent): PlayerState {
       if ((s.status !== 'active' && s.status !== 'paused') || e.idx < 0 || e.idx >= s.steps.length || e.idx === s.stepIdx) return s;
       const closed = advance(s, activeMs(s, e.t), offsetAt(s, e.t), e.distanceM, true);
       return { ...closed, status: s.status, stepIdx: e.idx };
+    }
+    case 'phase': {
+      if (s.status !== 'active' || s.runWalk?.open?.phase === e.phase) return s;
+      const active = activeMs(s, e.t);
+      const closed = closePhase(s, active, e.distanceM);
+      return {
+        ...closed,
+        runWalk: { segments: closed.runWalk?.segments ?? [], open: { phase: e.phase, stepIdx: s.stepIdx, startActiveMs: active, startDistanceM: e.distanceM } },
+      };
     }
     case 'finish': {
       if (s.status === 'finished' || s.status === 'ready') return s;

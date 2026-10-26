@@ -322,6 +322,17 @@ export interface StrengthDay {
   volumeKg: number;
 }
 
+/** One aerobic test (30 min at a fixed HR, spec §7): pace or belt speed at that HR. */
+export interface AerobicTest {
+  sessionId: string;
+  date: IsoDate;
+  mode: SessionMode;
+  durationS: number;
+  /** Pace over the test step (treadmill: from the belt speed). */
+  secPerKm?: number;
+  avgBpm?: number;
+}
+
 export interface RoutineDay {
   routineId: string;
   date: IsoDate;
@@ -610,6 +621,10 @@ export interface FitRepository {
   strengthDays(start: IsoDate, end: IsoDate): StrengthDay[];
   /** Routines marked done, by the occurrence date, in [start, end]. */
   routineDays(start: IsoDate, end: IsoDate): RoutineDay[];
+  /** Recorded plan retests with a 20 min or longer HR step, oldest first (spec §7 Progress). */
+  aerobicTests(): AerobicTest[];
+  /** Typical pace in Zone 2 from recent outdoor runs, the target when there is no live HR (spec §7). */
+  learnedZone2Pace(today: IsoDate): number | undefined;
 
   // Settings
   settings(): Settings;

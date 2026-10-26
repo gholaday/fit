@@ -6,3 +6,4 @@ export * from './track';
 export * from './heart';
 export * from './treadmill';
 export * from './route';
+export * from './runwalk';

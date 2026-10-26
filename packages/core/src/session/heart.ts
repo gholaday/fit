@@ -140,6 +140,38 @@ export function hrStats(
   return { avgBpm: Math.round(sum / weight), maxBpm: max, zoneSeconds: zoneSeconds.map((s) => Math.round(s)) as HrStats['zoneSeconds'], stepAvgBpm };
 }
 
+export const HR_SMOOTH_MS = 5000;
+
+/** Rolling mean of the samples in the last `windowMs` up to `tOffsetMs` (spec §7: 5 s for display and cues). */
+export function smoothedHr(samples: readonly Pick<HrSample, 'tOffsetMs' | 'bpm'>[], tOffsetMs: number, windowMs = HR_SMOOTH_MS): number | undefined {
+  let sum = 0;
+  let n = 0;
+  for (let i = samples.length - 1; i >= 0; i--) {
+    const s = samples[i]!;
+    if (s.tOffsetMs > tOffsetMs) continue;
+    if (s.tOffsetMs <= tOffsetMs - windowMs) break;
+    sum += s.bpm;
+    n++;
+  }
+  return n > 0 ? Math.round(sum / n) : undefined;
+}
+
+/** HR at a moment: the last sample at or before it, unless older than HR_GAP_MS (a dropout). */
+export function hrAt(samples: readonly Pick<HrSample, 'tOffsetMs' | 'bpm'>[], tOffsetMs: number): number | undefined {
+  let lo = 0;
+  let hi = samples.length - 1;
+  let found = -1;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    if (samples[mid]!.tOffsetMs <= tOffsetMs) {
+      found = mid;
+      lo = mid + 1;
+    } else hi = mid - 1;
+  }
+  const s = samples[found];
+  return s && tOffsetMs - s.tOffsetMs <= HR_GAP_MS ? s.bpm : undefined;
+}
+
 /** Seconds in one zone, for the Zone 2 gauge. */
 export const secondsInZone = (stats: HrStats, zone: HrZone) => stats.zoneSeconds[zone - 1];
 

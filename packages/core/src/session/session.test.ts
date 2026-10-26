@@ -3,6 +3,7 @@ import { counterIds, parseWorkout } from '../dsl';
 import { cuesFor, DEFAULT_CUE_PREFS, initialCueState, type CueContext } from './cues';
 import { addFix, autoPause, initialGpsFilter, type GpsFix } from './geo';
 import { createPlayer, playerReducer, snapshot } from './player';
+import { hrCap, runWalkPhase, runWalkTotals } from './runwalk';
 import { simplify, splits } from './track';
 
 const T0 = Date.UTC(2026, 9, 26, 7, 0, 0);
@@ -83,6 +84,52 @@ describe('cues', () => {
     expect(run(100, 280)).toEqual([]);
     expect(run(150, 280)).toEqual(['Ease off.']);
     expect(cuesFor(st, { snap, t: sec(210), distanceM: 0, currentPace: 280 }, { ...ctx, treadmill: true }).cues.map((c) => c.text)).toEqual(['Lower the speed.']);
+  });
+
+  it('heart rate: ease off after 20 s above, back in zone once, zone updates every 5 min', () => {
+    const z2 = parseWorkout('30m @ Z2', counterIds())[0] as never;
+    const hrCtx: CueContext = { unit: 'mi', prefs: { ...DEFAULT_CUE_PREFS, zoneUpdates: true }, hrRange: () => ({ minBpm: 128, maxBpm: 145, zone: 2 }) };
+    let st = initialCueState();
+    const at = (s: number, hr: number) => {
+      const r = cuesFor(st, { snap: { ...snap, step: z2, stepElapsedMs: s * 1000 }, t: sec(s), distanceM: 0, hr }, hrCtx);
+      st = r.state;
+      return r.cues.map((c) => c.text);
+    };
+    for (let s = 0; s < 60; s++) at(s, 140);
+    expect(at(60, 152)).toEqual([]);
+    for (let s = 61; s < 80; s++) expect(at(s, 152)).toEqual([]);
+    expect(at(80, 152)).toEqual(['Heart rate one hundred fifty-two. Ease off.']);
+    expect(at(81, 140)).toEqual(['Back in zone two.']);
+    expect(at(82, 140)).toEqual([]);
+    for (let s = 83; s < 300; s++) at(s, 140);
+    // 21 s of 300 measured were above the zone.
+    expect(at(300, 140)).toEqual(['Five minutes. Ninety-three percent in zone two.']);
+  });
+});
+
+describe('run/walk', () => {
+  const step = { id: 'rw', activity: 'run', duration: { type: 'time', seconds: 1800 }, target: { type: 'hr_zone', zone: 2 }, hrGuard: { capBpm: 145, walkWhenAbove: true } } as const;
+
+  it('walks at the cap, runs again 10 bpm below, never flapping inside 20 s, and logs phases', () => {
+    let p = playerReducer(createPlayer([step]), { type: 'start', t: sec(0) });
+    const tick = (s: number, hr: number | undefined, d: number) => {
+      const phase = runWalkPhase(p, sec(s), hr, hrCap(step));
+      if (phase) p = playerReducer(p, { type: 'phase', t: sec(s), distanceM: d, phase });
+      return phase;
+    };
+    expect(tick(0, 120, 0)).toBe('run');
+    expect(tick(10, 150, 30)).toBeUndefined(); // within 20 s of the phase start
+    expect(tick(60, 146, 180)).toBe('walk');
+    expect(tick(90, 140, 220)).toBeUndefined(); // 140 is not 10 below 145
+    expect(tick(100, undefined, 230)).toBeUndefined(); // dropout keeps the phase
+    expect(tick(120, 135, 250)).toBe('run');
+    p = playerReducer(p, { type: 'finish', t: sec(150), distanceM: 340 });
+    expect(p.runWalk!.segments.map((g) => [g.phase, g.startDistanceM, g.endDistanceM])).toEqual([
+      ['run', 0, 180],
+      ['walk', 180, 250],
+      ['run', 250, 340],
+    ]);
+    expect(runWalkTotals(p.runWalk!.segments)).toEqual({ runS: 90, walkS: 60, runM: 270, walkM: 70 });
   });
 });
 

@@ -85,6 +85,9 @@ import {
   cumulativeDistance,
   personalBests as fastestEfforts,
   sessionStats,
+  SESSION_STATS_VERSION,
+  learnedZone2Pace as medianZone2Pace,
+  type AerobicTest,
   type HistoryItem,
   type HistoryKind,
   type RunRow,
@@ -473,22 +476,70 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
   // -------------------------------------------------------------------------
   // Repository
 
-  /** SessionStats for a run, from its step log and (outdoor) track. */
-  const statsFor = (id: string, mode: string, player: PlayerState, distanceM: number): SessionStats => {
-    const points =
-      mode === 'outdoor' ? db.select().from(t.trackPoints).where(eq(t.trackPoints.sessionId, id)).orderBy(asc(t.trackPoints.tOffsetMs)).all().map(toTrackPoint) : [];
-    return sessionStats({ steps: stepResults(player.steps, player.log), distanceM, samples: cumulativeDistance(points), pauses: player.pauses ?? [] });
+  /** Live HR with Health Connect filling its gaps, as the summary shows it. */
+  const sessionHr = (id: string, endMs: number): HrSample[] => {
+    const samples = db.select().from(t.hrSamples).where(eq(t.hrSamples.sessionId, id)).orderBy(asc(t.hrSamples.tOffsetMs)).all().map(toHrSample);
+    return mergeHr(
+      samples.filter((h) => h.source === 'ble'),
+      samples.filter((h) => h.source === 'health_connect'),
+      endMs,
+    );
   };
 
-  /** Runs saved before stats_json existed get theirs on first use, once. */
+  /** The zones a session was recorded with, else the current ones. */
+  const zonesFor = (hrProfileId: string | null): HrZoneBand[] | undefined => {
+    const row = hrProfileId ? db.select({ zonesJson: t.hrProfiles.zonesJson }).from(t.hrProfiles).where(eq(t.hrProfiles.id, hrProfileId)).get() : undefined;
+    return row ? (JSON.parse(row.zonesJson) as HrZoneBand[]) : currentZones();
+  };
+
+  type StatsSource = Pick<typeof t.sessions.$inferSelect, 'id' | 'mode' | 'startedAt' | 'hrProfileId'>;
+
+  /** SessionStats for a run, from its step log, (outdoor) track and HR. */
+  const statsFor = (row: StatsSource, player: PlayerState, distanceM: number, endedAt: number): SessionStats => {
+    const points =
+      row.mode === 'outdoor' ? db.select().from(t.trackPoints).where(eq(t.trackPoints.sessionId, row.id)).orderBy(asc(t.trackPoints.tOffsetMs)).all().map(toTrackPoint) : [];
+    const endMs = endedAt - row.startedAt;
+    const zones = zonesFor(row.hrProfileId);
+    return sessionStats({
+      steps: stepResults(player.steps, player.log),
+      distanceM,
+      samples: cumulativeDistance(points),
+      pauses: player.pauses ?? [],
+      log: player.log,
+      ...(player.runWalk ? { runWalk: player.runWalk.segments } : {}),
+      hr: sessionHr(row.id, endMs),
+      ...(zones ? { zones } : {}),
+      endMs,
+    });
+  };
+
+  /**
+   * Runs without current stats get them on first use: saved before stats_json existed,
+   * saved under an older SESSION_STATS_VERSION, or cleared when Health Connect HR changed.
+   */
   const backfillStats = () => {
     const rows = db
-      .select({ id: t.sessions.id, mode: t.sessions.mode, playerJson: t.sessions.playerJson, distanceM: t.sessions.distanceM })
+      .select({
+        id: t.sessions.id,
+        mode: t.sessions.mode,
+        startedAt: t.sessions.startedAt,
+        endedAt: t.sessions.endedAt,
+        hrProfileId: t.sessions.hrProfileId,
+        playerJson: t.sessions.playerJson,
+        distanceM: t.sessions.distanceM,
+      })
       .from(t.sessions)
-      .where(and(eq(t.sessions.status, 'saved'), eq(t.sessions.kind, 'run'), isNull(t.sessions.statsJson), notDeleted(t.sessions)))
+      .where(
+        and(
+          eq(t.sessions.status, 'saved'),
+          eq(t.sessions.kind, 'run'),
+          or(isNull(t.sessions.statsJson), sql`${t.sessions.statsJson} NOT LIKE ${`%"v":${SESSION_STATS_VERSION},%`}`),
+          notDeleted(t.sessions),
+        ),
+      )
       .all();
     if (rows.length === 0) return;
-    const computed = rows.map((r) => ({ id: r.id, json: JSON.stringify(statsFor(r.id, r.mode, JSON.parse(r.playerJson) as PlayerState, r.distanceM)) }));
+    const computed = rows.map((r) => ({ id: r.id, json: JSON.stringify(statsFor(r, JSON.parse(r.playerJson) as PlayerState, r.distanceM, r.endedAt ?? r.startedAt)) }));
     db.transaction((tx) => {
       for (const c of computed) tx.update(t.sessions).set({ statsJson: c.json, ...stamp() }).where(eq(t.sessions.id, c.id)).run();
     });
@@ -1171,7 +1222,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         .all()
         .map((h) => ({ ...h, source: 'ble' as const }));
       const liveComplete = live.length > 0 && hrGaps(live, endedAt - row.startedAt).length === 0;
-      const stats = statsFor(id, row.mode, finish.player, finish.distanceM);
+      const stats = statsFor(row, finish.player, finish.distanceM, endedAt);
       db.transaction((tx) => {
         tx.update(t.sessions)
           .set({
@@ -1311,7 +1362,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
             distanceM: totalM,
             avgPaceSPerKm: totalM >= 50 ? row.elapsedMs / 1000 / (totalM / 1000) : null,
             playerJson: JSON.stringify({ ...player, log }),
-            statsJson: JSON.stringify(statsFor(id, row.mode, { ...player, log }, totalM)),
+            statsJson: JSON.stringify(statsFor(row, { ...player, log }, totalM, row.endedAt ?? row.startedAt)),
             ...stamp(),
           })
           .where(eq(t.sessions.id, id))
@@ -1797,8 +1848,9 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
             .onConflictDoNothing()
             .run();
         }
+        // New HR changes Zone 2 time and decoupling; stats are recomputed on next use.
         tx.update(t.sessions)
-          .set({ hrFilledAt: now(), ...stamp() })
+          .set({ hrFilledAt: now(), statsJson: null, ...stamp() })
           .where(eq(t.sessions.id, sessionId))
           .run();
       });
@@ -1889,7 +1941,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
           .run();
         // -1 keeps sessionsNeedingHr from adding the same HR back on the next sync.
         tx.update(t.sessions)
-          .set({ hrFilledAt: -1, ...stamp() })
+          .set({ hrFilledAt: -1, statsJson: null, ...stamp() })
           .where(eq(t.sessions.id, sessionId))
           .run();
       });
@@ -2057,10 +2109,52 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         });
     },
 
+    aerobicTests() {
+      const rows = db
+        .select({ s: t.sessions })
+        .from(t.sessions)
+        .innerJoin(t.planWorkouts, eq(t.planWorkouts.id, t.sessions.planWorkoutId))
+        .where(and(eq(t.planWorkouts.role, 'retest'), eq(t.sessions.status, 'saved'), notDeleted(t.sessions)))
+        .orderBy(asc(t.sessions.startedAt))
+        .all();
+      const tests: AerobicTest[] = [];
+      for (const { s } of rows) {
+        const player = JSON.parse(s.playerJson) as PlayerState;
+        const results = stepResults(player.steps, player.log);
+        // The test step: the longest completed HR step of 20 min or more.
+        let pick: number | undefined;
+        results.forEach((r, i) => {
+          const isHr = r.step.target.type === 'hr_zone' || r.step.target.type === 'hr_range';
+          if (isHr && !r.skipped && r.durationS >= 1200 && (pick === undefined || r.durationS > results[pick]!.durationS)) pick = i;
+        });
+        if (pick === undefined) continue;
+        const r = results[pick]!;
+        const entry = player.log[pick]!;
+        const beats = sessionHr(s.id, (s.endedAt ?? s.startedAt) - s.startedAt).filter((h) => h.tOffsetMs >= entry.startOffsetMs && h.tOffsetMs < entry.endOffsetMs);
+        const test: AerobicTest = { sessionId: s.id, date: localIsoDate(new Date(s.startedAt)), mode: s.mode, durationS: Math.round(r.durationS) };
+        if (r.avgPaceSecPerKm !== undefined) test.secPerKm = Math.round(r.avgPaceSecPerKm);
+        if (beats.length > 0) test.avgBpm = Math.round(beats.reduce((sum, h) => sum + h.bpm, 0) / beats.length);
+        tests.push(test);
+      }
+      return tests;
+    },
+
+    learnedZone2Pace(today) {
+      return medianZone2Pace(repo.runRows(addDays(today, -120), today));
+    },
+
     settings(): Settings {
       const rows = db.select().from(t.settings).where(notDeleted(t.settings)).all();
-      const stored = Object.fromEntries(rows.filter((r) => !INTERNAL_SETTING_KEYS.has(r.key)).map((r) => [r.key, JSON.parse(r.valueJson) as unknown]));
-      return { ...DEFAULT_SETTINGS, ...stored } as Settings;
+      const merged: Record<string, unknown> = { ...DEFAULT_SETTINGS };
+      for (const r of rows) {
+        if (INTERNAL_SETTING_KEYS.has(r.key)) continue;
+        const value = JSON.parse(r.valueJson) as unknown;
+        const base = merged[r.key];
+        // Object settings keep defaults for fields added after they were saved (e.g. new cue prefs).
+        const isObject = (v: unknown) => typeof v === 'object' && v !== null && !Array.isArray(v);
+        merged[r.key] = isObject(base) && isObject(value) ? { ...(base as object), ...(value as object) } : value;
+      }
+      return merged as unknown as Settings;
     },
 
     updateSettings(patch) {
