@@ -1,20 +1,24 @@
-import { type HrProfileInput, type PlanInputs, type UnitPrefs } from '@fit/core';
+import { type HrProfileInput, type PlanInputs, type UnitPrefs, presetInfo } from '@fit/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import Animated, { FadeInLeft, FadeInRight } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { actions, showSnack, useHrProfile, usePlan, useSettings, useToday } from '@/data/store';
+import { actions, showSnack, useHrProfile, usePlan, useSettings, useToday, useVdot } from '@/data/store';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, IconButton, Segmented, T } from '@/ui/primitives';
-import { type PlanChoice, PlanDetailsStep, PlanPickStep, defaultInputs, inputsProblem } from './PlanSteps';
+import { type PlanChoice, PaceStep, PlanDetailsStep, PlanPickStep, Run20Step, defaultInputs, inputsProblem, needsPaceStep } from './PlanSteps';
 import { ZonesStep, useZonesDraft } from './ZonesStep';
 import { defaultFitness, defaultHeartInput, FitnessStep, HeartStep } from './OnboardingSteps';
 import { haptic } from '@/lib/haptics';
 
-type Step = 'units' | 'heart' | 'zones' | 'pick' | 'fitness' | 'details';
-const FULL: readonly Step[] = ['units', 'heart', 'pick', 'fitness', 'details'];
+type Step = 'units' | 'heart' | 'zones' | 'run20' | 'pick' | 'fitness' | 'details' | 'pace';
+/** The plan part grows once a preset is picked: beginner plans skip the pace step. */
+function planSteps(choice: PlanChoice | undefined): Step[] {
+  if (!choice || choice === 'none') return ['run20', 'pick'];
+  return ['run20', 'pick', 'fitness', 'details', ...(needsPaceStep(choice) ? (['pace'] as const) : [])];
+}
 /** Step changes slide in on the UI thread; Reanimated follows the system reduce-motion setting. */
 const SLIDE_MS = 220;
 
@@ -27,10 +31,10 @@ export function SetupScreen() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const { only } = useLocalSearchParams<{ only?: 'zones' | 'plan' }>();
-  const flow: readonly Step[] = only === 'zones' ? ['zones'] : only === 'plan' ? ['pick', 'fitness', 'details'] : FULL;
   const settings = useSettings();
   const today = useToday();
   const plan = usePlan();
+  const vdot = useVdot();
   const [index, setIndex] = useState(0);
   const [forward, setForward] = useState(true);
   const existingHr = useHrProfile();
@@ -38,6 +42,8 @@ export function SetupScreen() {
   const [units, setUnits] = useState<UnitPrefs>(settings.units);
   const [zones, setZones] = useZonesDraft();
   const [choice, setChoice] = useState<PlanChoice | undefined>(plan?.presetId);
+  const [canRun20, setCanRun20] = useState<boolean | undefined>(plan ? !presetInfo(plan.presetId).beginner : undefined);
+  const flow: readonly Step[] = only === 'zones' ? ['zones'] : only === 'plan' ? planSteps(choice) : ['units', 'heart', ...planSteps(choice)];
   const [inputs, setInputs] = useState<PlanInputs | undefined>(plan ? { ...plan.inputs } : undefined);
   // The repo's message for inputs it rejected; editing the inputs clears it.
   const [rejected, setRejected] = useState<{ inputs: PlanInputs; message: string }>();
@@ -65,10 +71,10 @@ export function SetupScreen() {
         if (only) actions.abandonPlan();
         return finish();
       }
-      if (choice && inputs?.presetId !== choice) setInputs({ ...defaultInputs(choice, today), fitness: inputs?.fitness ?? defaultFitness(units.distance) });
+      if (choice && inputs?.presetId !== choice) setInputs({ ...defaultInputs(choice, today, vdot), fitness: inputs?.fitness ?? defaultFitness(units.distance) });
       else if (inputs && !inputs.fitness) setInputs({ ...inputs, fitness: defaultFitness(units.distance) });
     }
-    if (step === 'details' && inputs) {
+    if (index === flow.length - 1 && inputs) {
       let created;
       try {
         created = actions.createPlan(inputs);
@@ -92,8 +98,18 @@ export function SetupScreen() {
     else if (router.canGoBack()) router.back();
   };
 
-  const problem = step === 'details' && inputs ? (inputsProblem(inputs) ?? (rejected?.inputs === inputs ? rejected.message : undefined)) :step === 'zones' ? zones.error : step === 'pick' && !choice ? 'Pick a plan' : undefined;
-  const cta = step === 'details' ? 'Create plan' : step === 'pick' ? (choice === 'none' ? 'Finish' : 'Continue') : step === 'fitness' ? 'Next: run days' : step === 'zones' && only ? 'Save' : 'Continue';
+  const last = index === flow.length - 1;
+  const problem =
+    (step === 'details' || step === 'pace') && inputs
+      ? (inputsProblem(inputs) ?? (rejected?.inputs === inputs ? rejected.message : undefined))
+      : step === 'zones'
+        ? zones.error
+        : step === 'run20' && canRun20 === undefined
+          ? 'Pick an answer'
+          : step === 'pick' && !choice
+            ? 'Pick a plan'
+            : undefined;
+  const cta = (step === 'details' || step === 'pace') && last ? 'Create plan' : step === 'pick' && choice === 'none' ? 'Finish' : step === 'fitness' ? 'Next: run days' : step === 'details' ? 'Next: paces' : step === 'zones' && only ? 'Save' : 'Continue';
   const canBack = index > 0 || router.canGoBack();
 
   return (
@@ -119,9 +135,11 @@ export function SetupScreen() {
           {step === 'units' && <UnitsStep units={units} onChange={setUnits} />}
           {step === 'heart' && <HeartStep input={heart} onChange={setHeart} />}
           {step === 'zones' && <ZonesStep draft={zones} onChange={setZones} />}
-          {step === 'pick' && <PlanPickStep choice={choice} onChoose={setChoice} />}
+          {step === 'run20' && <Run20Step answer={canRun20} onAnswer={setCanRun20} />}
+          {step === 'pick' && <PlanPickStep choice={choice} onChoose={setChoice} canRun20={canRun20} />}
           {step === 'fitness' && inputs?.fitness && <FitnessStep fitness={inputs.fitness} unit={units.distance} onChange={(fitness) => setInputs({ ...inputs, fitness })} />}
           {step === 'details' && inputs && <PlanDetailsStep inputs={inputs} onChange={setInputs} today={today} />}
+          {step === 'pace' && inputs && <PaceStep inputs={inputs} onChange={setInputs} vdot={vdot} />}
         </Animated.View>
       </ScrollView>
 
