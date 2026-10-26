@@ -26,7 +26,18 @@ export interface HrProfile extends HrProfileInput {
   createdAt: string;
 }
 
-export type PlanPresetId = '5k-8wk' | 'z2-base-8wk';
+export type PlanPresetId =
+  | '5k-8wk'
+  | '10k-10wk'
+  | 'half-12wk'
+  | 'c25k-9wk'
+  | 'walk-to-run-6wk'
+  | 'base-builder'
+  | 'speed-6wk'
+  | 'z2-base-8wk'
+  | 'z2-run-walk-6wk'
+  | 'z2-walk-4wk'
+  | 'z2-speed-8wk';
 
 export interface PlanInputs {
   presetId: PlanPresetId;
@@ -49,6 +60,13 @@ export interface PlanInputs {
   treadmill: 'none' | 'some' | 'mostly';
   /** Where you are now. Sets the first week's volume; omitted uses the preset's defaults. */
   fitness?: StartingFitness;
+  /** Fitness plans: one of presetInfo().weeksOptions; omitted uses the preset length. */
+  weeks?: number;
+  /**
+   * Wizard step 5 (spec §8): race uses fitness.recentRace; trial puts a 3 km time trial in
+   * week 1; beginner turns pace targets into effort. Omitted behaves like race or goal.
+   */
+  paceSource?: 'race' | 'trial' | 'beginner';
 }
 
 /** Current running, as Runna asks it. SI units. */

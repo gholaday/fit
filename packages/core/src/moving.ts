@@ -1,5 +1,6 @@
 import type { AgendaItem } from './agenda';
 import { addDays, type IsoDate } from './dates';
+import { flattenSteps, isHardStep, type WorkoutItem } from './workout';
 
 /**
  * Moving rules (spec §8 "Moving activities"). Moves are always allowed; this only
@@ -81,4 +82,14 @@ function dayNum(date: IsoDate): number {
 /** Hard day definition for plan roles. Strength is never hard (docs/decisions.md). */
 export function isHardRole(role: string): boolean {
   return role === 'long' || role === 'quality' || role === 'quality2' || role === 'retest' || role === 'race';
+}
+
+/**
+ * Hard day for scheduling: long runs always (they need an easy day after), other hard
+ * roles only when they contain hard steps. A Zone 2 aerobic test is a retest but easy
+ * (spec §7: Zone 2 sessions are not hard days).
+ */
+export function isHardWorkout(role: string, items: readonly WorkoutItem[]): boolean {
+  if (role === 'long') return true;
+  return isHardRole(role) && flattenSteps(items).some(isHardStep);
 }

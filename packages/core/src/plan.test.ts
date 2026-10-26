@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { weekdayOf } from './dates';
 import { counterIds } from './dsl';
-import { assignRoles, generatePlan, weeklyVolume } from './plan';
+import { assignRoles, generatePlan, PRESET_IDS, presetInfo, weeklyVolume } from './plan';
+import { flattenSteps } from './workout';
 import type { PlanInputs } from './repository';
 
 const TODAY = '2026-10-26'; // Monday
@@ -101,5 +102,32 @@ describe('generatePlan: starting fitness', () => {
 
     const recent = generatePlan({ ...fiveK, fitness: { runsPerWeek: 3, weeklyDistanceM: 20_000, longestRunM: 8000, recentRace: { meters: 5000, seconds: 1200 } } }, TODAY, counterIds());
     expect(recent.vdot).toBeCloseTo(49.8, 0); // 20:00 5K, not the 25:00 goal
+  });
+});
+
+describe('every preset', () => {
+  it.each(PRESET_IDS.map((id) => [id]))('%s generates a valid plan at its default days', (id) => {
+    const info = presetInfo(id);
+    const inputs: PlanInputs = {
+      presetId: id,
+      daysPerWeek: info.daysPerWeek.default,
+      preferredDays: [1, 2, 3, 4, 5, 6, 7],
+      longRunDay: 7,
+      easyBy: 'pace',
+      treadmill: 'none',
+      ...(info.kind === 'race' ? { raceDate: '2027-03-21', goalSeconds: 3600 } : { startDate: TODAY }),
+    };
+    const plan = generatePlan(inputs, TODAY, counterIds());
+    expect(plan.workouts.length).toBeGreaterThanOrEqual(info.weeks * info.daysPerWeek.default - 2);
+    expect(plan.warnings.filter((w) => w.type !== 'volume_jump')).toEqual([]);
+  });
+
+  it('beginner pace source uses effort, and the trial source opens with a time trial', () => {
+    const beginner = generatePlan({ ...fiveK, paceSource: 'beginner' }, TODAY, counterIds());
+    const targets = beginner.workouts.flatMap((w) => flattenSteps(w.workout.items).map((s) => s.target.type));
+    expect(targets).not.toContain('pace_zone');
+    const trial = generatePlan({ ...zone2, presetId: 'base-builder', paceSource: 'trial', weeks: 4 }, TODAY, counterIds());
+    expect(trial.weeks).toBe(4);
+    expect(trial.workouts.filter((w) => w.role === 'retest').map((w) => [w.weekIndex, w.workout.name])).toEqual([[1, '3 km time trial']]);
   });
 });

@@ -692,7 +692,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
               vdot: plan.vdot,
               // Paces come from a recent race when given, else the 5K goal (see generatePlan).
               source: recentRace ? 'race' : 'goal',
-              sourceDetailJson: JSON.stringify(recentRace ?? { meters: 5000, seconds: inputs.goalSeconds }),
+              sourceDetailJson: JSON.stringify(recentRace ?? { meters: presetInfo(inputs.presetId).raceMeters, seconds: inputs.goalSeconds }),
               isCurrent: true,
               ...created(),
             })

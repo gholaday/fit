@@ -2,7 +2,7 @@ import type { AgendaItem, AgendaStatus, CompletionDetails, Lane, PlanRole, Sched
 import { LANE_ORDER } from './agenda';
 import { addDays, dateRange, startOfWeek, weekdayOf, type IsoDate, type Weekday } from './dates';
 import { zoneBand, type HrZoneBand } from './hr';
-import { isHardRole } from './moving';
+import { isHardWorkout } from './moving';
 import type { PaceLookup, Workout } from './workout';
 import { flattenSteps, stepSeconds, structureSegments, totalMeters, totalSeconds } from './workout';
 
@@ -173,7 +173,7 @@ export function buildAgenda(input: AgendaInput): AgendaItem[] {
       source: { type: 'plan_workout', planWorkoutId: pw.id, planId: pw.planId, weekIndex: pw.weekIndex, role: pw.role },
       title: pw.workout.name,
       refId: pw.workout.id,
-      hard: isHardRole(pw.role),
+      hard: isHardWorkout(pw.role, pw.workout.items),
       estSeconds: Math.round(totalSeconds(pw.workout.items, input.pace)),
       estMeters: Math.round(totalMeters(pw.workout.items, input.pace)),
       structure: structureSegments(pw.workout.items, input.pace),
