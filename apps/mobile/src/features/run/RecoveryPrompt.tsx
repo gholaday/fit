@@ -10,15 +10,18 @@ import { repo } from '@/data';
 import { haptic } from '@/lib/haptics';
 import { Sheet } from '@/ui/Sheet';
 import { Button, T } from '@/ui/primitives';
-import { resumeRecovered, saveRecovered, useRun } from './engine';
+
+// The engine (with the HR sensor and Health Connect sync behind it) loads only when a
+// recovered run is resumed or saved, not on every launch.
+const engine = () => import('./engine');
 
 export function RecoveryPrompt() {
   const [active, setActive] = useState<ActiveSession>();
   const [confirmDiscard, setConfirmDiscard] = useState(false);
 
+  // The root layout mounts once per launch, before any run can start, so an active
+  // session here is always one the app died during.
   useEffect(() => {
-    const phase = useRun.getState().phase;
-    if (phase === 'active' || phase === 'paused') return;
     setActive(repo.activeSession());
   }, []);
 
@@ -39,9 +42,11 @@ export function RecoveryPrompt() {
             if (!active) return;
             haptic.commit();
             const items = active.workoutId ? (repo.workout(active.workoutId)?.items ?? []) : [];
-            resumeRecovered(active, items);
             close();
-            router.push('/run');
+            void engine().then((e) => {
+              e.resumeRecovered(active, items);
+              router.push('/run');
+            });
           }}
         />
         <Button
@@ -50,10 +55,12 @@ export function RecoveryPrompt() {
           onPress={() => {
             if (!active) return;
             haptic.success();
-            saveRecovered(active);
             const id = active.id;
             close();
-            router.push({ pathname: '/summary/[id]', params: { id } });
+            void engine().then((e) => {
+              e.saveRecovered(active);
+              router.push({ pathname: '/summary/[id]', params: { id } });
+            });
           }}
         />
         <Button
