@@ -113,9 +113,21 @@ export function SensorScreen() {
                 {bpm === undefined && connection !== 'failed' && <ActivityIndicator size="small" color={p.textTertiary} />}
               </View>
             </Group>
-            <T v="caption" tone="tertiary">
-              Runs connect to it when you open the start screen.
-            </T>
+            <View style={s.sectionHead}>
+              <T v="caption" tone="tertiary" style={{ flex: 1 }}>
+                Runs connect to it when you open the start screen.
+              </T>
+              <Button
+                label="Forget"
+                kind="quiet"
+                size="sm"
+                onPress={() => {
+                  haptic.tap();
+                  actions.updateSettings({ hrSensor: undefined });
+                  sensorChanged();
+                }}
+              />
+            </View>
           </View>
         )}
 
