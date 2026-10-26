@@ -56,7 +56,7 @@ The point of the app is to **keep everything straight and stay on a plan** witho
 | Cloud sync | Next.js (App Router route handlers) on Vercel + Neon Postgres (Drizzle pg-core), in the same monorepo | Local-first push/pull sync (§17); token in expo-secure-store |
 | Health data | react-native-health-connect (+ Expo config plugin) | Garmin steps, HR and watch workouts via Health Connect (§11) |
 | Live heart rate | react-native-ble-plx | BLE Heart Rate Profile from the Garmin's broadcast (or a chest strap), auto-connected on Start, best effort (§7) |
-| Icons | phosphor-react-native (MIT) | Regular weight; filled glyphs on activity tiles |
+| Icons | Lucide drawings (ISC) via react-native-svg | 2 px outline, no icon package; player controls filled |
 | Monorepo | pnpm workspaces + Turborepo | One repo for app, API and shared packages |
 
 ### Repo structure
@@ -915,7 +915,7 @@ The app should read like a well-made sports tool, not like generated text.
 - These rules also apply to notifications, voice cues and empty states.
 
 **Chosen direction: Midnight**, with dark and light themes following the system setting (see Design canvas). 
-- **Icons:** Phosphor Icons (MIT), via `phosphor-react-native`, regular weight. Activity icons in tinted tiles identify each item on Today: filled glyphs for run, strength and stretch in the lane color.
+- **Icons:** Lucide drawings (ISC), drawn with react-native-svg in one file, 2 px stroke. Activity icons in tinted tiles identify each item on Today: footprints, biceps-flexed and person-standing in the lane color.
 - **In-run gauge:** a 270° ring that follows the step target: HR zones for heart-rate steps, a pace band for pace steps; sprint steps switch to a full-screen countdown.
 - **Run summary:** route map with Replay, headline stats, time-in-zone bar, and an **HR chart over the whole run with the target band shaded**, plus the post-run stretch card.
 

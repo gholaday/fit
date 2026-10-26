@@ -33,7 +33,7 @@ Out of scope for M0: GPS recording, Bluetooth HR, Health Connect, Neon sync, the
   - Hermes and the New Architecture on.
   - Don't add heavy dependencies.
 - **Testing is tight and focused.** Vitest in `packages/core` only, covering plan generation, schedule expansion, moving rules, zone math and the DSL. Use small table-driven tests with a fixed clock. No UI or snapshot tests.
-- **Design:** Phosphor icons and the tokens in `docs/design.md`. Follow the copy rules exactly: no middle dots, no em or en dashes, no emoji or exclamation marks, units always shown.
+- **Design:** Lucide-style icons (`apps/mobile/src/ui/icons.tsx`) and the tokens in `docs/design.md`. Follow the copy rules exactly: no middle dots, no em or en dashes, no emoji or exclamation marks, units always shown.
 - **Defaults for open questions:** miles and pounds (with a setting to switch), Karvonen heart-rate zones, MapLibre for maps later.
 - **Library versions:** check current versions of Expo SDK and any libraries rather than assuming. If something in the spec conflicts with what the current libraries support, tell me instead of working around it silently.
 

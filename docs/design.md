@@ -64,7 +64,7 @@ Font: **Inter** (400, 500, 600, 700). Numbers use tabular figures.
 - Motion 150-250 ms, UI thread only, never delays an action.
 
 ## Icons
-Phosphor Icons via `phosphor-react-native` (MIT). Regular weight everywhere, except activity tiles: a filled glyph in the lane color on the lane tint. All icons go through `apps/mobile/src/ui/icons.tsx`, which holds the name mapping (screens never import Phosphor directly).
+Lucide drawings (ISC, lucide.dev), drawn with `react-native-svg` in `apps/mobile/src/ui/icons.tsx`, the same approach as murmur. No icon package. 24-unit grid, 2 px round strokes, outline; player controls filled. Activity tiles: `footprints` (run), `biceps-flexed` (strength), `person-standing` (stretch) in the lane color on the lane tint. Screens import icons only from that file.
 
 ## Copy rules
 - No middle-dot separators and no em or en dashes in UI text. Use layout, or a comma within one line. Ranges use a hyphen: "128-145 bpm".
