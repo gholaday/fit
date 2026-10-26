@@ -2,8 +2,8 @@ import type { PlanRole } from './agenda';
 import { addDays, diffDays, startOfWeek, weekdayOf, type IsoDate, type Weekday } from './dates';
 import { parseWorkout, renderTemplate, type IdGen } from './dsl';
 import { isHardRole } from './moving';
-import type { PlanInputs, PlanPresetId } from './repository';
-import { vdotFromRace } from './vdot';
+import type { PlanInputs, PlanPresetId, StartingFitness } from './repository';
+import { vdotFromRace, zonePace } from './vdot';
 import type { SessionMode, Step, Target, Workout, WorkoutItem } from './workout';
 import { flattenSteps, isRepeat, stepSeconds, totalMeters, type PaceLookup } from './workout';
 
@@ -43,6 +43,19 @@ interface PresetDef {
   /** Build the session for a role in a week from the ramped values. */
   session(role: PlanRole, week: number, vars: Record<string, number>): SessionTemplate;
   race?: SessionTemplate;
+  /**
+   * Ramp start values from current fitness. Each is clamped to [floor, 85% of peak],
+   * so a fit runner starts higher but the plan still builds.
+   */
+  startFrom?(f: FitnessMinutes): Record<string, { value: number; floor: number }>;
+}
+
+/** Starting fitness converted to running minutes at an easy pace. */
+interface FitnessMinutes {
+  longestRunM: number;
+  longestRunMin: number;
+  weeklyMin: number;
+  perRunMin?: number;
 }
 
 const FIVE_K: PresetDef = {
@@ -79,6 +92,11 @@ const FIVE_K: PresetDef = {
     }
   },
   race: { name: '5K race', dsl: 'Warm up: 10m easy, 5km @ RPE 9' },
+  startFrom: (f) => {
+    const out: Record<string, { value: number; floor: number }> = { longKm: { value: (f.longestRunM / 1000) * 0.9, floor: 3 } };
+    if (f.perRunMin !== undefined) out.easyMin = { value: f.perRunMin, floor: 20 };
+    return out;
+  },
 };
 
 const Z2_SESSION = 'Warm up: 5m walk, {{min}}min @ Z2, Cool down: 5m walk';
@@ -104,6 +122,10 @@ const ZONE2_BASE: PresetDef = {
     if (role === 'long') return { name: 'Zone 2 Long', dsl: renderTemplate(Z2_SESSION, { min: v.longMin! }) };
     return { name: 'Zone 2 Run', dsl: renderTemplate(Z2_SESSION, { min: v.easyMin! }) };
   },
+  startFrom: (f) => ({
+    weekMin: { value: f.weeklyMin, floor: 60 },
+    longMin: { value: f.longestRunMin, floor: 30 },
+  }),
 };
 
 const PRESETS: Record<PlanPresetId, PresetDef> = { '5k-8wk': FIVE_K, 'z2-base-8wk': ZONE2_BASE };
@@ -277,12 +299,14 @@ export function generatePlan(inputs: PlanInputs, today: IsoDate, newId: IdGen): 
   const roles = preset.slots.slice(0, inputs.daysPerWeek);
   const byDay = assignRoles(roles, inputs.preferredDays, inputs.longRunDay);
   const lastBuildWeek = preset.weeks - preset.taperWeeks;
+  const vdot = planVdot(inputs);
+  const ramps = startingRamps(preset, inputs.fitness, vdot);
 
   const workouts: GeneratedWorkout[] = [];
   for (let week = 1; week <= preset.weeks; week++) {
     const mult = weekMultiplier(week, preset.weeks, preset.cutbackEvery, preset.taperWeeks);
     const raw: Record<string, number> = {};
-    for (const [key, ramp] of Object.entries(preset.ramps)) raw[key] = rampValue(ramp, week, lastBuildWeek);
+    for (const [key, ramp] of Object.entries(ramps)) raw[key] = rampValue(ramp, week, lastBuildWeek);
     const vars = scaleVars(preset, raw, mult, roles);
     let retestPlaced = !preset.retestWeeks.includes(week);
 
@@ -315,9 +339,6 @@ export function generatePlan(inputs: PlanInputs, today: IsoDate, newId: IdGen): 
     workouts.sort((a, b) => a.date.localeCompare(b.date));
   }
 
-  const vdot =
-    inputs.presetId === '5k-8wk' && inputs.goalSeconds ? Math.round(vdotFromRace(5000, inputs.goalSeconds) * 10) / 10 : undefined;
-
   const plan: GeneratedPlan = {
     presetId: preset.id,
     name: preset.name,
@@ -330,6 +351,40 @@ export function generatePlan(inputs: PlanInputs, today: IsoDate, newId: IdGen): 
   if (vdot !== undefined) plan.vdot = vdot;
   plan.warnings = validatePlan(plan);
   return plan;
+}
+
+/**
+ * Training paces come from current fitness (a recent race) when given, otherwise the
+ * 5K goal time. Daniels trains at current fitness; the goal is the target, not the pace.
+ */
+function planVdot(inputs: PlanInputs): number | undefined {
+  const race = inputs.fitness?.recentRace;
+  if (race) return Math.round(vdotFromRace(race.meters, race.seconds) * 10) / 10;
+  if (inputs.presetId === '5k-8wk' && inputs.goalSeconds) return Math.round(vdotFromRace(5000, inputs.goalSeconds) * 10) / 10;
+  return undefined;
+}
+
+/** Easy pace when nothing is known: 7:00 /km (about 11:15 /mi). */
+const DEFAULT_EASY_SEC_PER_KM = 420;
+
+function startingRamps(preset: PresetDef, fitness: StartingFitness | undefined, vdot: number | undefined): Record<string, Ramp> {
+  if (!fitness || !preset.startFrom) return preset.ramps;
+  const { runsPerWeek, weeklyDistanceM, longestRunM } = fitness;
+  if (![runsPerWeek, weeklyDistanceM, longestRunM].every((v) => Number.isFinite(v) && v >= 0)) {
+    throw new Error('Starting fitness values must be zero or more');
+  }
+  const easy = vdot !== undefined ? zonePace(vdot, 'easy').targetSecPerKm : DEFAULT_EASY_SEC_PER_KM;
+  const minutes = (m: number) => ((m / 1000) * easy) / 60;
+  const f: FitnessMinutes = { longestRunM, longestRunMin: minutes(longestRunM), weeklyMin: minutes(weeklyDistanceM) };
+  if (runsPerWeek > 0) f.perRunMin = minutes(weeklyDistanceM) / runsPerWeek;
+
+  const ramps = { ...preset.ramps };
+  for (const [key, { value, floor }] of Object.entries(preset.startFrom(f))) {
+    const ramp = ramps[key];
+    if (!ramp) continue;
+    ramps[key] = { ...ramp, start: Math.min(Math.max(value, floor), ramp.peak * 0.85) };
+  }
+  return ramps;
 }
 
 function scaleVars(preset: PresetDef, raw: Record<string, number>, mult: number, roles: readonly PlanRole[]): Record<string, number> {

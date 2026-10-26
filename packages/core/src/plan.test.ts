@@ -79,3 +79,27 @@ describe('generatePlan: Zone 2 Base', () => {
     expect(weekdayOf(late.workouts[0]!.date)).toBeGreaterThanOrEqual(4);
   });
 });
+
+describe('generatePlan: starting fitness', () => {
+  const longRunKm = (inputs: PlanInputs) => {
+    const plan = generatePlan(inputs, TODAY, counterIds());
+    const long = plan.workouts.find((w) => w.weekIndex === 1 && w.role === 'long')!;
+    return (long.workout.items[0] as { duration: { meters: number } }).duration.meters / 1000;
+  };
+
+  it('starts the long run from your longest run, clamped to a floor and below peak', () => {
+    const at = (longestRunM: number) => longRunKm({ ...fiveK, fitness: { runsPerWeek: 3, weeklyDistanceM: 20_000, longestRunM } });
+    expect(at(0)).toBe(3); // beginner floor
+    expect(at(8000)).toBe(7); // 90% of 8 km, rounded to 0.5
+    expect(at(30_000)).toBe(8.5); // capped at 85% of the 10 km peak
+  });
+
+  it('scales Zone 2 minutes from weekly running and takes paces from a recent race over the goal', () => {
+    const z2Week1 = (weeklyDistanceM: number) =>
+      weeklyVolume(generatePlan({ ...zone2, fitness: { runsPerWeek: 4, weeklyDistanceM, longestRunM: 8000 } }, TODAY, counterIds()), 1);
+    expect(z2Week1(25_000)).toBeGreaterThan(z2Week1(5000));
+
+    const recent = generatePlan({ ...fiveK, fitness: { runsPerWeek: 3, weeklyDistanceM: 20_000, longestRunM: 8000, recentRace: { meters: 5000, seconds: 1200 } } }, TODAY, counterIds());
+    expect(recent.vdot).toBeCloseTo(49.8, 0); // 20:00 5K, not the 25:00 goal
+  });
+});

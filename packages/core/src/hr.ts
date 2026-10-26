@@ -127,3 +127,9 @@ export function zoneBand(zones: readonly HrZoneBand[], zone: HrZone): HrZoneBand
   if (!band) throw new Error(`Missing zone ${zone}`);
   return band;
 }
+
+/**
+ * Initial method for new profiles: % of max HR, which is Garmin's default and needs only
+ * max HR or age. Karvonen and the others stay available in Settings.
+ */
+export const DEFAULT_HR_METHOD: HrMethod = 'max';

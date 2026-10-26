@@ -32,11 +32,29 @@ export interface PlanInputs {
   /** Preferred weekdays, length >= daysPerWeek. */
   preferredDays: Weekday[];
   longRunDay: Weekday;
-  /** 5K: goal finish time in seconds; drives paces. */
+  /** 5K: goal finish time in seconds. Drives paces when there is no recent race. */
   goalSeconds?: number;
   /** Easy runs targeted by pace or by heart rate. Zone 2 plans are always HR. */
   easyBy: 'pace' | 'hr';
+  /**
+   * Default session mode for generated runs. Onboarding no longer asks and passes 'none';
+   * the pre-start screen picks outdoor, treadmill or timer for each run.
+   */
   treadmill: 'none' | 'some' | 'mostly';
+  /** Where you are now. Sets the first week's volume; omitted uses the preset's defaults. */
+  fitness?: StartingFitness;
+}
+
+/** Current running, as Runna asks it. SI units. */
+export interface StartingFitness {
+  /** Runs per week lately, 0-7. */
+  runsPerWeek: number;
+  /** Typical weekly running distance lately. */
+  weeklyDistanceM: number;
+  /** Longest run in the last month. */
+  longestRunM: number;
+  /** A recent race or time trial. Sets training paces (current fitness, not goal). */
+  recentRace?: { meters: number; seconds: number };
 }
 
 export interface PlanSummary {

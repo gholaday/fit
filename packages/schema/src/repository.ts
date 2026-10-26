@@ -512,6 +512,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
 
     createPlan(inputs, onDate) {
       const plan = generatePlan(inputs, onDate, newId);
+      const recentRace = inputs.fitness?.recentRace;
       const planId = newId();
       db.transaction((tx) => {
         abandonActive();
@@ -537,7 +538,15 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         if (plan.vdot !== undefined) {
           tx.update(t.paceProfiles).set({ isCurrent: false, ...stamp() }).where(eq(t.paceProfiles.isCurrent, true)).run();
           tx.insert(t.paceProfiles)
-            .values({ id: newId(), vdot: plan.vdot, source: 'goal', sourceDetailJson: JSON.stringify({ meters: 5000, seconds: inputs.goalSeconds }), isCurrent: true, ...created() })
+            .values({
+              id: newId(),
+              vdot: plan.vdot,
+              // Paces come from a recent race when given, else the 5K goal (see generatePlan).
+              source: recentRace ? 'race' : 'goal',
+              sourceDetailJson: JSON.stringify(recentRace ?? { meters: 5000, seconds: inputs.goalSeconds }),
+              isCurrent: true,
+              ...created(),
+            })
             .run();
         }
       });
