@@ -37,6 +37,7 @@ import {
   type SkipReason,
   type Weekday,
   type WorkoutItem,
+  type Workout,
   type ActiveSession,
   type PlayerState,
   type SessionDetail,
@@ -607,6 +608,18 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     removeScheduleEntry(id) {
       // Ending (not deleting) keeps past occurrences and their completions.
       db.update(t.weeklySchedule).set({ endsOn: addDays(today(), -1), ...stamp() }).where(eq(t.weeklySchedule.id, id)).run();
+    },
+
+    workout(id) {
+      const w = db.select().from(t.workouts).where(and(eq(t.workouts.id, id), notDeleted(t.workouts))).get();
+      if (!w) return undefined;
+      const workout: Workout = { id: w.id, name: w.name, kind: w.kind, defaultMode: w.defaultMode, items: (JSON.parse(w.itemsJson) as { items: WorkoutItem[] }).items };
+      if (w.notes) workout.notes = w.notes;
+      return workout;
+    },
+
+    currentVdot() {
+      return db.select({ vdot: t.paceProfiles.vdot }).from(t.paceProfiles).where(and(eq(t.paceProfiles.isCurrent, true), notDeleted(t.paceProfiles))).get()?.vdot;
     },
 
     startSession(input) {

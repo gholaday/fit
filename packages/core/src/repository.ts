@@ -5,7 +5,7 @@ import type { TrackPoint } from './session/geo';
 import type { PlayerState, StepLogEntry } from './session/player';
 import type { StepResult } from './session/track';
 import type { UnitPrefs } from './units';
-import type { SessionMode } from './workout';
+import type { SessionMode, Workout } from './workout';
 
 /**
  * The contract between screens and storage. The mobile app calls this through its
@@ -189,6 +189,11 @@ export interface FitRepository {
   addScheduleEntry(entry: Omit<ScheduleEntry, 'id' | 'position'>): ScheduleEntry;
   updateScheduleEntry(id: string, patch: Partial<Omit<ScheduleEntry, 'id'>>): void;
   removeScheduleEntry(id: string): void;
+
+  // Workouts and paces
+  workout(id: string): Workout | undefined;
+  /** VDOT of the current pace profile, for zonePace() ranges. */
+  currentVdot(): number | undefined;
 
   // Sessions
   startSession(input: SessionStartInput): string;
