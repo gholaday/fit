@@ -81,13 +81,17 @@ export function mapExercise(src: SourceExercise, id: string, overrides: Override
   const m = overrides.muscles?.[slug];
   const sides = overrides.sides?.[slug] ?? (kind === 'stretch' && TWO_SIDED.test(src.instructions.join(' ')) ? 'both' : 'none');
 
+  const musclePrimary = m?.primary ?? muscle(primary);
+  // Mapping folds several source muscles into one of ours, so drop repeats and the primary.
+  const musclesSecondary = [...new Set(m?.secondary ?? src.secondaryMuscles.map(muscle))].filter((x) => x !== musclePrimary);
+
   const ex: CatalogExercise = {
     id,
     slug,
     name: overrides.rename?.[slug] ?? cleanName(src.name),
     kind,
-    musclePrimary: m?.primary ?? muscle(primary),
-    musclesSecondary: m?.secondary ?? src.secondaryMuscles.map(muscle),
+    musclePrimary,
+    musclesSecondary,
     equipment,
     tracking: overrides.tracking?.[slug] ?? tracking(kind, equipment, src.force),
     level: src.level as Level,

@@ -215,7 +215,6 @@ function toSummary(r: typeof t.exercises.$inferSelect): ExerciseSummary {
     custom: r.origin === 'custom',
   };
   if (r.defaultHoldS !== null) s.defaultHoldS = r.defaultHoldS;
-  if (r.origin === 'seed' && (JSON.parse(r.imageKeysJson) as string[]).length > 0) s.thumbKey = r.slug;
   return s;
 }
 

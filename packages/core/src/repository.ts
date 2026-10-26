@@ -107,8 +107,6 @@ export interface ExerciseSummary {
   tracking: Tracking;
   sides: 'both' | 'none';
   defaultHoldS?: number;
-  /** Thumbnail key ("cat-stretch"), absent for custom exercises. */
-  thumbKey?: string;
   custom: boolean;
 }
 

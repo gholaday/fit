@@ -7,8 +7,7 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./catalog.json": "./catalog.json",
-    "./images": "./src/images.generated.ts"
+    "./catalog.json": "./catalog.json"
   },
   "scripts": {
     "build:catalog": "tsx src/build.ts",
@@ -17,7 +16,6 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "sharp": "^0.35.5",
     "tsx": "^4.23.15",
     "ulid": "^3.0.2",
     "vitest": "^5.0.5",
