@@ -82,6 +82,7 @@ describe('cues', () => {
     expect(run(95, 310)).toEqual([]); // back in range resets
     expect(run(100, 280)).toEqual([]);
     expect(run(150, 280)).toEqual(['Ease off.']);
+    expect(cuesFor(st, { snap, t: sec(210), distanceM: 0, currentPace: 280 }, { ...ctx, treadmill: true }).cues.map((c) => c.text)).toEqual(['Lower the speed.']);
   });
 });
 

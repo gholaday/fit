@@ -33,6 +33,8 @@ export interface CueContext {
   prefs: CuePrefs;
   /** Target pace range for a pace step, sec/km (faster first). */
   paceRange?: (step: Step) => { minSecPerKm: number; maxSecPerKm: number } | undefined;
+  /** Treadmill nudges name the belt ("Raise the speed.") since pace follows the speed you set. */
+  treadmill?: boolean;
 }
 
 export interface CueInput {
@@ -112,7 +114,7 @@ export function cuesFor(state: CueState, input: CueInput, ctx: CueContext): { st
     if (!direction) s.outOfRange = undefined;
     else if (!s.outOfRange || s.outOfRange.direction !== direction) s.outOfRange = { since: t, direction };
     else if (t - s.outOfRange.since >= NUDGE_AFTER_MS && (s.lastNudgeAt === undefined || t - s.lastNudgeAt >= NUDGE_EVERY_MS)) {
-      cues.push({ kind: 'pace_nudge', text: direction === 'slow' ? 'A little faster.' : 'Ease off.' });
+      cues.push({ kind: 'pace_nudge', text: ctx.treadmill ? (direction === 'slow' ? 'Raise the speed.' : 'Lower the speed.') : direction === 'slow' ? 'A little faster.' : 'Ease off.' });
       s.lastNudgeAt = t;
     }
   }
