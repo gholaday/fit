@@ -17,3 +17,6 @@ apps/mobile/web-build/
 apps/api/.next/
 apps/api/next-env.d.ts
 apps/api/.vercel/
+
+# scratch smoke scripts
+*.tmp.ts
