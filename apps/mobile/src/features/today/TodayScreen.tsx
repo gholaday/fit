@@ -6,7 +6,9 @@ import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnim
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { useDayKeys, useFit, useSettings, useToday } from '@/data/store';
+import { openActivities, syncedLabel, useHealth } from '@/features/health/state';
 import { QuickLogSheet } from '@/features/quicklog/QuickLogSheet';
+import { haptic } from '@/lib/haptics';
 import { longDate } from '@/lib/format';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -32,6 +34,9 @@ export function TodayScreen() {
   const summary = summarizeDay(items, tomorrowItems, new Date().getHours(), settings.units);
   const heroKey = items.find((i) => i.lane === 'run' && i.status === 'pending')?.key;
   const [quickLog, setQuickLog] = useState(false);
+  const metrics = useHealth((h) => h.metrics);
+  const lastSyncedAt = useHealth((h) => h.lastSyncedAt);
+  const pendingCount = useHealth((h) => h.pending.length);
 
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler((e) => {
@@ -61,7 +66,33 @@ export function TodayScreen() {
         </View>
 
         <WeekStrip today={today} />
-        <DayWidget summary={summary} stepGoal={settings.stepGoal} />
+        <DayWidget summary={summary} stepGoal={settings.stepGoal} steps={metrics?.steps} />
+        {(metrics || lastSyncedAt) && (
+          <View style={s.health}>
+            <Icons.heart size={18} color={p.run.color} />
+            <View style={{ flex: 1 }}>
+              <T v="bodyMedium" num>
+                {metrics?.restingHr ? `Resting heart rate ${Math.round(metrics.restingHr)} bpm` : 'Resting heart rate not synced'}
+              </T>
+              <T v="caption" tone="secondary" num>
+                {lastSyncedAt ? `Last synced ${syncedLabel(lastSyncedAt)}` : 'Not synced yet'}
+              </T>
+            </View>
+          </View>
+        )}
+        {pendingCount > 0 && (
+          <Button
+            label={`New activities (${pendingCount})`}
+            kind="outline"
+            size="sm"
+            style={{ alignSelf: 'flex-start', borderRadius: 18 }}
+            icon={<Icons.bell size={14} color={p.text} />}
+            onPress={() => {
+              haptic.tap();
+              openActivities();
+            }}
+          />
+        )}
 
         {items.length === 0 ? (
           <View style={s.empty}>
@@ -82,7 +113,7 @@ export function TodayScreen() {
 
       <Animated.View pointerEvents="none" style={[s.slimWrap, { paddingTop: insets.top + 4 }, slimStyle]}>
         <View style={s.slim}>
-          <SlimBar summary={summary} />
+          <SlimBar summary={summary} steps={metrics?.steps} />
         </View>
       </Animated.View>
       {/* Keeps scrolled content from showing under the transparent status bar. */}
@@ -101,4 +132,5 @@ const useStyles = createStyles((p) => ({
   slimWrap: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 20, paddingBottom: 8, backgroundColor: p.bg },
   slim: { shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3, borderRadius: 14 },
   empty: { alignItems: 'center', gap: 4, paddingVertical: 32 },
+  health: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: p.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12 },
 }));

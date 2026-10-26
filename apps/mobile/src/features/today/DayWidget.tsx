@@ -10,10 +10,7 @@ import type { DaySummary } from './daySummary';
 const R = 42;
 const C = 2 * Math.PI * R;
 
-/**
- * Steps ring. Health Connect arrives in M2, so `steps` is undefined for now and the
- * ring shows the goal only.
- */
+/** Steps ring. `steps` is undefined until Health Connect has synced today; the ring then shows the goal only. */
 export const StepsRing = memo(function StepsRing({ steps, goal, size = 96 }: { steps: number | undefined; goal: number; size?: number }) {
   const p = usePalette();
   const met = steps !== undefined && steps >= goal;
@@ -55,14 +52,14 @@ export const DayStrip = memo(function DayStrip({ segments, height = 8 }: { segme
   );
 });
 
-export const DayWidget = memo(function DayWidget({ summary, stepGoal }: { summary: DaySummary; stepGoal: number }) {
+export const DayWidget = memo(function DayWidget({ summary, stepGoal, steps }: { summary: DaySummary; stepGoal: number; steps?: number }) {
   const s = useStyles();
   const p = usePalette();
   const LineIcon = summary.line ? LANE_ICON[summary.line.lane] : undefined;
   const SubIcon = summary.sub?.icon === 'clock' ? Icons.clock : Icons.calendar;
   return (
     <View style={s.card}>
-      <StepsRing steps={undefined} goal={stepGoal} />
+      <StepsRing steps={steps} goal={stepGoal} />
       <View style={s.right}>
         <T v="headline" numberOfLines={1}>
           {summary.headline}
@@ -90,7 +87,7 @@ export const DayWidget = memo(function DayWidget({ summary, stepGoal }: { summar
 });
 
 /** What the widget shrinks to while the checklist scrolls. */
-export const SlimBar = memo(function SlimBar({ summary }: { summary: DaySummary }) {
+export const SlimBar = memo(function SlimBar({ summary, steps }: { summary: DaySummary; steps?: number }) {
   const s = useStyles();
   return (
     <View style={s.slim}>
@@ -98,8 +95,8 @@ export const SlimBar = memo(function SlimBar({ summary }: { summary: DaySummary 
         {summary.total === 0 ? 'Rest day' : `${summary.done} of ${summary.total} done`}
       </T>
       <View style={{ flex: 1 }}>{summary.segments.length > 0 && <DayStrip segments={summary.segments} height={6} />}</View>
-      <T v="caption" tone="secondary">
-        Steps not synced
+      <T v="caption" tone="secondary" num>
+        {steps === undefined ? 'Steps not synced' : `${thousands(steps)} steps`}
       </T>
     </View>
   );
