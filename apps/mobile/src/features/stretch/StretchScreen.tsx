@@ -6,7 +6,6 @@
  * (audio focus ducks music) and the screen stays on.
  */
 import { createPlayer, firstStepOfItem, formatClock, playerReducer, type PlayerState, type RoutineDetail, snapshot, type Step, stretchSteps } from '@fit/core';
-import { Image } from 'expo-image';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -21,20 +20,19 @@ import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Sheet } from '@/ui/Sheet';
 import { Button, IconButton, T } from '@/ui/primitives';
-import { detailFor, thumbFor } from '@/features/library/catalog';
 import { services } from '@/features/run/services';
 
 const KEEP_AWAKE_TAG = 'stretch';
-const RING = 220;
-const STROKE = 10;
+const RING = 248;
+const STROKE = 12;
 const R = (RING - STROKE) / 2;
 const CIRC = 2 * Math.PI * R;
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 
 interface Move {
   name: string;
-  instruction: string;
-  image?: number;
+  /** Exercise.instructions, one paragraph per step. */
+  instructions: string[];
   holdS: number;
   sides: 'both' | 'none';
 }
@@ -58,12 +56,9 @@ function Player({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
     if (routine.items.kind !== 'stretch') return [];
     return routine.items.items.map((item) => {
       const ex = repo.exercise(item.exerciseId);
-      const key = ex?.imageKeys[0];
       return {
         name: ex?.name ?? 'Stretch',
-        // One or two lines on the card; the full steps are on the exercise page.
-        instruction: (ex?.instructions ?? []).slice(0, 1).join(' '),
-        image: key ? (detailFor(key) ?? thumbFor(ex?.slug)) : undefined,
+        instructions: ex?.instructions ?? [],
         holdS: item.holdS,
         sides: item.sides,
       };
@@ -215,60 +210,52 @@ function Player({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
         </IconButton>
       </View>
 
-      <ScrollView contentContainerStyle={s.body} showsVerticalScrollIndicator={false}>
-        <Animated.View key={between ? itemIdx + 1 : itemIdx} entering={FadeIn.duration(220)} style={{ gap: 8 }}>
-          <View style={s.imageWrap}>{shownMove.image ? <Image source={shownMove.image} style={{ width: '100%', height: '100%' }} contentFit="contain" /> : <Icons.stretching size={48} color={p.stretch.color} />}</View>
-          <T v="title" align="center">
-            {shownMove.name}
+      <Animated.View key={between ? itemIdx + 1 : itemIdx} entering={FadeIn.duration(220)} style={s.head}>
+        <T v="title" align="center" numberOfLines={2}>
+          {shownMove.name}
+        </T>
+        <T v="headline" align="center" color={between || step.label === 'Switch sides' ? p.textSecondary : p.stretch.onTint}>
+          {between ? 'Get ready' : step.label === 'Switch sides' ? 'Switch sides' : step.label ? `${step.label} side` : 'Hold'}
+        </T>
+      </Animated.View>
+
+      <View style={s.ringWrap}>
+        <CountdownRing progress={progress} color={between || step.label === 'Switch sides' ? p.textTertiary : p.stretch.color} track={p.ringTrack} />
+        <View style={s.ringText}>
+          <T v="display" num style={{ fontSize: 56, lineHeight: 64 }}>
+            {formatClock(left)}
           </T>
-          {shownMove.instruction ? (
-            <T v="body" tone="secondary" align="center" numberOfLines={2}>
-              {shownMove.instruction}
-            </T>
-          ) : null}
-        </Animated.View>
-
-        <View style={s.ringWrap}>
-          <CountdownRing progress={progress} color={between || step.label === 'Switch sides' ? p.textTertiary : p.stretch.color} track={p.ringTrack} />
-          <View style={s.ringText}>
-            <T v="display" num style={{ fontSize: 44 }}>
-              {formatClock(left)}
-            </T>
-            <T v="caption" tone="secondary">
-              {between ? 'Get ready' : step.label === 'Switch sides' ? 'Switch sides' : `of ${formatClock(total)}`}
-            </T>
-          </View>
+          <T v="caption" tone="secondary">{`of ${formatClock(total)}`}</T>
         </View>
+      </View>
 
-        {move.sides === 'both' && !between && (
-          <View style={s.sides}>
-            {(['Left', 'Right'] as const).map((side) => {
-              const on = step.label === side;
-              return (
-                <View key={side} style={[s.side, on && { backgroundColor: p.stretch.tint }]}>
-                  <T v={on ? 'labelStrong' : 'label'} color={on ? p.stretch.onTint : p.textTertiary}>
-                    {side}
-                  </T>
-                </View>
-              );
-            })}
-          </View>
-        )}
-
-        {nextMove && (
-          <View style={s.next}>
-            <T v="caption" tone="secondary">
-              Next
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={s.cues} showsVerticalScrollIndicator={false}>
+        {shownMove.instructions.length > 0 ? (
+          shownMove.instructions.map((line, i) => (
+            <T key={i} v="body" style={s.cue}>
+              {line}
             </T>
-            <T v="bodyMedium" style={{ flex: 1 }} numberOfLines={1}>
-              {nextMove.name}
-            </T>
-            <T v="caption" tone="secondary">
-              {nextMove.sides === 'both' ? `${nextMove.holdS} s each side` : `${nextMove.holdS} s`}
-            </T>
-          </View>
+          ))
+        ) : (
+          <T v="body" tone="secondary" style={s.cue}>
+            Hold the stretch and breathe slowly.
+          </T>
         )}
       </ScrollView>
+
+      {nextMove && (
+        <View style={s.next}>
+          <T v="caption" tone="secondary">
+            Next
+          </T>
+          <T v="bodyMedium" style={{ flex: 1 }} numberOfLines={1}>
+            {nextMove.name}
+          </T>
+          <T v="caption" tone="secondary">
+            {nextMove.sides === 'both' ? `${nextMove.holdS} s each side` : `${nextMove.holdS} s`}
+          </T>
+        </View>
+      )}
 
       <View style={s.controls}>
         <IconButton
@@ -433,13 +420,13 @@ function Feel({ routine, scheduleKey, startedAt, endedAt }: { routine: RoutineDe
 const useStyles = createStyles((p) => ({
   screen: { flex: 1, backgroundColor: p.bg },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16 },
-  body: { paddingHorizontal: 20, paddingTop: 12, gap: 16, alignItems: 'stretch' },
-  imageWrap: { height: 200, borderRadius: 20, backgroundColor: p.surface, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' },
-  ringWrap: { alignSelf: 'center', width: RING, height: RING, alignItems: 'center', justifyContent: 'center' },
+  head: { paddingHorizontal: 20, paddingTop: 16, gap: 4 },
+  ringWrap: { alignSelf: 'center', width: RING, height: RING, alignItems: 'center', justifyContent: 'center', marginVertical: 16 },
   ringText: { position: 'absolute', alignItems: 'center' },
-  sides: { flexDirection: 'row', alignSelf: 'center', gap: 6, padding: 4, borderRadius: 14, backgroundColor: p.surface },
-  side: { paddingHorizontal: 18, height: 34, borderRadius: 10, justifyContent: 'center' },
-  next: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, height: 52, borderRadius: 14, backgroundColor: p.surface },
+  cues: { paddingHorizontal: 24, paddingBottom: 12, gap: 12 },
+  // Read at arm's length mid-stretch, so larger than body copy.
+  cue: { fontSize: 19, lineHeight: 28 },
+  next: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, height: 52, borderRadius: 14, backgroundColor: p.surface, marginHorizontal: 20 },
   controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', paddingTop: 12 },
   play: { width: 76, height: 76, borderRadius: 38, backgroundColor: p.primary, alignItems: 'center', justifyContent: 'center' },
   overviewRow: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 48, paddingHorizontal: 10, borderRadius: 12 },

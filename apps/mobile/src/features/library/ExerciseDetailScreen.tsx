@@ -1,9 +1,8 @@
-/** Exercise detail: images, muscles, equipment, instructions and your history with it. */
+/** Exercise detail: instructions, muscles, equipment and your history with it. No images (cues only). */
 import { type LoggedSet, formatWeight } from '@fit/core';
-import { Image } from 'expo-image';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, Switch, useWindowDimensions, View } from 'react-native';
+import { ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
 import { actions, useUnits } from '@/data/store';
@@ -12,7 +11,6 @@ import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { IconButton, T } from '@/ui/primitives';
-import { detailFor } from './catalog';
 import { EQUIPMENT_LABEL, KIND_LABEL, MUSCLE_LABEL } from './labels';
 import { StatusShade } from '@/ui/StatusShade';
 
@@ -30,7 +28,6 @@ export function ExerciseDetailScreen() {
   const s = useStyles();
   const p = usePalette();
   const insets = useSafeAreaInsets();
-  const imageWidth = useWindowDimensions().width - 40;
   const { id } = useLocalSearchParams<{ id: string }>();
   const unit = useUnits().weight;
   const [ex] = useState(() => repo.exercise(id));
@@ -46,8 +43,8 @@ export function ExerciseDetailScreen() {
       </View>
     );
   }
-  const images = ex.imageKeys.map(detailFor).filter((x): x is number => x !== undefined);
-  const muscles = [ex.musclePrimary, ...ex.musclesSecondary].map((m) => MUSCLE_LABEL[m]).join(', ');
+  // Some catalog entries repeat the primary muscle among the secondary ones.
+  const muscles = [...new Set([ex.musclePrimary, ...ex.musclesSecondary])].map((m) => MUSCLE_LABEL[m]).join(', ');
 
   return (
     <View style={s.screen}>
@@ -55,26 +52,13 @@ export function ExerciseDetailScreen() {
         <IconButton label="Back" size={40} onPress={() => router.back()}>
           <Icons.chevronLeft size={20} color={p.text} />
         </IconButton>
-        {images.length > 0 && (
-          <ScrollView horizontal pagingEnabled showsHorizontalScrollIndicator={false} style={s.images}>
-            {images.map((src, i) => (
-              <Image key={i} source={src} style={[s.image, { width: imageWidth }]} contentFit="contain" accessibilityLabel={`${ex.name}, image ${i + 1} of ${images.length}`} />
-            ))}
-          </ScrollView>
-        )}
         <View>
           <T v="title" accessibilityRole="header">
             {ex.name}
           </T>
           <T v="caption" tone="secondary">
-            {`${KIND_LABEL[ex.kind]}, ${EQUIPMENT_LABEL[ex.equipment].toLowerCase()}${ex.custom ? ', custom' : ''}`}
+            {`${KIND_LABEL[ex.kind]}${ex.custom ? ', custom' : ''}`}
           </T>
-        </View>
-
-        <View style={s.card}>
-          <Fact label="Muscles" value={muscles} />
-          {ex.sides === 'both' && <Fact label="Sides" value="Left and right" />}
-          {ex.defaultHoldS ? <Fact label="Hold" value={`${ex.defaultHoldS} s`} /> : null}
         </View>
 
         {ex.instructions.length > 0 && (
@@ -94,6 +78,14 @@ export function ExerciseDetailScreen() {
             ))}
           </View>
         )}
+
+        <View style={s.card}>
+          <Fact label="Muscles" value={muscles} />
+          <Fact label="Equipment" value={EQUIPMENT_LABEL[ex.equipment]} />
+          {ex.sides === 'both' && <Fact label="Sides" value="Left and right" />}
+          {ex.defaultHoldS ? <Fact label="Hold" value={`${ex.defaultHoldS} s`} /> : null}
+        </View>
+
         {ex.note ? (
           <View style={[s.card, { paddingVertical: 12 }]}>
             <T v="body">{ex.note}</T>
@@ -161,8 +153,6 @@ function Fact({ label, value }: { label: string; value: string }) {
 const useStyles = createStyles((p) => ({
   screen: { flex: 1, backgroundColor: p.bg },
   content: { paddingHorizontal: 20, gap: 14 },
-  images: { height: 240, borderRadius: 20, backgroundColor: p.surface },
-  image: { height: 240 },
   card: { backgroundColor: p.surface, borderRadius: 16, paddingHorizontal: 14 },
   fact: { flexDirection: 'row', gap: 8, paddingVertical: 10 },
   step: { flexDirection: 'row', gap: 8, paddingVertical: 6 },

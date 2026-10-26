@@ -3,7 +3,6 @@
  * starters (starters are read-only).
  */
 import { type RoutineDetail, formatMinutes, formatWeight } from '@fit/core';
-import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
@@ -14,12 +13,10 @@ import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, IconButton, LaneTile, T } from '@/ui/primitives';
-import { thumbFor } from './catalog';
 import { StatusShade } from '@/ui/StatusShade';
 
 export interface ItemView {
   name: string;
-  thumbKey?: string;
   line: string;
 }
 
@@ -32,13 +29,12 @@ export function useItemViews(routine: RoutineDetail | undefined): ItemView[] {
     return r.items.map((item) => {
       const ex = repo.exercise(item.exerciseId);
       const name = ex?.name ?? 'Missing exercise';
-      const thumbKey = ex?.imageKeys.length ? ex.slug : undefined;
       if (r.kind === 'strength' && 'sets' in item) {
         const w = item.weightKg ? `, ${formatWeight(item.weightKg, unit)}` : '';
-        return { name, thumbKey, line: `${item.sets} x ${item.reps}${w}, rest ${item.restS} s` };
+        return { name, line: `${item.sets} x ${item.reps}${w}, rest ${item.restS} s` };
       }
-      if ('holdS' in item) return { name, thumbKey, line: item.sides === 'both' ? `${item.holdS} s each side` : `${item.holdS} s` };
-      return { name, thumbKey, line: '' };
+      if ('holdS' in item) return { name, line: item.sides === 'both' ? `${item.holdS} s each side` : `${item.holdS} s` };
+      return { name, line: '' };
     });
   }, [routine, unit]);
 }
@@ -108,22 +104,21 @@ export function RoutineScreen() {
         )}
 
         <View style={s.card}>
-          {items.map((it, i) => {
-            const thumb = thumbFor(it.thumbKey);
-            return (
-              <View key={i} style={[s.item, i > 0 && s.divider]}>
-                {thumb ? <Image source={thumb} style={s.thumb} contentFit="cover" /> : <View style={s.thumb} />}
-                <View style={{ flex: 1 }}>
-                  <T v="bodyMedium" numberOfLines={1}>
-                    {it.name}
-                  </T>
-                  <T v="caption" tone="secondary" num>
-                    {it.line}
-                  </T>
-                </View>
+          {items.map((it, i) => (
+            <View key={i} style={[s.item, i > 0 && s.divider]}>
+              <T v="labelStrong" tone="tertiary" num style={s.index}>
+                {String(i + 1)}
+              </T>
+              <View style={{ flex: 1 }}>
+                <T v="bodyMedium" numberOfLines={1}>
+                  {it.name}
+                </T>
+                <T v="caption" tone="secondary" num>
+                  {it.line}
+                </T>
               </View>
-            );
-          })}
+            </View>
+          ))}
         </View>
         {routine.notes ? (
           <T v="body" tone="secondary">
@@ -167,8 +162,8 @@ const useStyles = createStyles((p) => ({
   content: { paddingHorizontal: 20, paddingBottom: 24, gap: 14 },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   card: { backgroundColor: p.surface, borderRadius: 16, paddingHorizontal: 12 },
-  item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   divider: { borderTopWidth: 1, borderTopColor: p.divider },
-  thumb: { width: 44, height: 44, borderRadius: 10, backgroundColor: p.inset },
+  index: { width: 20, textAlign: 'center' },
   footer: { paddingHorizontal: 20, paddingTop: 8 },
 }));
