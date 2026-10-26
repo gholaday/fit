@@ -8,6 +8,7 @@
  * the 1 s interval covers the foreground and Timer mode.
  */
 import {
+  autoTitle,
   type ActiveSession,
   type CueState,
   type DistanceSample,
@@ -46,6 +47,9 @@ import { actions, useFit } from '@/data/store';
 import { syncHealth } from '@/features/health/sync';
 import { holdSensor, setHrSink, useHrLive } from '@/features/hr/live';
 import { cueHaptic, services } from './services';
+
+/** Name a run starts with when it is not from the plan; renamed with autoTitle() when saved. */
+export const FREE_RUN = 'Free run';
 
 export type RunPhase = 'ready' | 'countdown' | 'active' | 'paused' | 'finished';
 
@@ -279,7 +283,14 @@ export function saveRecovered(active: ActiveSession): void {
     elapsedMs: activeMs(done, t),
     pausedMs: done.pausedMs,
   });
+  nameFreeRun(active.id);
   actions.reload();
+}
+
+/** A free run gets a name from its day and shape ("Tuesday run and walk") once it is saved. */
+function nameFreeRun(id: string): void {
+  const s = repo.session(id);
+  if (s?.name === FREE_RUN) repo.renameSession(id, autoTitle(new Date(s.startedAt), s.steps.map((r) => r.step)));
 }
 
 function onFix(fix: GpsFix): void {
@@ -442,6 +453,7 @@ export async function finishRun(): Promise<string | undefined> {
       elapsedMs: activeMs(player, t),
       pausedMs: player.pausedMs,
     });
+    nameFreeRun(id);
     actions.reload();
     // A watch that recorded the same run may already have synced.
     void syncHealth();

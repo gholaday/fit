@@ -14,7 +14,7 @@ import { haptic } from '@/lib/haptics';
 import { usePalette } from '@/theme';
 import { Sheet } from '@/ui/Sheet';
 import { Button, T } from '@/ui/primitives';
-import { discardRun, finishRun, prepareRun, useRun } from './engine';
+import { discardRun, FREE_RUN, finishRun, prepareRun, useRun } from './engine';
 import { InRun } from './InRun';
 import { PreStart } from './PreStart';
 
@@ -25,7 +25,7 @@ const supported = (mode: SessionMode | undefined): SessionMode => mode ?? 'outdo
 
 function setupFor(key: string | undefined) {
   const item = key ? useFit.getState().items[key] : undefined;
-  if (!item) return { name: 'Free run', mode: 'outdoor' as const, items: [] };
+  if (!item) return { name: FREE_RUN, mode: 'outdoor' as const, items: [] };
   const workout = repo.workout(item.refId);
   return {
     name: workout?.name ?? item.title,
