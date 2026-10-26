@@ -1,0 +1,80 @@
+name: Release
+
+# Push a tag like v0.1.0 to publish the signed Android app as fit-0.1.0.apk on the
+# GitHub release, where Obtainium picks it up. Needs the ANDROID_KEYSTORE_BASE64,
+# ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD secrets.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # The release notes link to the commits since the previous tag.
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: gradle/actions/setup-gradle@v4
+      - run: pnpm install --frozen-lockfile
+      # The tag sets the app's version. versionCode has to grow with every release:
+      # 0.2.5 becomes 205, 1.0.0 becomes 10000.
+      - name: Set the app version
+        run: |
+          node -e '
+            const fs = require("fs");
+            const version = process.env.GITHUB_REF_NAME.replace(/^v/, "");
+            const [major, minor, patch] = version.split(".").map(Number);
+            const file = "apps/mobile/app.json";
+            const app = JSON.parse(fs.readFileSync(file, "utf8"));
+            app.expo.version = version;
+            app.expo.android.versionCode = major * 10000 + minor * 100 + patch;
+            fs.writeFileSync(file, JSON.stringify(app, null, 2));
+            fs.appendFileSync(process.env.GITHUB_ENV, `VERSION=${version}\n`);
+          '
+      - name: Generate the Android project
+        working-directory: apps/mobile
+        run: pnpm exec expo prebuild --platform android --clean --no-install
+      - name: Build the APK
+        working-directory: apps/mobile/android
+        env:
+          FIT_KEYSTORE: ${{ runner.temp }}/fit.jks
+          FIT_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          FIT_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          FIT_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          # Without the secrets the build stops here, rather than publishing a debug-signed APK.
+          test -n "$KEYSTORE_BASE64" || { echo "::error::The ANDROID_KEYSTORE_BASE64 secret is missing"; exit 1; }
+          echo "$KEYSTORE_BASE64" | base64 --decode > "$FIT_KEYSTORE"
+          ./gradlew assembleRelease --no-daemon
+          rm "$FIT_KEYSTORE"
+      # Release notes are the "Release x.y.z" commit's description. Without one, GitHub's generated notes.
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          apk="fit-$VERSION.apk"
+          cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$apk"
+          bash .github/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
+          if [ -s "$RUNNER_TEMP/notes.md" ]; then notes=(--notes-file "$RUNNER_TEMP/notes.md"); else notes=(--generate-notes); fi
+          if gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1; then
+            if [ -s "$RUNNER_TEMP/notes.md" ]; then gh release edit "$GITHUB_REF_NAME" --notes-file "$RUNNER_TEMP/notes.md"; fi
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$VERSION" "${notes[@]}"
+          fi
+          gh release upload "$GITHUB_REF_NAME" "$apk" --clobber
