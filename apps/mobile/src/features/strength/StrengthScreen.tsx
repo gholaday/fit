@@ -33,6 +33,7 @@ import { Button, IconButton, NumStepper, T } from '@/ui/primitives';
 import { onExercisesPicked } from '@/features/library/pick';
 import { setsSummary } from '@/features/library/ExerciseDetailScreen';
 import { cancelRest, startRest, useRest } from './rest';
+import { StatusShade } from '@/ui/StatusShade';
 
 interface Row extends SetRow {
   done: boolean;
@@ -440,6 +441,7 @@ function Finished({ routine, startedAt, endedAt, sets, blocks }: { routine: Rout
           </Animated.View>
         )}
       </ScrollView>
+      <StatusShade />
       <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Button label="Done" onPress={() => router.back()} />
       </View>

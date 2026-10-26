@@ -15,6 +15,7 @@ import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, IconButton, LaneTile, T } from '@/ui/primitives';
 import { thumbFor } from './catalog';
+import { StatusShade } from '@/ui/StatusShade';
 
 export interface ItemView {
   name: string;
@@ -148,6 +149,7 @@ export function RoutineScreen() {
           />
         )}
       </ScrollView>
+      <StatusShade />
       <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Button
           label={strength ? 'Start workout' : 'Start stretch'}

@@ -15,6 +15,7 @@ import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, Group, IconButton, NumStepper, Row, Segmented, T } from '@/ui/primitives';
 import { onExercisesPicked } from './pick';
+import { StatusShade } from '@/ui/StatusShade';
 
 const DEFAULT_REST_S = 90;
 
@@ -167,6 +168,7 @@ export function RoutineEditorScreen() {
 
         <Button label={kind === 'strength' ? 'Add exercises' : 'Add moves'} kind="outline" icon={<Icons.plus size={16} color={p.text} />} onPress={add} />
       </ScrollView>
+      <StatusShade />
       <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Button label="Save" disabled={name.trim() === '' || routine.items.length === 0} onPress={save} />
       </View>

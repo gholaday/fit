@@ -15,6 +15,7 @@ import { Button, Group, IconButton, Row, T } from '@/ui/primitives';
 import { useRun } from './engine';
 import { isSamsung, openAppSettings, type RecordingAccess, readAccess, requestBackground, requestBatteryExemption, requestLocation, requestNotifications } from './permissions';
 import { LOCATION_TASK } from './recording';
+import { StatusShade } from '@/ui/StatusShade';
 
 function ago(ms: number): string {
   const s = Math.max(0, Math.round(ms / 1000));
@@ -128,6 +129,7 @@ export function DiagnosticsScreen() {
 
         <Button label="Open app settings" kind="outline" onPress={() => void openAppSettings()} />
       </ScrollView>
+      <StatusShade />
     </View>
   );
 }

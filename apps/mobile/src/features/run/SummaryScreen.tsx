@@ -15,6 +15,7 @@ import { Icons } from '@/ui/icons';
 import { Button, IconButton, T } from '@/ui/primitives';
 import { PostRunCard } from '@/features/stretch/PostRunCard';
 import { stepAmount, stepName, stepTone } from './steps';
+import { StatusShade } from '@/ui/StatusShade';
 
 const RouteMap = lazy(() => import('./RouteMap'));
 
@@ -149,6 +150,7 @@ export function SummaryScreen() {
 
         <Feel session={session} />
       </ScrollView>
+      <StatusShade />
       <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Button label="Done" onPress={done} />
       </View>

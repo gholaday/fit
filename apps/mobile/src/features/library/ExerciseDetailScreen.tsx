@@ -14,6 +14,7 @@ import { Icons } from '@/ui/icons';
 import { IconButton, T } from '@/ui/primitives';
 import { detailFor } from './catalog';
 import { EQUIPMENT_LABEL, KIND_LABEL, MUSCLE_LABEL } from './labels';
+import { StatusShade } from '@/ui/StatusShade';
 
 /** "3 x 8 at 135 lb", or "8, 8, 6" when sets differ. */
 export function setsSummary(sets: readonly LoggedSet[], unit: 'lb' | 'kg'): string {
@@ -138,6 +139,7 @@ export function ExerciseDetailScreen() {
           </View>
         )}
       </ScrollView>
+      <StatusShade />
     </View>
   );
 }

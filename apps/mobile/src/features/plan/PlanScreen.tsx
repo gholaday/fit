@@ -12,6 +12,7 @@ import { Icons } from '@/ui/icons';
 import { Button, IconButton, LaneTile, Segmented, T } from '@/ui/primitives';
 import { ScheduleTab } from './ScheduleTab';
 import { WeekGrid } from './WeekGrid';
+import { StatusShade } from '@/ui/StatusShade';
 
 type Tab = 'week' | 'schedule';
 
@@ -33,56 +34,59 @@ export function PlanScreen() {
   };
 
   return (
-    <ScrollView style={s.screen} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} showsVerticalScrollIndicator={false}>
-      <View style={s.header}>
-        <T v="display" style={{ flex: 1 }} accessibilityRole="header">
-          Plan
-        </T>
-        <IconButton label="Settings" bg="none" onPress={() => router.push('/settings')}>
-          <Icons.settings size={22} color={p.text} />
-        </IconButton>
-      </View>
-
-      <Segmented
-        options={[
-          { value: 'week', label: 'This week' },
-          { value: 'schedule', label: 'Schedule' },
-        ]}
-        value={tab}
-        onChange={(t) => {
-          setTab(t);
-          if (t === 'schedule') setScheduleSeen(true);
-        }}
-      />
-
-      {/* Both stay mounted once seen, so switching back is instant. */}
-      <View style={{ display: tab === 'week' ? 'flex' : 'none', gap: 14 }}>
-        <PlanCard />
-        <View style={s.nav}>
-          <IconButton label="Previous week" onPress={() => go(-1)}>
-            <Icons.chevronLeft size={18} color={p.text} />
+    <>
+      <ScrollView style={s.screen} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} showsVerticalScrollIndicator={false}>
+        <View style={s.header}>
+          <T v="display" style={{ flex: 1 }} accessibilityRole="header">
+            Plan
+          </T>
+          <IconButton label="Settings" bg="none" onPress={() => router.push('/settings')}>
+            <Icons.settings size={22} color={p.text} />
           </IconButton>
-          <Animated.View key={weekStart} entering={FadeIn.duration(motion.fast)} style={{ alignItems: 'center' }}>
-            <T v="bodyStrong">{dateRangeLabel(weekStart, addDays(weekStart, 6))}</T>
-            <T v="micro" tone="secondary" style={{ fontWeight: '400' }}>
-              {weekStart < startOfWeek(today) ? 'Past week' : 'Hold and drag to move a day'}
-            </T>
+        </View>
+  
+        <Segmented
+          options={[
+            { value: 'week', label: 'This week' },
+            { value: 'schedule', label: 'Schedule' },
+          ]}
+          value={tab}
+          onChange={(t) => {
+            setTab(t);
+            if (t === 'schedule') setScheduleSeen(true);
+          }}
+        />
+  
+        {/* Both stay mounted once seen, so switching back is instant. */}
+        <View style={{ display: tab === 'week' ? 'flex' : 'none', gap: 14 }}>
+          <PlanCard />
+          <View style={s.nav}>
+            <IconButton label="Previous week" onPress={() => go(-1)}>
+              <Icons.chevronLeft size={18} color={p.text} />
+            </IconButton>
+            <Animated.View key={weekStart} entering={FadeIn.duration(motion.fast)} style={{ alignItems: 'center' }}>
+              <T v="bodyStrong">{dateRangeLabel(weekStart, addDays(weekStart, 6))}</T>
+              <T v="micro" tone="secondary" style={{ fontWeight: '400' }}>
+                {weekStart < startOfWeek(today) ? 'Past week' : 'Hold and drag to move a day'}
+              </T>
+            </Animated.View>
+            <IconButton label="Next week" onPress={() => go(1)}>
+              <Icons.chevronRight size={18} color={p.text} />
+            </IconButton>
+          </View>
+          <Animated.View key={weekStart} entering={FadeIn.duration(motion.base)}>
+            <WeekGrid weekStart={weekStart} today={today} />
           </Animated.View>
-          <IconButton label="Next week" onPress={() => go(1)}>
-            <Icons.chevronRight size={18} color={p.text} />
-          </IconButton>
+          {weekStart !== startOfWeek(today) && <Button label="Back to this week" kind="quiet" size="sm" style={{ alignSelf: 'center' }} onPress={() => setWeekStart(startOfWeek(today))} />}
         </View>
-        <Animated.View key={weekStart} entering={FadeIn.duration(motion.base)}>
-          <WeekGrid weekStart={weekStart} today={today} />
-        </Animated.View>
-        {weekStart !== startOfWeek(today) && <Button label="Back to this week" kind="quiet" size="sm" style={{ alignSelf: 'center' }} onPress={() => setWeekStart(startOfWeek(today))} />}
-      </View>
-      {(tab === 'schedule' || scheduleSeen) && (
-        <View style={{ display: tab === 'schedule' ? 'flex' : 'none' }}>
-          <ScheduleTab />
-        </View>
-      )}
-    </ScrollView>
+        {(tab === 'schedule' || scheduleSeen) && (
+          <View style={{ display: tab === 'schedule' ? 'flex' : 'none' }}>
+            <ScheduleTab />
+          </View>
+        )}
+      </ScrollView>
+      <StatusShade />
+    </>
   );
 }
 

@@ -11,6 +11,7 @@ import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, Chip, Group, IconButton, NumStepper, Row, Segmented, T } from '@/ui/primitives';
 import { EQUIPMENT_LABEL, KIND_LABEL, MUSCLE_LABEL } from './labels';
+import { StatusShade } from '@/ui/StatusShade';
 
 const KINDS: readonly ExerciseKind[] = ['strength', 'stretch', 'cardio', 'plyometric'];
 const TRACKING: readonly { value: Tracking; label: string }[] = [
@@ -109,6 +110,7 @@ export function CustomExerciseScreen() {
 
         <TextInput value={note} onChangeText={setNote} placeholder="Note, optional" placeholderTextColor={p.textTertiary} accessibilityLabel="Note" style={[s.input, { minHeight: 72, textAlignVertical: 'top', paddingTop: 12 }]} multiline />
       </ScrollView>
+      <StatusShade />
       <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Button label="Add exercise" disabled={name.trim() === ''} onPress={save} />
       </View>

@@ -16,6 +16,7 @@ import { Sheet } from '@/ui/Sheet';
 import { Button, LaneTile, T } from '@/ui/primitives';
 import { ExerciseRow } from './ExerciseRow';
 import { routineDays, routineSub } from './labels';
+import { StatusShade } from '@/ui/StatusShade';
 
 export function LibraryScreen() {
   const s = useStyles();
@@ -107,6 +108,7 @@ export function LibraryScreen() {
           </Pressable>
         )}
       </ScrollView>
+      <StatusShade />
 
       <Sheet visible={creating} onClose={() => setCreating(false)} title="New">
         <View style={{ gap: 8 }}>
