@@ -60,6 +60,7 @@ export function TodayScreen() {
           detail: x.distanceM ? `${formatDistance(x.distanceM, unit, 2)}, ${minutes}` : minutes,
           lane: (x.activity === 'strength' ? 'workout' : x.activity === 'stretch' ? 'stretch' : 'run') as Lane,
           icon: ACTIVITY_ICON[x.activity],
+          onPress: () => router.push({ pathname: '/activity/[id]', params: { id: x.id } }),
         };
       }),
     ...weekLogs

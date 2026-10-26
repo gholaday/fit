@@ -42,7 +42,7 @@ export const ACTIVITY_ICON = {
 } as const;
 
 /** "Today, 6:12 PM" or "Oct 25, 6:12 PM". */
-function whenLabel(iso: string): string {
+export function whenLabel(iso: string): string {
   const d = new Date(iso);
   const h = d.getHours();
   const time = `${h % 12 === 0 ? 12 : h % 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;

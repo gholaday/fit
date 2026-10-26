@@ -161,6 +161,22 @@ export function SummaryScreen() {
         )}
 
         <Feel session={session} />
+
+        {hasRoute && (
+          <Button
+            label="Export GPX"
+            kind="outline"
+            size="md"
+            onPress={() => {
+              haptic.tap();
+              // Loaded on demand: the sharing modules are native and only exist in newer builds.
+              import('./gpx').then(({ shareGpx }) => shareGpx(session)).then(
+                (ok) => !ok && showSnack({ message: 'Sharing is not available on this phone' }),
+                () => showSnack({ message: 'Could not create the GPX file' }),
+              );
+            }}
+          />
+        )}
       </ScrollView>
       <StatusShade />
       <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>

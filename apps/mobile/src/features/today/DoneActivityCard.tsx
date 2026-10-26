@@ -30,7 +30,7 @@ export const DoneActivityCard = memo(function DoneActivityCard({ activity: a }: 
     <Pressable
       accessibilityRole={onPress ? 'button' : undefined}
       accessibilityLabel={`${a.title}, ${a.detail}, done`}
-      accessibilityHint={onPress ? 'Opens the run summary' : undefined}
+      accessibilityHint={onPress ? 'Opens details' : undefined}
       disabled={!onPress}
       onPress={() => {
         haptic.tap();

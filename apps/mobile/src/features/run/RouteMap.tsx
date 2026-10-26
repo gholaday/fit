@@ -24,7 +24,8 @@ const LABEL: Record<RouteColorBy, string> = { step: 'Step', pace: 'Pace', hr: 'H
 
 const neutralColor = (p: Palette) => (p.scheme === 'dark' ? '#5A5D66' : '#B9BAC0');
 
-export default function RouteMap({ session }: { session: SessionDetail }) {
+/** `replay` off for routes that are not recorded sessions (a watch run's GPX file). */
+export default function RouteMap({ session, replay = true }: { session: SessionDetail; replay?: boolean }) {
   const p = usePalette();
   const unit = useUnits().distance;
   const route = useMemo(() => buildRoute(session, p, unit), [session, p, unit]);
@@ -93,12 +94,14 @@ export default function RouteMap({ session }: { session: SessionDetail }) {
             {readout.bpm !== undefined && <Readout value={`${readout.bpm} bpm`} label="HR" />}
           </View>
         )}
+        {replay && (
         <Pressable accessibilityRole="button" accessibilityLabel="Replay run" onPress={open} style={{ position: 'absolute', right: 10, bottom: 10, height: 34, paddingHorizontal: 12, borderRadius: 17, backgroundColor: p.text, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <Icons.play size={12} color={p.bg} />
           <T v="labelStrong" color={p.bg}>
             Replay
           </T>
         </Pressable>
+        )}
       </View>
 
       {options.length > 1 && (
