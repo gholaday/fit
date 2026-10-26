@@ -64,7 +64,7 @@ Font: **Inter** (400, 500, 600, 700). Numbers use tabular figures.
 - Motion 150-250 ms, UI thread only, never delays an action.
 
 ## Icons
-Tabler Icons via `@tabler/icons-react-native`, outline at 1.75 stroke, filled variants for player controls. Activity tiles: `run`, `barbell`, `stretching`. Tabs: `sun` (Today), `calendar` (Plan), `list-details` (Library), `chart-bar` (Stats).
+Phosphor Icons via `phosphor-react-native` (MIT). Regular weight everywhere, except activity tiles: a filled glyph in the lane color on the lane tint. All icons go through `apps/mobile/src/ui/icons.tsx`, which holds the name mapping (screens never import Phosphor directly).
 
 ## Copy rules
 - No middle-dot separators and no em or en dashes in UI text. Use layout, or a comma within one line. Ranges use a hyphen: "128-145 bpm".
