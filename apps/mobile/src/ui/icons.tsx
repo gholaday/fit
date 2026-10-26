@@ -1,120 +1,126 @@
 /**
- * Tabler icons, imported one file each so the bundle only carries what we use.
- * Outline at 1.75 stroke everywhere (design.md); filled variants only for player controls.
+ * Phosphor icons, imported one file each so the bundle only carries what we use (the
+ * package index is over 500 KB). Regular weight for UI chrome; activity glyphs and player
+ * controls are filled (design.md).
  */
-import type { Lane } from '@fit/core';
-import type { QuickLogType } from '@fit/core';
-import IconAntennaBars5 from '@tabler/icons-react-native/IconAntennaBars5';
-import IconArrowsExchange from '@tabler/icons-react-native/IconArrowsExchange';
-import IconBarbell from '@tabler/icons-react-native/IconBarbell';
-import IconBattery from '@tabler/icons-react-native/IconBattery';
-import IconBell from '@tabler/icons-react-native/IconBell';
-import IconBike from '@tabler/icons-react-native/IconBike';
-import IconCalendar from '@tabler/icons-react-native/IconCalendar';
-import IconCalendarEvent from '@tabler/icons-react-native/IconCalendarEvent';
-import IconChartBar from '@tabler/icons-react-native/IconChartBar';
-import IconCheck from '@tabler/icons-react-native/IconCheck';
-import IconChevronDown from '@tabler/icons-react-native/IconChevronDown';
-import IconChevronLeft from '@tabler/icons-react-native/IconChevronLeft';
-import IconChevronRight from '@tabler/icons-react-native/IconChevronRight';
-import IconChevronUp from '@tabler/icons-react-native/IconChevronUp';
-import IconClock from '@tabler/icons-react-native/IconClock';
-import IconCurrentLocation from '@tabler/icons-react-native/IconCurrentLocation';
-import IconDots from '@tabler/icons-react-native/IconDots';
-import IconFlag from '@tabler/icons-react-native/IconFlag';
-import IconHeart from '@tabler/icons-react-native/IconHeart';
-import IconInfoCircle from '@tabler/icons-react-native/IconInfoCircle';
-import IconListDetails from '@tabler/icons-react-native/IconListDetails';
-import IconLock from '@tabler/icons-react-native/IconLock';
-import IconLockOpen from '@tabler/icons-react-native/IconLockOpen';
-import IconMap from '@tabler/icons-react-native/IconMap';
-import IconMountain from '@tabler/icons-react-native/IconMountain';
-import IconPlayerPauseFilled from '@tabler/icons-react-native/IconPlayerPauseFilled';
-import IconPlayerPlayFilled from '@tabler/icons-react-native/IconPlayerPlayFilled';
-import IconPlayerSkipBackFilled from '@tabler/icons-react-native/IconPlayerSkipBackFilled';
-import IconPlayerSkipForwardFilled from '@tabler/icons-react-native/IconPlayerSkipForwardFilled';
-import IconPlayerStopFilled from '@tabler/icons-react-native/IconPlayerStopFilled';
-import IconPlus from '@tabler/icons-react-native/IconPlus';
-import IconRoute from '@tabler/icons-react-native/IconRoute';
-import IconRun from '@tabler/icons-react-native/IconRun';
-import IconSettings from '@tabler/icons-react-native/IconSettings';
-import IconStretching from '@tabler/icons-react-native/IconStretching';
-import IconSun from '@tabler/icons-react-native/IconSun';
-import IconSwimming from '@tabler/icons-react-native/IconSwimming';
-import IconTrash from '@tabler/icons-react-native/IconTrash';
-import IconVolume from '@tabler/icons-react-native/IconVolume';
-import IconVolumeOff from '@tabler/icons-react-native/IconVolumeOff';
-import IconWalk from '@tabler/icons-react-native/IconWalk';
-import IconX from '@tabler/icons-react-native/IconX';
+import type { Lane, QuickLogType } from '@fit/core';
+import { ArrowsLeftRightIcon } from 'phosphor-react-native/src/icons/ArrowsLeftRight';
+import { BarbellIcon } from 'phosphor-react-native/src/icons/Barbell';
+import { BatteryFullIcon } from 'phosphor-react-native/src/icons/BatteryFull';
+import { BellIcon } from 'phosphor-react-native/src/icons/Bell';
+import { CalendarBlankIcon } from 'phosphor-react-native/src/icons/CalendarBlank';
+import { CalendarCheckIcon } from 'phosphor-react-native/src/icons/CalendarCheck';
+import { CaretDownIcon } from 'phosphor-react-native/src/icons/CaretDown';
+import { CaretLeftIcon } from 'phosphor-react-native/src/icons/CaretLeft';
+import { CaretRightIcon } from 'phosphor-react-native/src/icons/CaretRight';
+import { CaretUpIcon } from 'phosphor-react-native/src/icons/CaretUp';
+import { CellSignalFullIcon } from 'phosphor-react-native/src/icons/CellSignalFull';
+import { ChartBarIcon } from 'phosphor-react-native/src/icons/ChartBar';
+import { CheckIcon } from 'phosphor-react-native/src/icons/Check';
+import { ClockIcon } from 'phosphor-react-native/src/icons/Clock';
+import { CrosshairIcon } from 'phosphor-react-native/src/icons/Crosshair';
+import { DotsThreeIcon } from 'phosphor-react-native/src/icons/DotsThree';
+import { FlagIcon } from 'phosphor-react-native/src/icons/Flag';
+import { GearSixIcon } from 'phosphor-react-native/src/icons/GearSix';
+import { HeartIcon } from 'phosphor-react-native/src/icons/Heart';
+import { InfoIcon } from 'phosphor-react-native/src/icons/Info';
+import { ListBulletsIcon } from 'phosphor-react-native/src/icons/ListBullets';
+import { LockIcon } from 'phosphor-react-native/src/icons/Lock';
+import { LockOpenIcon } from 'phosphor-react-native/src/icons/LockOpen';
+import { MapTrifoldIcon } from 'phosphor-react-native/src/icons/MapTrifold';
+import { MountainsIcon } from 'phosphor-react-native/src/icons/Mountains';
+import { PathIcon } from 'phosphor-react-native/src/icons/Path';
+import { PauseIcon } from 'phosphor-react-native/src/icons/Pause';
+import { PersonSimpleBikeIcon } from 'phosphor-react-native/src/icons/PersonSimpleBike';
+import { PersonSimpleRunIcon } from 'phosphor-react-native/src/icons/PersonSimpleRun';
+import { PersonSimpleSwimIcon } from 'phosphor-react-native/src/icons/PersonSimpleSwim';
+import { PersonSimpleTaiChiIcon } from 'phosphor-react-native/src/icons/PersonSimpleTaiChi';
+import { PersonSimpleWalkIcon } from 'phosphor-react-native/src/icons/PersonSimpleWalk';
+import { PlayIcon } from 'phosphor-react-native/src/icons/Play';
+import { PlusIcon } from 'phosphor-react-native/src/icons/Plus';
+import { SkipBackIcon } from 'phosphor-react-native/src/icons/SkipBack';
+import { SkipForwardIcon } from 'phosphor-react-native/src/icons/SkipForward';
+import { SpeakerHighIcon } from 'phosphor-react-native/src/icons/SpeakerHigh';
+import { SpeakerSlashIcon } from 'phosphor-react-native/src/icons/SpeakerSlash';
+import { StopIcon } from 'phosphor-react-native/src/icons/Stop';
+import { SunIcon } from 'phosphor-react-native/src/icons/Sun';
+import { TrashIcon } from 'phosphor-react-native/src/icons/Trash';
+import { XIcon } from 'phosphor-react-native/src/icons/X';
+import type { Icon as PhosphorIcon } from 'phosphor-react-native';
 import type { ComponentType } from 'react';
+
+export type IconWeight = 'regular' | 'bold' | 'fill';
 
 export interface IconProps {
   size?: number;
   color?: string;
-  strokeWidth?: number;
+  /** Overrides the icon's default weight. */
+  weight?: IconWeight;
 }
 
-type TablerIcon = ComponentType<IconProps>;
+export type AppIcon = ComponentType<IconProps>;
 
-function wrap(Icon: TablerIcon): TablerIcon {
-  function Wrapped({ size = 20, color, strokeWidth = 1.75 }: IconProps) {
-    return <Icon size={size} color={color} strokeWidth={strokeWidth} />;
+function wrap(Icon: PhosphorIcon, base: IconWeight = 'regular'): AppIcon {
+  function Wrapped({ size = 20, color, weight = base }: IconProps) {
+    return <Icon size={size} color={color} weight={weight} />;
   }
   return Wrapped;
 }
 
 export const Icons = {
-  sun: wrap(IconSun),
-  calendar: wrap(IconCalendar),
-  calendarEvent: wrap(IconCalendarEvent),
-  listDetails: wrap(IconListDetails),
-  chartBar: wrap(IconChartBar),
-  settings: wrap(IconSettings),
-  run: wrap(IconRun),
-  barbell: wrap(IconBarbell),
-  stretching: wrap(IconStretching),
-  plus: wrap(IconPlus),
-  x: wrap(IconX),
-  check: wrap(IconCheck),
-  chevronLeft: wrap(IconChevronLeft),
-  chevronRight: wrap(IconChevronRight),
-  chevronUp: wrap(IconChevronUp),
-  chevronDown: wrap(IconChevronDown),
-  clock: wrap(IconClock),
-  dots: wrap(IconDots),
-  info: wrap(IconInfoCircle),
-  swap: wrap(IconArrowsExchange),
-  bell: wrap(IconBell),
-  trash: wrap(IconTrash),
-  walk: wrap(IconWalk),
-  mountain: wrap(IconMountain),
-  bike: wrap(IconBike),
-  swimming: wrap(IconSwimming),
-  lock: wrap(IconLock),
-  lockOpen: wrap(IconLockOpen),
-  map: wrap(IconMap),
-  route: wrap(IconRoute),
-  flag: wrap(IconFlag),
-  heart: wrap(IconHeart),
-  volume: wrap(IconVolume),
-  volumeOff: wrap(IconVolumeOff),
-  signal: wrap(IconAntennaBars5),
-  location: wrap(IconCurrentLocation),
-  battery: wrap(IconBattery),
-  pause: wrap(IconPlayerPauseFilled),
-  play: wrap(IconPlayerPlayFilled),
-  previous: wrap(IconPlayerSkipBackFilled),
-  skip: wrap(IconPlayerSkipForwardFilled),
-  stop: wrap(IconPlayerStopFilled),
+  sun: wrap(SunIcon),
+  calendar: wrap(CalendarBlankIcon),
+  calendarEvent: wrap(CalendarCheckIcon),
+  listDetails: wrap(ListBulletsIcon),
+  chartBar: wrap(ChartBarIcon),
+  settings: wrap(GearSixIcon),
+  plus: wrap(PlusIcon),
+  x: wrap(XIcon),
+  check: wrap(CheckIcon),
+  chevronLeft: wrap(CaretLeftIcon),
+  chevronRight: wrap(CaretRightIcon),
+  chevronUp: wrap(CaretUpIcon),
+  chevronDown: wrap(CaretDownIcon),
+  clock: wrap(ClockIcon),
+  dots: wrap(DotsThreeIcon),
+  info: wrap(InfoIcon),
+  swap: wrap(ArrowsLeftRightIcon),
+  bell: wrap(BellIcon),
+  trash: wrap(TrashIcon),
+  lock: wrap(LockIcon),
+  lockOpen: wrap(LockOpenIcon),
+  map: wrap(MapTrifoldIcon),
+  route: wrap(PathIcon),
+  flag: wrap(FlagIcon),
+  heart: wrap(HeartIcon),
+  volume: wrap(SpeakerHighIcon),
+  volumeOff: wrap(SpeakerSlashIcon),
+  signal: wrap(CellSignalFullIcon),
+  location: wrap(CrosshairIcon),
+  battery: wrap(BatteryFullIcon),
+  // Activities: filled glyphs, drawn in the lane color on its tint.
+  run: wrap(PersonSimpleRunIcon, 'fill'),
+  barbell: wrap(BarbellIcon, 'fill'),
+  stretching: wrap(PersonSimpleTaiChiIcon, 'fill'),
+  walk: wrap(PersonSimpleWalkIcon, 'fill'),
+  mountain: wrap(MountainsIcon, 'fill'),
+  bike: wrap(PersonSimpleBikeIcon, 'fill'),
+  swimming: wrap(PersonSimpleSwimIcon, 'fill'),
+  // Player controls.
+  pause: wrap(PauseIcon, 'fill'),
+  play: wrap(PlayIcon, 'fill'),
+  previous: wrap(SkipBackIcon, 'fill'),
+  skip: wrap(SkipForwardIcon, 'fill'),
+  stop: wrap(StopIcon, 'fill'),
 } as const;
 
-export const LANE_ICON: Record<Lane, TablerIcon> = {
+export const LANE_ICON: Record<Lane, AppIcon> = {
   run: Icons.run,
   workout: Icons.barbell,
   stretch: Icons.stretching,
 };
 
-export const QUICK_LOG_ICON: Record<QuickLogType, TablerIcon> = {
+export const QUICK_LOG_ICON: Record<QuickLogType, AppIcon> = {
   walk: Icons.walk,
   hike: Icons.mountain,
   bike: Icons.bike,

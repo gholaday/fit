@@ -75,7 +75,7 @@ export function TodayScreen() {
         <DayWidget summary={summary} stepGoal={settings.stepGoal} steps={metrics?.steps} />
         {(metrics || lastSyncedAt) && (
           <View style={s.health}>
-            <Icons.heart size={18} color={p.run.color} />
+            <Icons.heart size={20} color={p.run.color} weight="fill" />
             <View style={{ flex: 1 }}>
               <T v="bodyMedium" num>
                 {metrics?.restingHr ? `Resting heart rate ${Math.round(metrics.restingHr)} bpm` : 'Resting heart rate not synced'}
