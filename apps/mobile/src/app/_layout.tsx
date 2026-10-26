@@ -5,6 +5,8 @@ import { AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { actions } from '@/data/store';
 import { usePalette } from '@/theme';
+import { ActivityModalHost } from '@/features/health/ActivityModal';
+import { reloadHealth } from '@/features/health/state';
 import { ItemSheetHost } from '@/features/items/ItemSheet';
 import { MoveFlowHost } from '@/features/move/MoveFlowHost';
 // Defines the background location task; must load at startup, before any run.
@@ -22,6 +24,7 @@ export default function RootLayout() {
     let stop: (() => void) | undefined;
     const t = setTimeout(() => {
       void seedCatalogIfNeeded();
+      reloadHealth();
       stop = startReminderSync();
     }, 300);
     return () => {
@@ -61,6 +64,7 @@ export default function RootLayout() {
       <ItemSheetHost />
       <MoveFlowHost />
       <RecoveryPrompt />
+      <ActivityModalHost />
       <Snackbar />
     </GestureHandlerRootView>
   );
