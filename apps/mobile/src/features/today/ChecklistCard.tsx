@@ -1,30 +1,24 @@
-import { type AgendaItem, formatDistance, formatMinutes } from "@fit/core";
-import { router } from "expo-router";
-import { memo } from "react";
-import { Pressable, View } from "react-native";
-import { useItem, usePlan, useRoutines, useUnits } from "@/data/store";
-import { markDoneNow, openItemSheet } from "@/features/items/ItemSheet";
-import { itemSubtitle } from "@/features/items/meta";
-import { clockTime } from "@/lib/format";
-import { haptic } from "@/lib/haptics";
-import { createStyles, usePalette } from "@/theme";
-import { Icons } from "@/ui/icons";
-import { Button, IconButton, LaneTile, StructureBar, T } from "@/ui/primitives";
+import { type AgendaItem, formatDistance, formatMinutes } from '@fit/core';
+import { router } from 'expo-router';
+import { memo } from 'react';
+import { Pressable, View } from 'react-native';
+import { useItem, usePlan, useRoutines, useUnits } from '@/data/store';
+import { markDoneNow, openItemSheet } from '@/features/items/ItemSheet';
+import { itemSubtitle } from '@/features/items/meta';
+import { clockTime } from '@/lib/format';
+import { haptic } from '@/lib/haptics';
+import { createStyles, usePalette } from '@/theme';
+import { Icons } from '@/ui/icons';
+import { Button, IconButton, LaneTile, StructureBar, T } from '@/ui/primitives';
 
 /**
  * One checklist card. Done is one tap; long-press Done opens Done + details; the card
  * body opens the actions sheet (Skip, Move to tomorrow, Move to another day).
  */
-export const ChecklistCard = memo(function ChecklistCard({
-  itemKey,
-  hero,
-}: {
-  itemKey: string;
-  hero: boolean;
-}) {
+export const ChecklistCard = memo(function ChecklistCard({ itemKey, hero }: { itemKey: string; hero: boolean }) {
   const item = useItem(itemKey);
   if (!item) return null;
-  if (item.status !== "pending") return <ResolvedRow item={item} />;
+  if (item.status !== 'pending') return <ResolvedRow item={item} />;
   if (hero) return <HeroRunCard item={item} />;
   return <CompactCard item={item} />;
 });
@@ -34,19 +28,13 @@ function HeroRunCard({ item }: { item: AgendaItem }) {
   const p = usePalette();
   const units = useUnits();
   const plan = usePlan();
-  const week =
-    item.source.type === "plan_workout" ? item.source.weekIndex + 1 : undefined;
-  const eyebrow = plan && week ? `${plan.name}, week ${week}` : "Run";
+  const week = item.source.type === 'plan_workout' ? item.source.weekIndex + 1 : undefined;
+  const eyebrow = plan && week ? `${plan.name}, week ${week}` : 'Run';
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityHint="Opens actions"
-      onPress={() => {
+    <Pressable accessibilityRole="button" accessibilityHint="Opens actions" onPress={() => {
         haptic.tap();
         openItemSheet(item.key);
-      }}
-      style={s.hero}
-    >
+      }} style={s.hero}>
       <View style={s.heroHead}>
         <LaneTile lane="run" size={40} />
         <View style={{ flex: 1 }}>
@@ -58,27 +46,11 @@ function HeroRunCard({ item }: { item: AgendaItem }) {
       </View>
       <View style={s.stats}>
         <Stat value={formatMinutes(item.estSeconds)} label="Duration" />
-        {item.hrRange ? (
-          <Stat
-            value={`${item.hrRange.minBpm}-${item.hrRange.maxBpm}`}
-            label="Target bpm"
-          />
-        ) : (
-          <Stat value={item.hard ? "Hard" : "Easy"} label="Effort" />
-        )}
-        {item.estMeters ? (
-          <Stat
-            value={formatDistance(item.estMeters, units.distance)}
-            label="Estimated"
-          />
-        ) : (
-          <View style={{ flex: 1 }} />
-        )}
+        {item.hrRange ? <Stat value={`${item.hrRange.minBpm}-${item.hrRange.maxBpm}`} label="Target bpm" /> : <Stat value={item.hard ? 'Hard' : 'Easy'} label="Effort" />}
+        {item.estMeters ? <Stat value={formatDistance(item.estMeters, units.distance)} label="Estimated" /> : <View style={{ flex: 1 }} />}
       </View>
-      {item.structure && item.structure.length > 0 && (
-        <StructureBar segments={item.structure} />
-      )}
-      <View style={{ flexDirection: "row", gap: 8 }}>
+      {item.structure && item.structure.length > 0 && <StructureBar segments={item.structure} />}
+      <View style={{ flexDirection: 'row', gap: 8 }}>
         <Button
           label="Start"
           size="md"
@@ -86,7 +58,7 @@ function HeroRunCard({ item }: { item: AgendaItem }) {
           accessibilityHint="Opens the run with GPS recording"
           onPress={() => {
             haptic.commit();
-            router.push({ pathname: "/run", params: { key: item.key } });
+            router.push({ pathname: '/run', params: { key: item.key } });
           }}
           icon={<Icons.play size={16} color={p.onPrimary} />}
         />
@@ -97,7 +69,7 @@ function HeroRunCard({ item }: { item: AgendaItem }) {
           style={{ width: 96 }}
           accessibilityHint="Hold for details"
           onPress={() => markDoneNow(item)}
-          onLongPress={() => openItemSheet(item.key, "details")}
+          onLongPress={() => openItemSheet(item.key, 'details')}
           delayLongPress={350}
           icon={<Icons.check size={18} color={p.text} />}
         />
@@ -124,34 +96,21 @@ function CompactCard({ item }: { item: AgendaItem }) {
   const p = usePalette();
   const routines = useRoutines();
   const units = useUnits();
-  const later = item.slot === "evening";
+  const later = item.slot === 'evening';
   const sub = itemSubtitle(item, routines, units);
   return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityHint="Opens actions"
-      onPress={() => {
+    <Pressable accessibilityRole="button" accessibilityHint="Opens actions" onPress={() => {
         haptic.tap();
         openItemSheet(item.key);
-      }}
-      style={[s.compact, later && s.later]}
-    >
+      }} style={[s.compact, later && s.later]}>
       <LaneTile lane={item.lane} />
       <View style={{ flex: 1 }}>
-        <T v={later ? "bodyMedium" : "bodyStrong"}>{item.title}</T>
+        <T v={later ? 'bodyMedium' : 'bodyStrong'}>{item.title}</T>
         <T v="caption" tone="secondary">
           {item.time ? `${clockTime(item.time)}, ${sub}` : sub}
         </T>
       </View>
-      <IconButton
-        label={`Done, ${item.title}`}
-        bg="none"
-        size={40}
-        onPress={() => markDoneNow(item)}
-        onLongPress={() => openItemSheet(item.key, "details")}
-        delayLongPress={350}
-        style={{ borderWidth: 1, borderColor: p.border, borderRadius: 12 }}
-      >
+      <IconButton label={`Done, ${item.title}`} bg="none" size={40} onPress={() => markDoneNow(item)} onLongPress={() => openItemSheet(item.key, 'details')} delayLongPress={350} style={{ borderWidth: 1, borderColor: p.border, borderRadius: 12 }}>
         <Icons.check size={18} color={p.text} />
       </IconButton>
     </Pressable>
@@ -163,16 +122,15 @@ function ResolvedRow({ item }: { item: AgendaItem }) {
   const p = usePalette();
   const routines = useRoutines();
   const units = useUnits();
-  const done = item.status === "done";
+  const done = item.status === 'done';
   const sessionId = item.sessionId;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityHint={sessionId ? "Opens the run summary" : "Opens actions"}
+      accessibilityHint={sessionId ? 'Opens the run summary' : 'Opens actions'}
       onPress={() => {
         haptic.tap();
-        if (sessionId)
-          router.push({ pathname: "/summary/[id]", params: { id: sessionId } });
+        if (sessionId) router.push({ pathname: '/summary/[id]', params: { id: sessionId } });
         else openItemSheet(item.key);
       }}
       onLongPress={sessionId ? () => openItemSheet(item.key) : undefined}
@@ -187,10 +145,10 @@ function ResolvedRow({ item }: { item: AgendaItem }) {
           {itemSubtitle(item, routines, units)}
         </T>
       </View>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         {done && <Icons.check size={14} color={p.success} />}
         <T v="captionMedium" color={done ? p.success : p.textTertiary}>
-          {done ? "Done" : "Skipped"}
+          {done ? 'Done' : 'Skipped'}
         </T>
         {sessionId && <Icons.chevronRight size={14} color={p.textTertiary} />}
       </View>
@@ -200,31 +158,9 @@ function ResolvedRow({ item }: { item: AgendaItem }) {
 
 const useStyles = createStyles((p) => ({
   hero: { backgroundColor: p.surface, borderRadius: 20, padding: 16, gap: 14 },
-  heroHead: { flexDirection: "row", alignItems: "center", gap: 12 },
-  stats: { flexDirection: "row", gap: 8 },
-  compact: {
-    backgroundColor: p.surface,
-    borderRadius: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    minHeight: 64,
-  },
-  later: {
-    backgroundColor: "transparent",
-    borderWidth: 1,
-    borderColor: p.outline,
-  },
-  resolved: {
-    backgroundColor: p.doneRow,
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    minHeight: 60,
-  },
+  heroHead: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  stats: { flexDirection: 'row', gap: 8 },
+  compact: { backgroundColor: p.surface, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 64 },
+  later: { backgroundColor: 'transparent', borderWidth: 1, borderColor: p.outline },
+  resolved: { backgroundColor: p.doneRow, borderRadius: 14, paddingVertical: 12, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 12, minHeight: 60 },
 }));
