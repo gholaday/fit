@@ -170,7 +170,7 @@ function PlanCard() {
   );
 }
 
-/** Bigger shifts (spec ง8): the rest of this week a day later, or the whole plan a week later. */
+/** Bigger shifts (spec ยง8): the rest of this week a day later, or the whole plan a week later. */
 function PlanMenu({ plan, open, onClose }: { plan: PlanSummary; open: boolean; onClose: () => void }) {
   const race = presetInfo(plan.presetId).kind === 'race';
   const act = (run: () => void, message: string) => {

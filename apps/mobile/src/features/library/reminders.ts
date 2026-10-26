@@ -51,7 +51,8 @@ export function startReminderSync(): () => void {
   const run = () => {
     const { schedule, routines } = useFit.getState();
     const next = wanted(schedule, routines);
-    running = running.then(() => sync(next)).catch(() => undefined);
+    // Keep the chain alive after a failure, but say so: a missed reminder is otherwise silent.
+    running = running.then(() => sync(next)).catch((e: unknown) => console.warn('Reminder sync failed', e));
   };
   run();
   return useFit.subscribe((s, prev) => {

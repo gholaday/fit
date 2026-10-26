@@ -11,20 +11,8 @@
  */
 import { type DailyMetricsInput, type ExternalActivity, type ExternalSessionInput, GARMIN_CONNECT_PACKAGE, type IsoDate, addDays, localIsoDate } from '@fit/core';
 import { Platform } from 'react-native';
-import {
-  ExerciseType,
-  type Permission,
-  type RecordResult,
-  SdkAvailabilityStatus,
-  aggregateGroupByPeriod,
-  aggregateRecord,
-  getChanges,
-  getGrantedPermissions,
-  getSdkStatus,
-  initialize,
-  readRecords,
-  requestPermission,
-} from 'react-native-health-connect';
+import type * as HealthConnectLib from 'react-native-health-connect';
+import type { Permission, RecordResult } from 'react-native-health-connect';
 import { repo } from '@/data';
 import { actions, showSnack, useFit } from '@/data/store';
 import { openActivities, reloadHealth } from './state';
@@ -50,10 +38,23 @@ export interface HealthStatus {
   granted: number;
 }
 
+type HealthConnect = typeof HealthConnectLib;
+let lib: HealthConnect | undefined;
+
+/**
+ * The library binds its native module when imported, and Today imports this file. Loading
+ * it on first use keeps Health Connect off the startup path (spec §2: after first paint).
+ */
+async function hc(): Promise<HealthConnect> {
+  lib ??= await import('react-native-health-connect');
+  return lib;
+}
+
 let ready = false;
 
 async function init(): Promise<HealthAvailability> {
   if (Platform.OS !== 'android') return 'missing';
+  const { SdkAvailabilityStatus, getSdkStatus, initialize } = await hc();
   const sdk = await getSdkStatus();
   if (sdk === SdkAvailabilityStatus.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED) return 'update';
   if (sdk !== SdkAvailabilityStatus.SDK_AVAILABLE) return 'missing';
@@ -62,7 +63,7 @@ async function init(): Promise<HealthAvailability> {
 }
 
 async function grantedTypes(): Promise<Set<string>> {
-  const granted = await getGrantedPermissions();
+  const granted = await (await hc()).getGrantedPermissions();
   return new Set(granted.filter((g) => g.accessType === 'read').map((g) => g.recordType));
 }
 
@@ -76,13 +77,13 @@ export async function healthStatus(): Promise<HealthStatus> {
 /** Shows the Health Connect permission sheet; returns how many reads were granted. */
 export async function requestHealthPermissions(): Promise<number> {
   if ((await init()) !== 'available') return 0;
-  const granted = await requestPermission(READ_PERMISSIONS);
+  const granted = await (await hc()).requestPermission(READ_PERMISSIONS);
   return READ_PERMISSIONS.filter((p) => granted.some((g) => g.recordType === p.recordType && g.accessType === 'read')).length;
 }
 
 // ---------- mapping ----------
 
-const ACTIVITY_FOR: Record<number, ExternalActivity> = {
+const activityFor = ({ ExerciseType }: HealthConnect): Record<number, ExternalActivity> => ({
   [ExerciseType.RUNNING]: 'run',
   [ExerciseType.RUNNING_TREADMILL]: 'treadmill',
   [ExerciseType.WALKING]: 'walk',
@@ -98,13 +99,15 @@ const ACTIVITY_FOR: Record<number, ExternalActivity> = {
   [ExerciseType.STRETCHING]: 'stretch',
   [ExerciseType.YOGA]: 'stretch',
   [ExerciseType.PILATES]: 'stretch',
-};
+});
+let activities: Record<number, ExternalActivity> | undefined;
 
 const between = (startTime: string, endTime: string) => ({ operator: 'between' as const, startTime, endTime });
 
 /** All pages of a read. */
 async function readAll<T extends 'ExerciseSession' | 'HeartRate' | 'RestingHeartRate'>(type: T, startTime: string, endTime: string, origins?: string[]): Promise<RecordResult<T>[]> {
   const out: RecordResult<T>[] = [];
+  const { readRecords } = await hc();
   let pageToken: string | undefined;
   do {
     const page = await readRecords(type, { timeRangeFilter: between(startTime, endTime), dataOriginFilter: origins, pageSize: 1000, pageToken });
@@ -118,6 +121,9 @@ async function toExternal(rec: RecordResult<'ExerciseSession'>): Promise<Externa
   const id = rec.metadata?.id;
   const origin = rec.metadata?.dataOrigin;
   if (!id || !origin) return undefined;
+  const mod = await hc();
+  const { aggregateRecord } = mod;
+  activities ??= activityFor(mod);
   const window = between(rec.startTime, rec.endTime);
   const filter = [origin];
   // Each read fails on its own when that permission is missing; the field is then left out.
@@ -129,7 +135,7 @@ async function toExternal(rec: RecordResult<'ExerciseSession'>): Promise<Externa
   const input: ExternalSessionInput = {
     hcRecordId: id,
     originPackage: origin,
-    activity: ACTIVITY_FOR[rec.exerciseType] ?? 'other',
+    activity: activities[rec.exerciseType] ?? 'other',
     startedAt: rec.startTime,
     endedAt: rec.endTime,
     hasRoute: rec.exerciseRoute !== undefined,
@@ -150,6 +156,7 @@ const dayStart = (date: IsoDate) => new Date(`${date}T00:00:00`).toISOString();
 async function dailyMetrics(from: IsoDate, to: IsoDate, types: Set<string>): Promise<DailyMetricsInput[]> {
   const range = between(dayStart(from), dayStart(addDays(to, 1)));
   const slicer = { period: 'DAYS' as const, length: 1 };
+  const { aggregateGroupByPeriod } = await hc();
   const [steps, kcal, resting] = await Promise.all([
     types.has('Steps') ? aggregateGroupByPeriod({ recordType: 'Steps', timeRangeFilter: range, timeRangeSlicer: slicer }) : [],
     types.has('ActiveCaloriesBurned') ? aggregateGroupByPeriod({ recordType: 'ActiveCaloriesBurned', timeRangeFilter: range, timeRangeSlicer: slicer }) : [],
@@ -184,6 +191,7 @@ interface Changes {
 }
 
 async function readChanges(token: string | undefined, types: Set<string>): Promise<Changes> {
+  const { getChanges } = await hc();
   const recordTypes = CHANGE_TYPES.filter((t) => types.has(t));
   if (!token) return { token: (await getChanges({ recordTypes: [...recordTypes] })).nextChangesToken };
   const sessions: RecordResult<'ExerciseSession'>[] = [];

@@ -227,7 +227,7 @@ export const sessions = sqliteTable(
     /** Player state, saved every 5 s while active for crash recovery; final log after. */
     playerJson: text('player_json').notNull(),
     summaryJson: text('summary_json'),
-    /** When Health Connect HR was last added; -1 after "Undo" so it is not added again. */
+    /** When Health Connect HR was last added; -1 when none should be (after "Undo", or a gap-free live trace). */
     hrFilledAt: integer('hr_filled_at'),
     ...syncColumns,
   },

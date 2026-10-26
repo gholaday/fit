@@ -5,7 +5,10 @@ import { openDatabaseSync } from 'expo-sqlite';
 import { monotonicFactory } from 'ulid';
 
 const sqlite = openDatabaseSync('fit.db');
-sqlite.execSync('PRAGMA journal_mode = WAL;');
+// NORMAL skips the fsync on every commit in WAL mode (it syncs at checkpoints). A commit can
+// only be lost to power loss or an OS crash, never to the app crashing, and run recovery
+// already works from the last 5 s save.
+sqlite.execSync('PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;');
 const db = drizzle(sqlite, { schema: tables });
 migrateSync();
 
