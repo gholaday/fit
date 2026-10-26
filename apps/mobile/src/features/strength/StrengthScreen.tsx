@@ -6,6 +6,7 @@
  */
 import {
   formatClock,
+  formatWeight,
   kgToUnit,
   type LoggedSet,
   prefillSets,
@@ -292,7 +293,7 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
 const SetLine = memo(function SetLine({ row, unit, onEdit, onToggle }: { row: Row; unit: 'lb' | 'kg'; onEdit: () => void; onToggle: () => void }) {
   const s = useStyles();
   const p = usePalette();
-  const prev = row.previous ? (row.previous.weightKg ? `${Math.round(kgToUnit(row.previous.weightKg, unit))} x ${row.previous.reps}` : `${row.previous.reps}`) : '-';
+  const prev = row.previous ? (row.previous.weightKg ? `${formatWeight(row.previous.weightKg, unit)} x ${row.previous.reps}` : `${row.previous.reps} reps`) : '-';
   return (
     <View style={[s.setRow, row.done && { backgroundColor: p.success + '1F' }]}>
       <T v="labelStrong" tone="secondary" style={s.colSet} num>
