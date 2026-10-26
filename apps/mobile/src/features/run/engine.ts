@@ -13,6 +13,7 @@ import {
   type DistanceSample,
   type GpsFilterState,
   type GpsFix,
+  type HrSample,
   type PlayerState,
   type SessionMode,
   type Step,
@@ -25,10 +26,12 @@ import {
   DEFAULT_CUE_PREFS,
   formatClock,
   formatDistance,
+  hrStats,
   initialCueState,
   initialGpsFilter,
   playerReducer,
   rollingPace,
+  secondsInZone,
   snapshot,
   trimSamples,
   zonePace,
@@ -36,6 +39,7 @@ import {
 import { create } from 'zustand';
 import { repo } from '@/data';
 import { actions, useFit } from '@/data/store';
+import { holdSensor, setHrSink, useHrLive } from '@/features/hr/live';
 import { cueHaptic, services } from './services';
 
 export type RunPhase = 'ready' | 'countdown' | 'active' | 'paused' | 'finished';
@@ -92,6 +96,10 @@ let player: PlayerState = createPlayer([]);
 let gps: GpsFilterState = initialGpsFilter();
 let samples: DistanceSample[] = [];
 let pending: TrackPoint[] = [];
+/** Live HR since the last save, and the whole run's for the Zone 2 total. */
+let hrPending: HrSample[] = [];
+let hrAll: HrSample[] = [];
+let releaseHr: (() => void) | undefined;
 let cue: CueState = initialCueState();
 let setup: RunSetup | undefined;
 let lastSaveAt = 0;
@@ -116,6 +124,9 @@ function resetEngine(s: RunSetup, p: PlayerState): void {
   gps = initialGpsFilter();
   samples = [];
   pending = [];
+  hrPending = [];
+  hrAll = [];
+  setHrSink(onHr);
   cue = initialCueState();
   lastSaveAt = 0;
   lastT = 0;
@@ -130,6 +141,7 @@ export function prepareRun(s: RunSetup): void {
   useLive.setState({ activeMs: 0, stepElapsedMs: 0, distanceM: 0, stepDistanceM: 0, stepRemainingMs: undefined, stepRemainingM: undefined, stepProgress: undefined, paceSecPerKm: undefined });
   publish(Date.now());
   void setMode(s.mode);
+  holdHr();
 }
 
 /** Switching Outdoor/Timer on pre-start starts or stops the GPS warmup. */
@@ -190,6 +202,7 @@ export function resumeRecovered(active: ActiveSession, items: readonly WorkoutIt
   const phase: RunPhase = player.status === 'paused' ? 'paused' : 'active';
   useRun.setState({ phase, name: active.name, mode: active.mode, steps: player.steps, stepIdx: player.stepIdx, sessionId: active.id, locked: false, linked: active.planWorkoutId != null });
   if (active.mode === 'outdoor') void services.location?.record(onFix);
+  holdHr();
   startTicker();
   step(Date.now());
 }
@@ -225,6 +238,24 @@ function onFix(fix: GpsFix): void {
   pending.push({ tOffsetMs: fix.t - player.startedAt, lat: fix.lat, lng: fix.lng, alt: fix.alt, accuracy: fix.accuracy, speed: fix.speed });
   samples.push({ t: fix.t, distanceM: gps.distanceM });
   step(Date.now());
+}
+
+/** Holds the remembered HR sensor for this run (at most one hold). */
+function holdHr(): void {
+  releaseHr ??= holdSensor();
+}
+
+function dropHr(): void {
+  releaseHr?.();
+  releaseHr = undefined;
+  setHrSink(undefined);
+}
+
+function onHr(bpm: number, t: number): void {
+  if (player.startedAt === undefined || t < player.startedAt || player.status === 'finished') return;
+  const sample: HrSample = { tOffsetMs: t - player.startedAt, bpm, source: 'ble' };
+  hrPending.push(sample);
+  hrAll.push(sample);
 }
 
 /** One engine step at wall time `t`: advance the player, fire cues, publish, persist. */
@@ -272,11 +303,22 @@ function save(t: number): void {
   const id = useRun.getState().sessionId;
   if (!id) return;
   const points = pending;
+  const hr = hrPending;
   pending = [];
-  repo.saveProgress(id, { player, distanceM: gps.distanceM, points });
+  hrPending = [];
+  repo.saveProgress(id, { player, distanceM: gps.distanceM, points, hr });
   lastSaveAt = t;
+  updateZone2(t);
   const status = `${formatDistance(gps.distanceM, unit(), 2)}, ${formatClock(activeMs(player, t) / 1000)}`;
   services.location?.setStatus(status);
+}
+
+/** Zone 2 total for the gauge, recomputed at each save (every 5 s), not every tick. */
+function updateZone2(t: number): void {
+  const zones = useFit.getState().hrProfile?.zones;
+  if (!zones || hrAll.length === 0 || player.startedAt === undefined) return;
+  const stats = hrStats(hrAll, zones, { endMs: t - player.startedAt, pauses: player.pauses });
+  if (stats) useHrLive.setState({ zone2S: secondsInZone(stats, 2) });
 }
 
 function startTicker(): void {
@@ -329,8 +371,9 @@ export async function finishRun(): Promise<string | undefined> {
   publish(t);
   if (id) {
     // Flush the last points with the progress write, then close the session.
-    repo.saveProgress(id, { player, distanceM: gps.distanceM, points: pending });
+    repo.saveProgress(id, { player, distanceM: gps.distanceM, points: pending, hr: hrPending });
     pending = [];
+    hrPending = [];
     repo.finishSession(id, {
       endedAt: new Date(t).toISOString(),
       player,
@@ -340,6 +383,7 @@ export async function finishRun(): Promise<string | undefined> {
     });
     actions.reload();
   }
+  dropHr();
   services.speaker?.stop();
   await services.location?.stop();
   return id;
@@ -351,6 +395,7 @@ export async function discardRun(): Promise<void> {
   stopTimers();
   if (id) repo.discardSession(id);
   useRun.setState({ phase: 'ready', sessionId: undefined });
+  dropHr();
   services.speaker?.stop();
   await services.location?.stop();
 }

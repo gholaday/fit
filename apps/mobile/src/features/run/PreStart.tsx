@@ -7,7 +7,10 @@ import { memo, useEffect, useState } from 'react';
 import { Pressable, ScrollView, Switch, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useHrProfile, useUnits } from '@/data/store';
+import { router } from 'expo-router';
+import { useHrProfile, useSettings, useUnits } from '@/data/store';
+import { useHrLive } from '@/features/hr/live';
+import { useSensor } from '@/features/hr/sensor';
 import { haptic } from '@/lib/haptics';
 import { createStyles, motion, toneColor, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -76,6 +79,36 @@ function GpsRow() {
         {sig.text}
       </T>
     </View>
+  );
+}
+
+/** Remembered sensor and its latest reading; with none remembered, opens the sensor screen. */
+function HrRow() {
+  const p = usePalette();
+  const s = useStyles();
+  const sensor = useSettings().hrSensor;
+  const bpm = useHrLive((h) => h.bpm);
+  const connection = useSensor((x) => x.connection);
+  const text = !sensor ? 'No HR sensor' : bpm !== undefined ? `${bpm} bpm, ${sensor.name}` : connection === 'connected' ? `Waiting, ${sensor.name}` : `Connecting to ${sensor.name}`;
+  const live = bpm !== undefined;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Heart rate, ${text}`}
+      style={[s.setting, s.dividerTop]}
+      onPress={() => {
+        haptic.tap();
+        router.push('/hr-sensor');
+      }}
+    >
+      <Icons.heart size={20} color={live ? p.run.color : p.textTertiary} />
+      <T v="bodyMedium" style={{ flex: 1 }}>
+        Heart rate
+      </T>
+      <T v="label" color={live ? p.text : p.textTertiary} numberOfLines={1} style={{ flexShrink: 1 }}>
+        {text}
+      </T>
+    </Pressable>
   );
 }
 
@@ -160,6 +193,7 @@ export function PreStart({ onClose }: { onClose: () => void }) {
               accessibilityLabel="Voice cues"
             />
           </View>
+          <HrRow />
         </View>
         {mode !== 'outdoor' && (
           <T v="caption" tone="tertiary">

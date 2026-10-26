@@ -46,6 +46,7 @@ export default function RootLayout() {
         <Stack.Screen name="settings" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="setup" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="diagnostics" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="hr-sensor" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="run" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen name="summary/[id]" options={{ animation: 'fade' }} />
         <Stack.Screen name="replay/[id]" options={{ animation: 'fade', gestureEnabled: false }} />

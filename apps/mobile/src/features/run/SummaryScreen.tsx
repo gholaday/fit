@@ -2,18 +2,19 @@
  * Run summary (spec §5 "Post-session summary", mockup Summary). Reads the stored session
  * once; the map and replay are lazy-loaded so opening a summary never waits on MapLibre.
  */
-import { type DistanceUnit, type SessionDetail, cumulativeDistance, formatClock, formatDistance, metersToUnit, paceToUnit, splits as splitsOf } from '@fit/core';
+import { type DistanceUnit, type SessionDetail, cumulativeDistance, formatClock, formatDistance, hrStats, metersToUnit, paceToUnit, splits as splitsOf } from '@fit/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { lazy, Suspense, useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
-import { useUnits } from '@/data/store';
+import { useHrProfile, useUnits } from '@/data/store';
 import { haptic } from '@/lib/haptics';
 import { createStyles, toneColor, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, IconButton, T } from '@/ui/primitives';
 import { PostRunCard } from '@/features/stretch/PostRunCard';
+import { HrCard } from './HrCard';
 import { stepAmount, stepName, stepTone } from './steps';
 import { StatusShade } from '@/ui/StatusShade';
 
@@ -40,6 +41,9 @@ export function SummaryScreen() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const unit = useUnits().distance;
+  const zones = useHrProfile()?.zones;
+  // Stats over the merged trace, once; the zones only change in Settings.
+  const [hr] = useState(() => (session && session.hr.length > 1 ? hrStats(session.hr, zones ?? [], { endMs: session.endedAt ? Date.parse(session.endedAt) - Date.parse(session.startedAt) : (session.hr[session.hr.length - 1]?.tOffsetMs ?? 0), pauses: session.pauses, log: session.log }) : undefined));
 
   const done = () => {
     haptic.commit();
@@ -96,6 +100,8 @@ export function SummaryScreen() {
           {session.mode === 'outdoor' && <Stat value={pace(avgPace, unit)} label={`Pace /${unit}`} />}
         </View>
 
+        {hr && <HrCard session={session} stats={hr} zones={zones} />}
+
         <PostRunCard endedAt={session.endedAt} />
 
         {session.steps.length > 1 && (
@@ -119,6 +125,11 @@ export function SummaryScreen() {
                   {session.mode === 'outdoor' && (
                     <T v="caption" tone="secondary" num>
                       {r.avgPaceSecPerKm !== undefined ? `${formatDistance(r.distanceM, unit, 2)}, ${pace(r.avgPaceSecPerKm, unit)} /${unit}` : formatDistance(r.distanceM, unit, 2)}
+                    </T>
+                  )}
+                  {hr?.stepAvgBpm[r.idx] !== undefined && (
+                    <T v="caption" tone="secondary" num>
+                      {`${hr.stepAvgBpm[r.idx]} bpm avg`}
                     </T>
                   )}
                 </View>

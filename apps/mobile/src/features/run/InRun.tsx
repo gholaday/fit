@@ -4,12 +4,13 @@
  * change every second live in tiny components subscribed to one formatted value each, so
  * a tick re-renders a text node, not the screen.
  */
-import { type DistanceUnit, type Step, formatClock, formatDistance, paceToUnit } from '@fit/core';
+import { type DistanceUnit, type HrZoneBand, type Step, formatClock, formatDistance, paceToUnit, zoneForBpm } from '@fit/core';
 import { memo, useState } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useHrProfile, useUnits } from '@/data/store';
+import { useHrLive } from '@/features/hr/live';
 import { haptic } from '@/lib/haptics';
 import { createStyles, motion, type Palette, toneColor, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -56,30 +57,46 @@ function useRingSize(): number {
   return Math.min(300, width - 60);
 }
 
+/** Where a bpm sits on the five-zone ring: its zone's fifth, plus how far into the band. */
+function hrPos(bpm: number, zones: readonly HrZoneBand[]): number {
+  const zone = zoneForBpm(bpm, zones);
+  const band = zones.find((z) => z.zone === zone);
+  if (!band) return 0;
+  const into = Math.min(1, Math.max(0, (bpm - band.minBpm) / (band.maxBpm - band.minBpm + 1)));
+  return (zone - 1 + into) / 5;
+}
+
 const HrGauge = memo(function HrGauge({ step }: { step: Step }) {
   const p = usePalette();
   const s = useStyles();
   const size = useRingSize();
   const zones = useHrProfile()?.zones;
+  const bpm = useHrLive((h) => h.bpm);
+  const zone2S = useHrLive((h) => h.zone2S);
   const range = hrRangeFor(step, zones);
   const zone = step.target.type === 'hr_zone' ? step.target.zone : zones?.find((z) => range && z.minBpm <= range.minBpm && z.maxBpm >= range.minBpm)?.zone;
   const arcs: Arc[] = [0, 1, 2, 3, 4].map((i) => ({ from: i / 5, to: (i + 1) / 5, color: i + 1 === zone ? p.run.color : p.ringTrack, width: i + 1 === zone ? 14 : 10 }));
+  const live = bpm !== undefined;
+  const status = !live || !range ? (zone ? `Zone ${zone}` : 'Heart rate') : bpm > range.maxBpm ? 'Ease off' : bpm < range.minBpm ? 'A little low' : `In Zone ${zone ?? ''}`.trim();
+  const caption = zone2S ? `${formatClock(zone2S)} in Zone 2` : !zones ? 'Set heart rate zones in Settings' : live ? '' : 'HR will sync from Garmin';
   return (
     <View style={[s.gauge, { width: size, height: size * 0.94 }]}>
-      <Ring size={size} arcs={arcs} gapPx={5} markerColor={p.text} bg={p.bg} />
+      <Ring size={size} arcs={arcs} gapPx={5} marker={live && zones ? hrPos(bpm, zones) : undefined} markerColor={p.text} bg={p.bg} />
       <View style={s.gaugeCenter} pointerEvents="none">
         <T v="labelStrong" color={p.run.color}>
-          {zone ? `Zone ${zone}` : 'Heart rate'}
+          {status}
         </T>
-        <T v="title" num style={{ fontSize: size * 0.17, lineHeight: size * 0.19 }}>
-          {range ? `${range.minBpm}-${range.maxBpm}` : '-'}
+        <T v="title" num style={live ? { fontSize: size * 0.3, lineHeight: size * 0.32, letterSpacing: -size * 0.012 } : { fontSize: size * 0.17, lineHeight: size * 0.19 }}>
+          {live ? String(bpm) : range ? `${range.minBpm}-${range.maxBpm}` : '-'}
         </T>
         <T v="label" tone="secondary">
-          bpm target
+          {live && range ? `bpm, target ${range.minBpm}-${range.maxBpm}` : live ? 'bpm' : 'bpm target'}
         </T>
-        <T v="caption" tone="tertiary" style={{ marginTop: 6 }}>
-          {zones ? 'HR will sync from Garmin' : 'Set heart rate zones in Settings'}
-        </T>
+        {caption !== '' && (
+          <T v="caption" tone="tertiary" style={{ marginTop: 6 }}>
+            {caption}
+          </T>
+        )}
       </View>
       <View style={[s.ends, { top: size * 0.82 }]} pointerEvents="none">
         <T v="micro" tone="tertiary">
@@ -163,6 +180,22 @@ const TimerGauge = memo(function TimerGauge({ step }: { step: Step }) {
 });
 
 // ---------- pieces ----------
+
+/** Live heart rate in the stats row, when a sensor is sending. */
+const HrCell = memo(function HrCell() {
+  const bpm = useHrLive((h) => h.bpm);
+  if (bpm === undefined) return null;
+  return (
+    <View style={{ flex: 1 }}>
+      <T v="statSm" num>
+        {String(bpm)}
+      </T>
+      <T v="caption" tone="secondary">
+        HR bpm
+      </T>
+    </View>
+  );
+});
 
 /** Whole-workout progress: one segment per step, upcoming steps faded. */
 const WorkoutBar = memo(function WorkoutBar({ steps, idx }: { steps: readonly Step[]; idx: number }) {
@@ -393,6 +426,7 @@ function GaugeView({ step, onEnd }: { step: Step; onEnd: () => void }) {
             </T>
           </View>
         )}
+        {gauge !== 'hr' && <HrCell />}
       </View>
 
       <View style={{ marginTop: 'auto', gap: 14 }}>
