@@ -172,7 +172,7 @@ function Details({ item }: { item: AgendaItem }) {
         </Row>
         <Row label="Distance">
           <View style={s.inputWrap}>
-            <TextInput value={distance} onChangeText={setDistance} keyboardType="decimal-pad" placeholder="Optional" placeholderTextColor={p.textTertiary} style={[s.input, { width: 80, textAlign: 'right' }]} accessibilityLabel={`Distance in ${units.distance}`} />
+            <TextInput value={distance} onChangeText={setDistance} keyboardType="decimal-pad" placeholder="Optional" placeholderTextColor={p.textTertiary} style={[s.input, { width: 104, textAlign: 'right' }]} accessibilityLabel={`Distance in ${units.distance}`} />
             <T v="body" tone="secondary">
               {units.distance}
             </T>

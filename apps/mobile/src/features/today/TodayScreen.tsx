@@ -77,9 +77,13 @@ export function TodayScreen() {
         )}
       </Animated.ScrollView>
 
-      <Animated.View pointerEvents="none" style={[s.slim, { top: insets.top + 4 }, slimStyle]}>
-        <SlimBar summary={summary} />
+      <Animated.View pointerEvents="none" style={[s.slimWrap, { paddingTop: insets.top + 4 }, slimStyle]}>
+        <View style={s.slim}>
+          <SlimBar summary={summary} />
+        </View>
       </Animated.View>
+      {/* Keeps scrolled content from showing under the transparent status bar. */}
+      <View pointerEvents="none" style={[s.statusBar, { height: insets.top }]} />
 
       <QuickLogSheet visible={quickLog} onClose={() => setQuickLog(false)} />
     </View>
@@ -90,6 +94,8 @@ const useStyles = createStyles((p) => ({
   screen: { flex: 1, backgroundColor: p.bg },
   content: { paddingHorizontal: 20, paddingBottom: 120, gap: 12 },
   header: { flexDirection: 'row', alignItems: 'flex-end', gap: 4, marginBottom: 4 },
-  slim: { position: 'absolute', left: 20, right: 20, shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3, borderRadius: 14 },
+  statusBar: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: p.bg },
+  slimWrap: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 20, paddingBottom: 8, backgroundColor: p.bg },
+  slim: { shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3, borderRadius: 14 },
   empty: { alignItems: 'center', gap: 4, paddingVertical: 32 },
 }));

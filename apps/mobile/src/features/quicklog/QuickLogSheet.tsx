@@ -77,26 +77,30 @@ function Form({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-        {TYPES.map((t) => {
-          const on = t.value === kind;
-          const Icon = QUICK_LOG_ICON[t.value];
-          const fg = on ? p.onPrimary : p.textBody;
-          return (
-            <Pressable
-              key={t.value}
-              accessibilityRole="button"
-              accessibilityState={{ selected: on }}
-              onPress={() => pick(t.value)}
-              style={{ width: '23.5%', height: 68, borderRadius: 14, backgroundColor: on ? p.primary : p.inset, alignItems: 'center', justifyContent: 'center', gap: 6 }}
-            >
-              <Icon size={22} color={fg} />
-              <T v="captionMedium" color={fg}>
-                {t.label}
-              </T>
-            </Pressable>
-          );
-        })}
+      <View style={{ gap: 8 }}>
+        {[TYPES.slice(0, 4), TYPES.slice(4)].map((row, r) => (
+          <View key={r} style={{ flexDirection: 'row', gap: 8 }}>
+            {row.map((t) => {
+              const on = t.value === kind;
+              const Icon = QUICK_LOG_ICON[t.value];
+              const fg = on ? p.onPrimary : p.textBody;
+              return (
+                <Pressable
+                  key={t.value}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: on }}
+                  onPress={() => pick(t.value)}
+                  style={{ flex: 1, height: 68, borderRadius: 14, backgroundColor: on ? p.primary : p.inset, alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                >
+                  <Icon size={22} color={fg} />
+                  <T v="captionMedium" color={fg}>
+                    {t.label}
+                  </T>
+                </Pressable>
+              );
+            })}
+          </View>
+        ))}
       </View>
 
       <Group style={{ borderWidth: 1, borderColor: p.outline }}>
@@ -124,7 +128,7 @@ function Form({ onClose }: { onClose: () => void }) {
         </Row>
         <Row label="Distance">
           <View style={f.inputWrap}>
-            <TextInput value={distance} onChangeText={setDistance} keyboardType="decimal-pad" placeholder="Optional" placeholderTextColor={p.textTertiary} style={[f.input, { width: 90, textAlign: 'right' }]} accessibilityLabel={`Distance in ${units.distance}`} />
+            <TextInput value={distance} onChangeText={setDistance} keyboardType="decimal-pad" placeholder="Optional" placeholderTextColor={p.textTertiary} style={[f.input, { width: 104, textAlign: 'right' }]} accessibilityLabel={`Distance in ${units.distance}`} />
             <T v="body" tone="secondary">
               {units.distance}
             </T>

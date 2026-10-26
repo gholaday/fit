@@ -83,7 +83,7 @@ export const dark: Palette = {
   scheme: 'dark',
   bg: '#111214',
   surface: '#1A1B1F',
-  inset: '#17181B',
+  inset: '#232429',
   segmentTrack: '#1A1B1F',
   segmentActive: '#2C2D33',
   border: '#2E2F35',

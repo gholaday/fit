@@ -2,8 +2,8 @@ import { type PlanSummary, type Routine, type ScheduleEntry, type ScheduleSlot, 
 import { router } from 'expo-router';
 import { memo, useState } from 'react';
 import { Pressable, Switch, View } from 'react-native';
-import { actions, showSnack, usePlan, useRoutines, useSchedule } from '@/data/store';
-import { clockTime, hhmm, list, minutesOf, weekdayLong, weekdayShort } from '@/lib/format';
+import { actions, showSnack, usePlan, useRoutines, useSchedule, useToday } from '@/data/store';
+import { clockTime, hhmm, list, minutesOf, monthDay, weekdayLong, weekdayShort } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
 import { type ActivityColor, createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -25,8 +25,10 @@ function runDays(plan: PlanSummary | undefined): Map<Weekday, 'Run' | 'Long run'
   return out;
 }
 
-function sortEntries(entries: readonly ScheduleEntry[]): ScheduleEntry[] {
-  return [...entries].sort((a, b) => SLOT_ORDER[a.slot ?? 'any'] - SLOT_ORDER[b.slot ?? 'any'] || (a.time ?? '').localeCompare(b.time ?? '') || a.position - b.position);
+/** Workouts first, then stretches by part of day, as in the mockups. */
+function sortEntries(entries: readonly ScheduleEntry[], routines: readonly Routine[]): ScheduleEntry[] {
+  const kind = (e: ScheduleEntry) => (routines.find((r) => r.id === e.routineId)?.kind === 'strength' ? 0 : 1);
+  return [...entries].sort((a, b) => kind(a) - kind(b) || SLOT_ORDER[a.slot ?? 'any'] - SLOT_ORDER[b.slot ?? 'any'] || (a.time ?? '').localeCompare(b.time ?? '') || a.position - b.position);
 }
 
 function chipLabel(entry: ScheduleEntry, routine: Routine): string {
@@ -62,7 +64,7 @@ export function ScheduleTab() {
             key={w}
             weekday={w}
             run={runs.get(w)}
-            entries={sortEntries(schedule.filter((e) => e.weekday === w))}
+            entries={sortEntries(schedule.filter((e) => e.weekday === w), routines)}
             routines={routines}
             onEdit={(entryId) => {
               haptic.tick();
@@ -96,6 +98,7 @@ function Legend({ color, label }: { color: string; label: string }) {
 
 function PlanSummaryCard({ plan, runs }: { plan: PlanSummary | undefined; runs: Map<Weekday, string> }) {
   const s = useStyles();
+  const today = useToday();
   const manage = () => router.push({ pathname: '/setup', params: { only: 'plan' } });
   if (!plan) {
     return (
@@ -127,7 +130,7 @@ function PlanSummaryCard({ plan, runs }: { plan: PlanSummary | undefined; runs: 
         <Button label="Manage" kind="outline" size="sm" onPress={manage} />
       </View>
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        <Fact value={`Week ${plan.currentWeek} of ${plan.weeks}`} label="Progress" />
+        {today < plan.startDate ? <Fact value={monthDay(plan.startDate)} label="Starts" /> : <Fact value={`Week ${plan.currentWeek} of ${plan.weeks}`} label="Progress" />}
         <Fact value={`${days.length} days`} label={list(days.map(weekdayShort))} />
         <Fact value={weekdayLong(plan.inputs.longRunDay)} label="Long run" />
       </View>
@@ -203,7 +206,7 @@ function DayEditor({ editing, onChange }: { editing: { weekday: Weekday; entryId
       </Sheet>
     );
   }
-  const entries = sortEntries(schedule.filter((e) => e.weekday === editing.weekday));
+  const entries = sortEntries(schedule.filter((e) => e.weekday === editing.weekday), routines);
   const available = routines.filter((r) => !entries.some((e) => e.routineId === r.id));
   return (
     <Sheet visible onClose={close} title={weekdayLong(editing.weekday)} scroll>

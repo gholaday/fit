@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
+import { GestureDetector, Pressable, useTapGesture } from 'react-native-gesture-handler';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { dismissSnack, useSnack } from '@/data/store';
@@ -15,6 +16,8 @@ export function Snackbar() {
   const s = useStyles();
   const p = usePalette();
   const insets = useSafeAreaInsets();
+  // Swallow taps on the bar itself so they never reach a draggable item underneath.
+  const block = useTapGesture({});
 
   useEffect(() => {
     if (!snack) return;
@@ -31,50 +34,52 @@ export function Snackbar() {
       style={[s.wrap, { bottom: TAB_BAR + insets.bottom + 10 }]}
       accessibilityLiveRegion="polite"
     >
-      <View style={s.bar}>
-        <View style={s.line}>
-          <T v="label" color={p.onPrimary} style={{ flex: 1 }}>
-            {snack.message}
-          </T>
-          {snack.actionLabel && (
-            <Pressable
-              accessibilityRole="button"
-              hitSlop={10}
-              onPress={() => {
-                dismissSnack(snack.id);
-                haptic.commit();
-                snack.onAction?.();
-              }}
-            >
-              <T v="labelStrong" color={p.onPrimary} style={{ textDecorationLine: 'underline' }}>
-                {snack.actionLabel}
-              </T>
-            </Pressable>
-          )}
-        </View>
-        {snack.note && (
-          <View style={[s.line, s.note]}>
-            <T v="caption" color={p.onPrimary} style={{ flex: 1, opacity: 0.8 }}>
-              {snack.note}
+      <GestureDetector gesture={block}>
+        <View style={s.bar}>
+          <View style={s.line}>
+            <T v="label" color={p.onPrimary} style={{ flex: 1 }}>
+              {snack.message}
             </T>
-            {snack.noteActionLabel && (
+            {snack.actionLabel && (
               <Pressable
                 accessibilityRole="button"
                 hitSlop={10}
                 onPress={() => {
                   dismissSnack(snack.id);
                   haptic.commit();
-                  snack.onNoteAction?.();
+                  snack.onAction?.();
                 }}
               >
                 <T v="labelStrong" color={p.onPrimary} style={{ textDecorationLine: 'underline' }}>
-                  {snack.noteActionLabel}
+                  {snack.actionLabel}
                 </T>
               </Pressable>
             )}
           </View>
-        )}
-      </View>
+          {snack.note && (
+            <View style={[s.line, s.note]}>
+              <T v="caption" color={p.onPrimary} style={{ flex: 1, opacity: 0.8 }}>
+                {snack.note}
+              </T>
+              {snack.noteActionLabel && (
+                <Pressable
+                  accessibilityRole="button"
+                  hitSlop={10}
+                  onPress={() => {
+                    dismissSnack(snack.id);
+                    haptic.commit();
+                    snack.onNoteAction?.();
+                  }}
+                >
+                  <T v="labelStrong" color={p.onPrimary} style={{ textDecorationLine: 'underline' }}>
+                    {snack.noteActionLabel}
+                  </T>
+                </Pressable>
+              )}
+            </View>
+          )}
+        </View>
+      </GestureDetector>
     </Animated.View>
   );
 }

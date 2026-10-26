@@ -2,8 +2,8 @@ import { ZONE_NAMES, zoneBand } from '@fit/core';
 import { router } from 'expo-router';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { actions, useHrProfile, usePlan, useSettings } from '@/data/store';
-import { thousands } from '@/lib/format';
+import { actions, useHrProfile, usePlan, useSettings, useToday } from '@/data/store';
+import { monthDay, thousands } from '@/lib/format';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Group, IconButton, Row, Segmented, Stepper, T } from '@/ui/primitives';
@@ -17,6 +17,7 @@ export function SettingsScreen() {
   const settings = useSettings();
   const hr = useHrProfile();
   const plan = usePlan();
+  const today = useToday();
   const z2 = hr ? zoneBand(hr.zones, 2) : undefined;
 
   return (
@@ -76,7 +77,7 @@ export function SettingsScreen() {
             >
               <Icons.chevronRight size={18} color={p.textTertiary} />
             </Row>
-            <Row label="Running plan" sub={plan ? `${plan.name}, week ${plan.currentWeek} of ${plan.weeks}` : 'None'} onPress={() => router.push({ pathname: '/setup', params: { only: 'plan' } })} last>
+            <Row label="Running plan" sub={plan ? (today < plan.startDate ? `${plan.name}, starts ${monthDay(plan.startDate)}` : `${plan.name}, week ${plan.currentWeek} of ${plan.weeks}`) : 'None'} onPress={() => router.push({ pathname: '/setup', params: { only: 'plan' } })} last>
               <Icons.chevronRight size={18} color={p.textTertiary} />
             </Row>
           </Group>
