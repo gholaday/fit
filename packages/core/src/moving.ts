@@ -80,5 +80,5 @@ function dayNum(date: IsoDate): number {
 
 /** Hard day definition for plan roles. Strength is never hard (docs/decisions.md). */
 export function isHardRole(role: string): boolean {
-  return role === 'long' || role === 'quality' || role === 'quality2' || role === 'retest';
+  return role === 'long' || role === 'quality' || role === 'quality2' || role === 'retest' || role === 'race';
 }

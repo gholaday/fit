@@ -5,3 +5,6 @@ export * from './agenda';
 export * from './hr';
 export * from './moving';
 export * from './repository';
+export * from './dsl';
+export * from './vdot';
+export * from './plan';

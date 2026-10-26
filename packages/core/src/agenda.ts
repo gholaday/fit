@@ -23,8 +23,8 @@ export type AgendaSource =
   | { type: 'plan_workout'; planWorkoutId: string; planId: string; weekIndex: number; role: PlanRole }
   | { type: 'schedule'; scheduleId: string; routineId: string };
 
-/** Plan slot roles (spec §8). `retest` replaces a quality slot in retest weeks. */
-export type PlanRole = 'long' | 'quality' | 'quality2' | 'easy' | 'easy2' | 'retest';
+/** Plan slot roles (spec §8). `retest` replaces a quality slot in retest weeks; `race` is race day. */
+export type PlanRole = 'long' | 'quality' | 'quality2' | 'easy' | 'easy2' | 'easy3' | 'easy4' | 'retest' | 'race';
 
 export type ScheduleSlot = 'morning' | 'evening' | 'any';
 
