@@ -147,3 +147,72 @@ export function pausedBefore(pauses: readonly (readonly [number, number])[], tOf
   for (const [a, b] of pauses) if (tOffsetMs > a) ms += Math.min(tOffsetMs, b) - a;
   return ms;
 }
+
+/** Cool to warm, for value coloring. Low values take the first color. */
+const RAMP = ['#3B82F6', '#14B8A6', '#84CC16', '#EAB308', '#F97316', '#EF4444'];
+const LEVELS = 16;
+const MAX_STOPS = 240;
+
+function rampColor(t: number): string {
+  const x = Math.max(0, Math.min(1, t)) * (RAMP.length - 1);
+  const i = Math.min(RAMP.length - 2, Math.floor(x));
+  const f = x - i;
+  const a = RAMP[i]!;
+  const b = RAMP[i + 1]!;
+  const ch = (k: number) => Math.round(parseInt(a.slice(k, k + 2), 16) * (1 - f) + parseInt(b.slice(k, k + 2), 16) * f);
+  return `#${[1, 3, 5].map((k) => ch(k).toString(16).padStart(2, '0')).join('')}`;
+}
+
+/** The ramp as evenly spaced colors, for the legend. */
+export const RAMP_COLORS = RAMP;
+
+/**
+ * Color stops from one value per drawn point (routeValues). Values are bucketed to at most
+ * MAX_STOPS stops and quantized to LEVELS colors so neighbors merge. `invert` puts low values
+ * at the warm end (pace: faster is warmer). Points without a value are `neutral`.
+ */
+export function valueStops(route: RouteGeometry, values: readonly (number | undefined)[], range: [number, number], neutral: string, invert = false): ColorStop[] {
+  const total = route.drawnDist[route.drawnDist.length - 1]?.distanceM ?? 0;
+  const n = values.length;
+  const per = Math.max(1, Math.ceil(n / MAX_STOPS));
+  const span = range[1] - range[0];
+  const stops: ColorStop[] = [];
+  for (let i = 0; i < n; i += per) {
+    let sum = 0;
+    let count = 0;
+    for (let j = i; j < Math.min(n, i + per); j++) {
+      const v = values[j];
+      if (v !== undefined) {
+        sum += v;
+        count++;
+      }
+    }
+    let color = neutral;
+    if (count > 0) {
+      const t = span > 0 ? (sum / count - range[0]) / span : 0.5;
+      color = rampColor(Math.round((invert ? 1 - t : t) * (LEVELS - 1)) / (LEVELS - 1));
+    }
+    const at = total > 0 && i > 0 ? route.drawnDist[i]!.distanceM / total : 0;
+    const prev = stops[stops.length - 1];
+    if (prev && prev.color === color) continue;
+    if (prev && at <= prev.at) stops[stops.length - 1] = { at: prev.at, color };
+    else stops.push({ at, color });
+  }
+  return stops;
+}
+
+/** The drawn point nearest a tap, by flat distance in meters, or undefined when farther than `maxM`. */
+export function nearestDrawn(route: RouteGeometry, lng: number, lat: number, maxM: number): number | undefined {
+  const kx = Math.cos((lat * Math.PI) / 180) * 111_320;
+  const ky = 110_540;
+  let best = -1;
+  let bestD = Infinity;
+  route.drawn.forEach((q, i) => {
+    const d = Math.hypot((q.lng - lng) * kx, (q.lat - lat) * ky);
+    if (d < bestD) {
+      bestD = d;
+      best = i;
+    }
+  });
+  return best >= 0 && bestD <= maxM ? best : undefined;
+}

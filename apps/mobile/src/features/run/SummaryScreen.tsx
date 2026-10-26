@@ -9,14 +9,15 @@ import { ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
 import { actions, showSnack, useHrProfile, useUnits } from '@/data/store';
-import { useFormStyles } from '@/features/items/ItemSheet';
 import { haptic } from '@/lib/haptics';
 import { createStyles, toneColor, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, IconButton, T } from '@/ui/primitives';
 import { PostRunCard } from '@/features/stretch/PostRunCard';
 import { HrCard } from './HrCard';
+import { SessionProfile } from './SessionProfile';
 import { stepAmount, stepName, stepTone } from './steps';
+import { Slider } from '@/ui/Slider';
 import { StatusShade } from '@/ui/StatusShade';
 
 const RouteMap = lazy(() => import('./RouteMap'));
@@ -89,20 +90,16 @@ export function SummaryScreen() {
             <RouteMap session={session} />
           </Suspense>
         ) : (
-          <View style={[s.mapSlot, s.center]}>
-            <T v="caption" tone="tertiary">
-              {session.mode === 'outdoor' ? 'No route recorded' : session.mode === 'treadmill' ? 'Treadmill run, no route' : 'Timer run, no route'}
-            </T>
-          </View>
+          <SessionProfile session={session} />
         )}
+
+        {session.mode !== 'outdoor' && <DistanceFix key={session.distanceM} session={session} onSaved={() => setSession(repo.session(id))} />}
 
         <View style={s.hero}>
           <Stat value={formatClock(Math.round(session.elapsedMs / 1000))} label="Time" />
           {hasDistance && <Stat value={metersToUnit(session.distanceM, unit).toFixed(2)} label={unit === 'mi' ? 'Miles' : 'Kilometers'} />}
           {hasDistance && <Stat value={pace(avgPace, unit)} label={`Pace /${unit}`} />}
         </View>
-
-        {session.mode !== 'outdoor' && <DistanceFix session={session} onSaved={() => setSession(repo.session(id))} />}
 
         {hr && <HrCard session={session} stats={hr} zones={zones} />}
 
@@ -187,51 +184,72 @@ function Stat({ value, label }: { value: string; label: string }) {
 }
 
 /**
- * Treadmill: "Treadmill says X" replaces the speed x time estimate with the belt's own
- * count. Timer: an optional distance. Either way every step's distance is rescaled.
+ * Treadmill and Timer runs: the recorded distance, set on a slider. On a treadmill the
+ * estimate comes from belt speed and time, and the console's own count is nearly always
+ * entered, so this card sits right under the run profile. Saving rescales every step's
+ * distance and the pace.
  */
 function DistanceFix({ session, onSaved }: { session: SessionDetail; onSaved: () => void }) {
   const s = useStyles();
-  const f = useFormStyles();
-  const p = usePalette();
   const unit = useUnits().distance;
-  const [text, setText] = useState('');
-  const value = Number(text.replace(',', '.'));
-  const valid = text.trim() !== '' && Number.isFinite(value) && value > 0 && value < 200;
   const treadmill = session.mode === 'treadmill';
+  const stored = Math.round(metersToUnit(session.distanceM, unit) * 100) / 100;
+  const [value, setValue] = useState(stored);
+  // Half to one and a half times the estimate, at least one unit either side; 8 units with no estimate.
+  const [range] = useState(() => (stored > 0 ? [Math.max(0, Math.floor((stored - Math.max(1, stored * 0.5)) * 10) / 10), Math.ceil((stored + Math.max(1, stored * 0.5)) * 10) / 10] : [0, 8]) as [number, number]);
+  const changed = Math.abs(value - stored) >= 0.005 && value > 0;
+  const paceS = value > 0 ? session.elapsedMs / 1000 / value : undefined;
+
+  const set = (v: number) => {
+    const next = Math.round(Math.max(0, v) * 100) / 100;
+    if (next === value) return;
+    // A tick on each tenth while dragging, every step on the buttons.
+    if (Math.floor(next * 10) !== Math.floor(value * 10) || Math.abs(next - value) < 0.015) haptic.tick();
+    setValue(next);
+  };
   const save = () => {
-    if (!valid) return;
+    if (!changed) return;
     haptic.commit();
     repo.correctDistance(session.id, unitToMeters(value, unit));
     actions.reload();
-    setText('');
     onSaved();
-    showSnack({ message: `Distance set to ${value.toFixed(2)} ${unit}` });
+    showSnack({ message: `Distance saved as ${value.toFixed(2)} ${unit}` });
   };
+
   return (
-    <View style={s.card}>
+    <View style={[s.card, { paddingBottom: 14 }]}>
       <T v="headline" style={s.cardTitle}>
-        {treadmill ? 'Treadmill says' : 'Distance'}
+        {treadmill ? 'Treadmill distance' : 'Distance'}
       </T>
-      <T v="caption" tone="secondary" style={{ marginBottom: 10 }}>
-        {treadmill ? 'Enter the distance on the treadmill display to replace the estimate.' : 'Optional. Add how far you went to get pace and splits.'}
+      <T v="caption" tone="secondary">
+        {treadmill ? 'Set the distance shown on the treadmill console. Pace and step distances update to match.' : 'Set the distance covered. Pace and step distances update to match.'}
       </T>
-      <View style={[f.inputWrap, { marginBottom: 12 }]}>
-        <TextInput
-          value={text}
-          onChangeText={setText}
-          keyboardType="decimal-pad"
-          placeholder={treadmill && session.distanceM > 0 ? metersToUnit(session.distanceM, unit).toFixed(2) : '3.10'}
-          placeholderTextColor={p.textMuted}
-          style={[f.input, { flex: 1 }]}
-          accessibilityLabel={`Distance in ${unit}`}
-          onSubmitEditing={save}
-        />
-        <T v="bodyMedium" tone="secondary">
-          {unit}
-        </T>
-        <Button label="Save" size="sm" kind={valid ? 'primary' : 'quiet'} onPress={save} />
+      <View style={s.fixValue}>
+        <IconButton label={`Decrease by 0.01 ${unit}`} size={44} bg="inset" onPress={() => set(value - 0.01)}>
+          <T v="title">-</T>
+        </IconButton>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <T v="display" num>
+            {value.toFixed(2)}
+          </T>
+          <T v="caption" tone="secondary" num>
+            {paceS ? `${unit === 'mi' ? 'Miles' : 'Kilometers'}, ${formatClock(paceS)} /${unit} pace` : unit === 'mi' ? 'Miles' : 'Kilometers'}
+          </T>
+        </View>
+        <IconButton label={`Increase by 0.01 ${unit}`} size={44} bg="inset" onPress={() => set(value + 0.01)}>
+          <T v="title">+</T>
+        </IconButton>
       </View>
+      <Slider value={value} min={range[0]} max={range[1]} step={0.01} onChange={set} label={treadmill ? 'Treadmill distance' : 'Distance'} valueText={`${value.toFixed(2)} ${unit}`} />
+      <View style={s.fixRange}>
+        <T v="micro" tone="tertiary" num>
+          {`${range[0].toFixed(1)} ${unit}`}
+        </T>
+        <T v="micro" tone="tertiary" num>
+          {`${range[1].toFixed(1)} ${unit}`}
+        </T>
+      </View>
+      <Button label={changed ? 'Save distance' : stored > 0 ? `Recorded ${stored.toFixed(2)} ${unit}` : 'Set a distance'} kind={changed ? 'primary' : 'quiet'} disabled={!changed} onPress={save} />
     </View>
   );
 }
@@ -296,4 +314,6 @@ const useStyles = createStyles((p) => ({
   rpeBtn: { width: 44, paddingHorizontal: 0 },
   notes: { minHeight: 72, borderRadius: 12, backgroundColor: p.inset, padding: 12, color: p.text, fontFamily: 'Inter', fontSize: 15, textAlignVertical: 'top', marginBottom: 10 },
   footer: { paddingHorizontal: 20, paddingTop: 8 },
+  fixValue: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 14, paddingBottom: 4 },
+  fixRange: { flexDirection: 'row', justifyContent: 'space-between', paddingBottom: 12 },
 }));
