@@ -79,6 +79,12 @@ export function TrialCard({ sessionId, trial, current }: { sessionId: string; tr
     setDone(true);
     showSnack({ message: `Paces updated to VDOT ${trial.vdot.toFixed(1)}` });
   };
+  // Stored, so this run's summary stops offering the trial.
+  const keep = () => {
+    haptic.tap();
+    repo.dismissTrial(sessionId);
+    setDone(true);
+  };
   return (
     <View style={s.card}>
       <T v="headline" style={s.title}>
@@ -91,7 +97,7 @@ export function TrialCard({ sessionId, trial, current }: { sessionId: string; tr
       </T>
       <PaceTable vdot={trial.vdot} before={current} />
       <View style={s.buttons}>
-        <Button label="Keep current" kind="quiet" size="md" style={{ flex: 1 }} onPress={() => (haptic.tap(), setDone(true))} />
+        <Button label="Keep current" kind="quiet" size="md" style={{ flex: 1 }} onPress={keep} />
         <Button label="Update paces" size="md" style={{ flex: 1.3 }} onPress={accept} />
       </View>
     </View>

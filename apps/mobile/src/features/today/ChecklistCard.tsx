@@ -148,7 +148,7 @@ function ResolvedRow({ item }: { item: AgendaItem }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
         {done && <Icons.check size={14} color={p.success} />}
         <T v="captionMedium" color={done ? p.success : p.textTertiary}>
-          {done ? 'Done' : 'Skipped'}
+          {done ? 'Done' : item.missed ? 'Missed' : 'Skipped'}
         </T>
         {sessionId && <Icons.chevronRight size={14} color={p.textTertiary} />}
       </View>

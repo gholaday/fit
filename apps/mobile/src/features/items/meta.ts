@@ -24,7 +24,7 @@ export function itemSubtitle(item: AgendaItem, routines: readonly Routine[], uni
 /** Short cell meta for the Plan grid: "35 min", "6 exercises", "Done". */
 export function cellMeta(item: AgendaItem, routines: readonly Routine[]): string {
   if (item.status === 'done') return 'Done';
-  if (item.status === 'skipped') return 'Skipped';
+  if (item.status === 'skipped') return item.missed ? 'Missed' : 'Skipped';
   if (item.lane === 'workout') {
     const n = routineOf(item, routines)?.itemCount;
     return n ? `${n} exercises` : formatMinutes(item.estSeconds);
