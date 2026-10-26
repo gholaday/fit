@@ -1,8 +1,9 @@
 import { ZONE_NAMES, zoneBand } from '@fit/core';
 import { router } from 'expo-router';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { actions, useHrProfile, usePlan, useSettings, useToday } from '@/data/store';
+import { haptic } from '@/lib/haptics';
 import { monthDay, thousands } from '@/lib/format';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -77,8 +78,20 @@ export function SettingsScreen() {
             >
               <Icons.chevronRight size={18} color={p.textTertiary} />
             </Row>
-            <Row label="Running plan" sub={plan ? (today < plan.startDate ? `${plan.name}, starts ${monthDay(plan.startDate)}` : `${plan.name}, week ${plan.currentWeek} of ${plan.weeks}`) : 'None'} onPress={() => router.push({ pathname: '/setup', params: { only: 'plan' } })} last>
+            <Row label="Running plan" sub={plan ? (today < plan.startDate ? `${plan.name}, starts ${monthDay(plan.startDate)}` : `${plan.name}, week ${plan.currentWeek} of ${plan.weeks}`) : 'None'} onPress={() => router.push({ pathname: '/setup', params: { only: 'plan' } })}>
               <Icons.chevronRight size={18} color={p.textTertiary} />
+            </Row>
+            <Row label="Post-run stretch" sub="Offer a stretch on the run summary" last>
+              <Switch
+                value={settings.postRunStretch}
+                onValueChange={(postRunStretch) => {
+                  haptic.tick();
+                  actions.updateSettings({ postRunStretch });
+                }}
+                trackColor={{ true: p.primary, false: p.border }}
+                thumbColor={p.surface}
+                accessibilityLabel="Post-run stretch"
+              />
             </Row>
           </Group>
         </Section>

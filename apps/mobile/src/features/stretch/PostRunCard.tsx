@@ -1,13 +1,13 @@
 /**
  * "Post-run stretch?" on the summary of a run that just ended (spec §10 Post-run
- * reminder). Starts the guided player with your post-run routine; it is not a scheduled
- * occurrence, so it never counts for adherence.
+ * reminder), unless turned off in Settings. Starts the guided player with your
+ * post-run routine; it is not a scheduled occurrence, so it never counts for adherence.
  */
 import type { Routine } from '@fit/core';
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { View } from 'react-native';
-import { useRoutines } from '@/data/store';
+import { useRoutines, useSettings } from '@/data/store';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -26,10 +26,11 @@ function postRunRoutine(routines: readonly Routine[]): Routine | undefined {
 export function PostRunCard({ endedAt }: { endedAt?: string }) {
   const s = useStyles();
   const p = usePalette();
+  const enabled = useSettings().postRunStretch;
   const routine = postRunRoutine(useRoutines());
   const [dismissed, setDismissed] = useState(false);
   const fresh = endedAt !== undefined && Date.now() - new Date(endedAt).getTime() < FRESH_MS;
-  if (!routine || !fresh || dismissed) return null;
+  if (!enabled || !routine || !fresh || dismissed) return null;
   return (
     <View style={s.card}>
       <View style={s.head}>
