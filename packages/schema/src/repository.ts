@@ -16,6 +16,7 @@ import {
   type Clock,
   type CompletionDetails,
   type FitRepository,
+  type HealthImportResult,
   type HrProfile,
   type HrProfileInput,
   type HrZoneBand,
@@ -52,8 +53,18 @@ import {
   type Muscle,
   type RoutineDetail,
   type RoutineItems,
+  type DailyMetrics,
+  type ExternalActivity,
+  type ExternalSession,
+  type HrSample,
+  type HrWindow,
   DEFAULT_CUE_PREFS,
+  findMergeTarget,
+  GARMIN_CONNECT_PACKAGE,
+  hrGaps,
   localIsoDate,
+  matchPlanItem,
+  mergeHr,
   routineSeconds,
   stepResults,
   volumeKg,
@@ -80,10 +91,51 @@ const DEFAULT_SETTINGS: Settings = {
   autoPause: false,
   autoPauseOnWalks: true,
   postRunStretch: true,
+  healthConnect: { importWorkouts: true, addHr: true, writeSessions: false, allSources: false, autoMatch: false },
 };
+
+const ACTIVITY_TITLES: Record<ExternalActivity, string> = {
+  run: 'Run',
+  treadmill: 'Treadmill run',
+  walk: 'Walk',
+  hike: 'Hike',
+  bike: 'Ride',
+  swim: 'Swim',
+  strength: 'Strength',
+  stretch: 'Stretch',
+  other: 'Workout',
+};
+
+function toExternal(r: typeof t.externalSessions.$inferSelect): ExternalSession {
+  const e: ExternalSession = {
+    id: r.id,
+    hcRecordId: r.hcRecordId,
+    originPackage: r.originPackage,
+    activity: r.activity as ExternalActivity,
+    title: r.title,
+    startedAt: new Date(r.startedAt).toISOString(),
+    endedAt: new Date(r.endedAt).toISOString(),
+    hasRoute: r.hasRoute,
+    status: r.status,
+  };
+  if (r.distanceM !== null) e.distanceM = r.distanceM;
+  if (r.activeKcal !== null) e.activeKcal = r.activeKcal;
+  if (r.avgHr !== null) e.avgHr = r.avgHr;
+  if (r.maxHr !== null) e.maxHr = r.maxHr;
+  if (r.rpe !== null) e.rpe = r.rpe;
+  if (r.note !== null) e.note = r.note;
+  if (r.linkedSessionId) e.linkedSessionId = r.linkedSessionId;
+  if (r.linkedPlanKey) e.linkedPlanKey = r.linkedPlanKey;
+  return e;
+}
+
+const toHrSample = (r: typeof t.hrSamples.$inferSelect): HrSample => ({ tOffsetMs: r.tOffsetMs, bpm: r.bpm, source: r.source });
 
 /** Rows per seed insert; 50 rows of ~24 columns stays far under SQLite's variable limit. */
 const SEED_BATCH = 50;
+
+/** Health Connect HR rows per insert (4 columns each). */
+const HR_BATCH = 200;
 
 /** M0 rows stored names only. seedCatalog upgrades them in place, keeping their ids. */
 interface LegacyRoutineItems {
@@ -249,7 +301,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     };
   }
 
-  function upsertCompletion(key: string, status: 'done' | 'skipped', extra: { completedAt?: number; details?: CompletionDetails; skipReason?: SkipReason; sessionId?: string }) {
+  function upsertCompletion(key: string, status: 'done' | 'skipped', extra: { completedAt?: number; details?: CompletionDetails; skipReason?: SkipReason; sessionId?: string; externalSessionId?: string }) {
     const occ = parseOccurrenceKey(key);
     if (!occ) throw new Error(`Not a schedule occurrence: ${key}`);
     const entry = db.select().from(t.weeklySchedule).where(eq(t.weeklySchedule.id, occ.scheduleId)).get();
@@ -260,6 +312,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       detailsJson: extra.details ? JSON.stringify(extra.details) : null,
       skipReason: extra.skipReason ?? null,
       sessionId: extra.sessionId ?? null,
+      externalSessionId: extra.externalSessionId ?? null,
       deletedAt: null,
     };
     db.insert(t.routineCompletions)
@@ -350,7 +403,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
   // -------------------------------------------------------------------------
   // Repository
 
-  return {
+  const repo: FitRepository = {
     agenda(start, end): AgendaItem[] {
       const pwRows = db
         .select({ pw: t.planWorkouts, w: t.workouts })
@@ -384,6 +437,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         if (Object.keys(details).length > 0) row.details = details;
         if (pw.skipReason) row.skipReason = pw.skipReason;
         if (pw.sessionId) row.sessionId = pw.sessionId;
+        if (pw.externalSessionId) row.externalSessionId = pw.externalSessionId;
         return row;
       });
 
@@ -412,6 +466,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
           if (c.detailsJson) row.details = JSON.parse(c.detailsJson) as CompletionDetails;
           if (c.skipReason) row.skipReason = c.skipReason;
           if (c.sessionId) row.sessionId = c.sessionId;
+          if (c.externalSessionId) row.externalSessionId = c.externalSessionId;
           return row;
         });
 
@@ -743,6 +798,9 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
             .onConflictDoNothing()
             .run();
         }
+        for (const h of progress.hr ?? []) {
+          tx.insert(t.hrSamples).values({ sessionId: id, tOffsetMs: h.tOffsetMs, bpm: h.bpm, source: 'ble' }).onConflictDoNothing().run();
+        }
       });
     },
 
@@ -801,6 +859,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       db.transaction((tx) => {
         tx.update(t.sessions).set({ status: 'discarded', deletedAt: now(), ...stamp() }).where(eq(t.sessions.id, id)).run();
         tx.delete(t.trackPoints).where(eq(t.trackPoints.sessionId, id)).run();
+        tx.delete(t.hrSamples).where(eq(t.hrSamples.sessionId, id)).run();
       });
     },
 
@@ -839,7 +898,17 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         log: player.log,
         pauses: player.pauses ?? [],
         points,
+        hr: [],
+        hrFromHealth: false,
       };
+      const samples = db.select().from(t.hrSamples).where(eq(t.hrSamples.sessionId, id)).orderBy(asc(t.hrSamples.tOffsetMs)).all().map(toHrSample);
+      const health = samples.filter((h) => h.source === 'health_connect');
+      detail.hr = mergeHr(
+        samples.filter((h) => h.source === 'ble'),
+        health,
+        (row.endedAt ?? now()) - row.startedAt,
+      );
+      detail.hrFromHealth = health.length > 0;
       if (row.endedAt) detail.endedAt = new Date(row.endedAt).toISOString();
       if (row.avgPaceSPerKm !== null) detail.avgPaceSecPerKm = row.avgPaceSPerKm;
       if (row.rpe !== null) detail.rpe = row.rpe;
@@ -1120,6 +1189,253 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       return out;
     },
 
+    healthSyncState() {
+      const row = db.select().from(t.hcSyncState).where(eq(t.hcSyncState.key, 'health_connect')).get();
+      const out: { changesToken?: string; lastSyncedAt?: string } = {};
+      if (row?.changesToken) out.changesToken = row.changesToken;
+      if (row?.lastSyncedAt) out.lastSyncedAt = new Date(row.lastSyncedAt).toISOString();
+      return out;
+    },
+
+    setHealthSyncState(state) {
+      const values = { changesToken: state.changesToken ?? null, lastSyncedAt: Date.parse(state.lastSyncedAt) };
+      db.insert(t.hcSyncState)
+        .values({ key: 'health_connect', ...values })
+        .onConflictDoUpdate({ target: t.hcSyncState.key, set: values })
+        .run();
+    },
+
+    upsertDailyMetrics(rows) {
+      const syncedAt = now();
+      db.transaction((tx) => {
+        for (const r of rows) {
+          // Only fields Health Connect returned overwrite, so a steps-only read keeps resting HR.
+          const set: Partial<typeof t.dailyMetrics.$inferInsert> = { source: r.source, syncedAt, ...stamp() };
+          if (r.steps !== undefined) set.steps = r.steps;
+          if (r.restingHr !== undefined) set.restingHr = r.restingHr;
+          if (r.activeKcal !== undefined) set.activeKcal = r.activeKcal;
+          if (r.sleepMin !== undefined) set.sleepMin = r.sleepMin;
+          tx.insert(t.dailyMetrics)
+            .values({ date: r.date, source: r.source, syncedAt, ...set, ...stamp() })
+            .onConflictDoUpdate({ target: t.dailyMetrics.date, set })
+            .run();
+        }
+      });
+    },
+
+    dailyMetrics(date) {
+      const r = db.select().from(t.dailyMetrics).where(and(eq(t.dailyMetrics.date, date), notDeleted(t.dailyMetrics))).get();
+      if (!r) return undefined;
+      const m: DailyMetrics = { date: r.date, source: r.source, syncedAt: new Date(r.syncedAt).toISOString() };
+      if (r.steps !== null) m.steps = r.steps;
+      if (r.restingHr !== null) m.restingHr = r.restingHr;
+      if (r.activeKcal !== null) m.activeKcal = r.activeKcal;
+      if (r.sleepMin !== null) m.sleepMin = r.sleepMin;
+      return m;
+    },
+
+    importExternalSessions(inputs) {
+      const prefs = repo.settings().healthConnect;
+      const result: HealthImportResult = { merged: [], added: [] };
+      if (!prefs.importWorkouts) return result;
+      const allowed = inputs.filter((i) => prefs.allSources || i.originPackage === GARMIN_CONNECT_PACKAGE);
+      if (allowed.length === 0) return result;
+      const known = new Set(
+        db
+          .select({ hc: t.externalSessions.hcRecordId })
+          .from(t.externalSessions)
+          .where(
+            inArray(
+              t.externalSessions.hcRecordId,
+              allowed.map((i) => i.hcRecordId),
+            ),
+          )
+          .all()
+          .map((r) => r.hc),
+      );
+      const fresh = allowed.filter((i) => !known.has(i.hcRecordId));
+      if (fresh.length === 0) return result;
+      const minStart = Math.min(...fresh.map((i) => Date.parse(i.startedAt)));
+      const phone = db
+        .select({ id: t.sessions.id, name: t.sessions.name, startMs: t.sessions.startedAt, endMs: t.sessions.endedAt })
+        .from(t.sessions)
+        .where(and(eq(t.sessions.status, 'saved'), notDeleted(t.sessions), gte(t.sessions.endedAt, minStart)))
+        .all()
+        .filter((s): s is { id: string; name: string; startMs: number; endMs: number } => s.endMs !== null);
+
+      const added: string[] = [];
+      db.transaction((tx) => {
+        for (const input of fresh) {
+          const id = newId();
+          const startMs = Date.parse(input.startedAt);
+          const endMs = Date.parse(input.endedAt);
+          const target = findMergeTarget({ startMs, endMs }, phone);
+          tx.insert(t.externalSessions)
+            .values({
+              id,
+              hcRecordId: input.hcRecordId,
+              originPackage: input.originPackage,
+              activity: input.activity,
+              title: input.title?.trim() || ACTIVITY_TITLES[input.activity],
+              startedAt: startMs,
+              endedAt: endMs,
+              distanceM: input.distanceM ?? null,
+              activeKcal: input.activeKcal ?? null,
+              avgHr: input.avgHr ?? null,
+              maxHr: input.maxHr ?? null,
+              hasRoute: input.hasRoute,
+              status: target ? 'merged' : 'new',
+              linkedSessionId: target?.id ?? null,
+              ...created(),
+            })
+            .run();
+          if (target) result.merged.push({ externalId: id, sessionId: target.id, sessionName: target.name });
+          else added.push(id);
+        }
+      });
+
+      for (const id of added) {
+        if (prefs.autoMatch) {
+          // Auto-match only when the suggestion is the one strong candidate (spec §11 Settings).
+          const { suggested, candidates } = repo.planMatch(id);
+          const rivals = candidates.filter((c) => suggested && c.lane === suggested.lane && c.date === suggested.date);
+          if (suggested && rivals.length === 1) {
+            const ext = repo.externalSession(id)!;
+            repo.saveExternal(id, { planKey: suggested.key, title: ext.title, activity: ext.activity });
+          }
+        }
+        result.added.push(repo.externalSession(id)!);
+      }
+      return result;
+    },
+
+    sessionsNeedingHr(since) {
+      if (!repo.settings().healthConnect.addHr) return [];
+      const rows = db
+        .select()
+        .from(t.sessions)
+        .where(and(eq(t.sessions.status, 'saved'), notDeleted(t.sessions), isNull(t.sessions.hrFilledAt), gte(t.sessions.startedAt, Date.parse(since))))
+        .all();
+      const out: HrWindow[] = [];
+      for (const r of rows) {
+        if (r.endedAt === null) continue;
+        const live = db
+          .select()
+          .from(t.hrSamples)
+          .where(and(eq(t.hrSamples.sessionId, r.id), eq(t.hrSamples.source, 'ble')))
+          .orderBy(asc(t.hrSamples.tOffsetMs))
+          .all()
+          .map(toHrSample);
+        if (live.length > 0 && hrGaps(live, r.endedAt - r.startedAt).length === 0) continue;
+        out.push({ sessionId: r.id, startedAt: new Date(r.startedAt).toISOString(), endedAt: new Date(r.endedAt).toISOString() });
+      }
+      return out;
+    },
+
+    addHealthHr(sessionId, samples) {
+      if (samples.length === 0) return;
+      const row = db.select().from(t.sessions).where(eq(t.sessions.id, sessionId)).get();
+      if (!row) throw new Error(`Unknown session ${sessionId}`);
+      const endOffset = (row.endedAt ?? now()) - row.startedAt;
+      const rows = samples
+        .map((s) => ({ sessionId, tOffsetMs: Date.parse(s.time) - row.startedAt, bpm: Math.round(s.bpm), source: 'health_connect' as const }))
+        .filter((s) => s.tOffsetMs >= 0 && s.tOffsetMs <= endOffset);
+      db.transaction((tx) => {
+        tx.delete(t.hrSamples)
+          .where(and(eq(t.hrSamples.sessionId, sessionId), eq(t.hrSamples.source, 'health_connect')))
+          .run();
+        for (let i = 0; i < rows.length; i += HR_BATCH) {
+          tx.insert(t.hrSamples)
+            .values(rows.slice(i, i + HR_BATCH))
+            .onConflictDoNothing()
+            .run();
+        }
+        tx.update(t.sessions)
+          .set({ hrFilledAt: now(), ...stamp() })
+          .where(eq(t.sessions.id, sessionId))
+          .run();
+      });
+    },
+
+    pendingExternal() {
+      return db
+        .select()
+        .from(t.externalSessions)
+        .where(and(eq(t.externalSessions.status, 'new'), notDeleted(t.externalSessions)))
+        .orderBy(asc(t.externalSessions.startedAt))
+        .all()
+        .map(toExternal);
+    },
+
+    externalSession(id) {
+      const r = db
+        .select()
+        .from(t.externalSessions)
+        .where(and(eq(t.externalSessions.id, id), notDeleted(t.externalSessions)))
+        .get();
+      return r ? toExternal(r) : undefined;
+    },
+
+    planMatch(externalId) {
+      const ext = repo.externalSession(externalId);
+      if (!ext) throw new Error(`Unknown external session ${externalId}`);
+      const day = localIsoDate(new Date(ext.startedAt));
+      return matchPlanItem(
+        { startMs: Date.parse(ext.startedAt), endMs: Date.parse(ext.endedAt), activity: ext.activity },
+        repo.agenda(addDays(day, -1), addDays(day, 3)),
+      );
+    },
+
+    saveExternal(id, save) {
+      const ext = repo.externalSession(id);
+      if (!ext) throw new Error(`Unknown external session ${id}`);
+      db.update(t.externalSessions)
+        .set({ status: 'saved', title: save.title, activity: save.activity, rpe: save.rpe ?? null, note: save.note ?? null, linkedPlanKey: save.planKey ?? null, ...stamp() })
+        .where(eq(t.externalSessions.id, id))
+        .run();
+      if (!save.planKey) return;
+      const endedAt = Date.parse(ext.endedAt);
+      const details: CompletionDetails = { minutes: Math.round((endedAt - Date.parse(ext.startedAt)) / 60000) };
+      if (ext.distanceM !== undefined) details.distanceM = ext.distanceM;
+      if (save.rpe !== undefined) details.rpe = save.rpe;
+      if (save.note) details.note = save.note;
+      if (parseOccurrenceKey(save.planKey)) {
+        upsertCompletion(save.planKey, 'done', { completedAt: endedAt, details, externalSessionId: id });
+        return;
+      }
+      db.update(t.planWorkouts)
+        .set({ status: 'done', completedAt: endedAt, skipReason: null, externalSessionId: id, ...completionDetails(details), ...stamp() })
+        .where(eq(t.planWorkouts.id, save.planKey))
+        .run();
+    },
+
+    ignoreExternal(id) {
+      db.update(t.externalSessions)
+        .set({ status: 'ignored', ...stamp() })
+        .where(eq(t.externalSessions.id, id))
+        .run();
+    },
+
+    undoMerge(externalId) {
+      const ext = db.select().from(t.externalSessions).where(eq(t.externalSessions.id, externalId)).get();
+      if (!ext || ext.status !== 'merged' || !ext.linkedSessionId) return;
+      const sessionId = ext.linkedSessionId;
+      db.transaction((tx) => {
+        tx.update(t.externalSessions)
+          .set({ status: 'new', linkedSessionId: null, ...stamp() })
+          .where(eq(t.externalSessions.id, externalId))
+          .run();
+        tx.delete(t.hrSamples)
+          .where(and(eq(t.hrSamples.sessionId, sessionId), eq(t.hrSamples.source, 'health_connect')))
+          .run();
+        // -1 keeps sessionsNeedingHr from adding the same HR back on the next sync.
+        tx.update(t.sessions)
+          .set({ hrFilledAt: -1, ...stamp() })
+          .where(eq(t.sessions.id, sessionId))
+          .run();
+      });
+    },
+
     settings(): Settings {
       const rows = db.select().from(t.settings).where(notDeleted(t.settings)).all();
       const stored = Object.fromEntries(rows.map((r) => [r.key, JSON.parse(r.valueJson) as unknown]));
@@ -1138,5 +1454,6 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       });
     },
   };
+  return repo;
 }
 

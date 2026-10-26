@@ -108,6 +108,7 @@ export interface PlanWorkoutRow {
   details?: CompletionDetails;
   skipReason?: SkipReason;
   sessionId?: string;
+  externalSessionId?: string;
 }
 
 export interface RoutineInfo {
@@ -125,6 +126,7 @@ export interface CompletionRow {
   details?: CompletionDetails;
   skipReason?: SkipReason;
   sessionId?: string;
+  externalSessionId?: string;
 }
 
 export interface AgendaInput {
@@ -183,6 +185,7 @@ export function buildAgenda(input: AgendaInput): AgendaItem[] {
     if (pw.details) item.details = pw.details;
     if (pw.skipReason) item.skipReason = pw.skipReason;
     if (pw.sessionId) item.sessionId = pw.sessionId;
+    if (pw.externalSessionId) item.externalSessionId = pw.externalSessionId;
     items.push(item);
   }
 
@@ -211,6 +214,7 @@ export function buildAgenda(input: AgendaInput): AgendaItem[] {
     if (c?.details) item.details = c.details;
     if (c?.skipReason) item.skipReason = c.skipReason;
     if (c?.sessionId) item.sessionId = c.sessionId;
+    if (c?.externalSessionId) item.externalSessionId = c.externalSessionId;
     items.push(item);
   }
 

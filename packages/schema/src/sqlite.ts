@@ -103,6 +103,8 @@ export const planWorkouts = sqliteTable(
     manualNote: text('manual_note'),
     skipReason: text('skip_reason', { enum: ['sick', 'busy', 'sore', 'other'] }),
     sessionId: text('session_id'),
+    /** Watch workout linked from the new-activity modal (Done + data, no phone session). */
+    externalSessionId: text('external_session_id'),
     ...syncColumns,
   },
   (t) => [index('plan_workouts_date').on(t.date), index('plan_workouts_plan').on(t.planId, t.date), index('plan_workouts_sync').on(t.dirty, t.updatedAt)],
@@ -180,6 +182,7 @@ export const routineCompletions = sqliteTable(
     skipReason: text('skip_reason', { enum: ['sick', 'busy', 'sore', 'other'] }),
     itemsDoneJson: text('items_done_json'),
     sessionId: text('session_id'),
+    externalSessionId: text('external_session_id'),
     ...syncColumns,
   },
   (t) => [index('routine_completions_date').on(t.date), uniqueIndex('routine_completions_occurrence').on(t.scheduleId, t.date)],
@@ -224,6 +227,8 @@ export const sessions = sqliteTable(
     /** Player state, saved every 5 s while active for crash recovery; final log after. */
     playerJson: text('player_json').notNull(),
     summaryJson: text('summary_json'),
+    /** When Health Connect HR was last added; -1 after "Undo" so it is not added again. */
+    hrFilledAt: integer('hr_filled_at'),
     ...syncColumns,
   },
   (t) => [index('sessions_status').on(t.status), index('sessions_started').on(t.startedAt), index('sessions_plan_workout').on(t.planWorkoutId)],
@@ -313,3 +318,63 @@ export const strengthSets = sqliteTable(
   },
   (t) => [index('strength_sets_session').on(t.sessionId), index('strength_sets_exercise').on(t.exerciseId, t.completedAt)],
 );
+
+// M2: heart rate and Health Connect (spec §7, §11).
+
+/** Per-session HR trace. Live BLE samples are written with saveProgress; Health Connect samples replace each other. */
+export const hrSamples = sqliteTable(
+  'hr_samples',
+  {
+    sessionId: text('session_id').notNull(),
+    tOffsetMs: integer('t_offset_ms').notNull(),
+    bpm: integer('bpm').notNull(),
+    source: text('source', { enum: ['ble', 'health_connect'] }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.sessionId, t.source, t.tOffsetMs] })],
+);
+
+export const dailyMetrics = sqliteTable('daily_metrics', {
+  date: text('date').primaryKey(),
+  steps: integer('steps'),
+  restingHr: integer('resting_hr'),
+  activeKcal: real('active_kcal'),
+  sleepMin: integer('sleep_min'),
+  source: text('source').notNull(),
+  syncedAt: integer('synced_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  deletedAt: integer('deleted_at'),
+  dirty: integer('dirty', { mode: 'boolean' }).notNull().default(true),
+});
+
+export const externalSessions = sqliteTable(
+  'external_sessions',
+  {
+    id: text('id').primaryKey(),
+    hcRecordId: text('hc_record_id').notNull(),
+    originPackage: text('origin_package').notNull(),
+    activity: text('activity').notNull(),
+    title: text('title').notNull(),
+    startedAt: integer('started_at').notNull(),
+    endedAt: integer('ended_at').notNull(),
+    distanceM: real('distance_m'),
+    activeKcal: real('active_kcal'),
+    avgHr: integer('avg_hr'),
+    maxHr: integer('max_hr'),
+    hasRoute: bool('has_route').notNull().default(false),
+    rpe: integer('rpe'),
+    note: text('note'),
+    /** new: waiting in the modal; saved: linked to the plan or unplanned; merged into a phone session; ignored. */
+    status: text('status', { enum: ['new', 'saved', 'merged', 'ignored'] }).notNull(),
+    linkedSessionId: text('linked_session_id'),
+    /** Agenda key the save completed, for undo. */
+    linkedPlanKey: text('linked_plan_key'),
+    ...syncColumns,
+  },
+  (t) => [uniqueIndex('external_sessions_hc').on(t.hcRecordId), index('external_sessions_status').on(t.status), index('external_sessions_started').on(t.startedAt)],
+);
+
+export const hcSyncState = sqliteTable('hc_sync_state', {
+  key: text('key').primaryKey(),
+  changesToken: text('changes_token'),
+  lastSyncedAt: integer('last_synced_at'),
+});

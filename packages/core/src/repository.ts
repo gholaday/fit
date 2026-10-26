@@ -1,7 +1,9 @@
 import type { AgendaItem, CompletionDetails, ScheduleSlot, SkipReason } from './agenda';
 import type { IsoDate, Weekday } from './dates';
 import type { HrProfileInput, HrZoneBand } from './hr';
+import type { ExternalActivity, PlanMatch } from './external';
 import type { CuePrefs } from './session/cues';
+import type { HrSample } from './session/heart';
 import type { TrackPoint } from './session/geo';
 import type { PlayerState, StepLogEntry } from './session/player';
 import type { StepResult } from './session/track';
@@ -183,6 +185,92 @@ export interface Settings {
   autoPauseOnWalks: boolean;
   /** Offer "Post-run stretch?" on fresh run summaries (spec §10). */
   postRunStretch: boolean;
+  /** Remembered BLE heart-rate sensor, reconnected at session start (spec §7). */
+  hrSensor?: { id: string; name: string };
+  healthConnect: HealthConnectPrefs;
+}
+
+/** Spec §11 Settings. */
+export interface HealthConnectPrefs {
+  /** Import watch workouts (new-activity modal). */
+  importWorkouts: boolean;
+  /** Add watch HR to phone sessions. */
+  addHr: boolean;
+  /** Write Fit sessions to Health Connect. Off by default to avoid duplicates. */
+  writeSessions: boolean;
+  /** Import from every app, not only Garmin Connect. */
+  allSources: boolean;
+  /** Link without asking when there is exactly one strong plan match. */
+  autoMatch: boolean;
+}
+
+export const GARMIN_CONNECT_PACKAGE = 'com.garmin.android.apps.connectmobile';
+
+// Health Connect (M2). The app reads Health Connect and hands normalized records to the
+// repository; the repository decides merges, matches and storage. Instants are ISO strings.
+
+export interface DailyMetricsInput {
+  date: IsoDate;
+  steps?: number;
+  restingHr?: number;
+  activeKcal?: number;
+  sleepMin?: number;
+  /** Origin package of the records. */
+  source: string;
+}
+
+export interface DailyMetrics extends DailyMetricsInput {
+  syncedAt: string;
+}
+
+export interface ExternalSessionInput {
+  hcRecordId: string;
+  originPackage: string;
+  activity: ExternalActivity;
+  /** Health Connect title, if any; otherwise one is made from the activity. */
+  title?: string;
+  startedAt: string;
+  endedAt: string;
+  distanceM?: number;
+  activeKcal?: number;
+  avgHr?: number;
+  maxHr?: number;
+  hasRoute: boolean;
+}
+
+export interface ExternalSession extends Omit<ExternalSessionInput, 'title'> {
+  id: string;
+  title: string;
+  status: 'new' | 'saved' | 'merged' | 'ignored';
+  rpe?: number;
+  note?: string;
+  /** Merged into this phone session. */
+  linkedSessionId?: string;
+  /** Agenda item the save completed. */
+  linkedPlanKey?: string;
+}
+
+export interface HealthImportResult {
+  /** Watch sessions merged into phone sessions: "Added Garmin heart rate to ...". */
+  merged: { externalId: string; sessionId: string; sessionName: string }[];
+  /** New sessions for the modal (status new), or saved when auto-matched. */
+  added: ExternalSession[];
+}
+
+/** A saved phone session whose time window still needs Health Connect HR. */
+export interface HrWindow {
+  sessionId: string;
+  startedAt: string;
+  endedAt: string;
+}
+
+export interface ExternalSave {
+  /** Agenda key to complete; omitted for "Not part of my plan". */
+  planKey?: string;
+  title: string;
+  activity: ExternalActivity;
+  rpe?: number;
+  note?: string;
 }
 
 // Sessions (M1): recorded runs. Track points are buffered in memory and written with
@@ -218,6 +306,8 @@ export interface SessionProgress {
   distanceM: number;
   /** Points since the last save (not the whole track). */
   points: TrackPoint[];
+  /** Live BLE samples since the last save. */
+  hr?: HrSample[];
 }
 
 export interface SessionFinish {
@@ -253,6 +343,10 @@ export interface SessionDetail extends SessionListItem {
   pauses: [number, number][];
   /** Full-resolution track; simplify with simplifyTo() for drawing. */
   points: TrackPoint[];
+  /** Live samples with Health Connect filling dropouts (mergeHr); pass to hrStats(). */
+  hr: HrSample[];
+  /** Health Connect HR has been added (summary banner "Heart rate added from Garmin"). */
+  hrFromHealth: boolean;
 }
 
 /** How a recurring (schedule) item moves. Plan workouts always move "once". */
@@ -327,6 +421,25 @@ export interface FitRepository {
   /** Saves the session and its sets, and marks the scheduled occurrence done (Done + data). */
   saveStrengthSession(input: StrengthSessionInput): string;
   exerciseHistory(exerciseId: string, limit: number): ExerciseHistoryEntry[];
+
+  // Health Connect (M2). Sync runs on app open, pull-to-refresh and after a save.
+  healthSyncState(): { changesToken?: string; lastSyncedAt?: string };
+  setHealthSyncState(state: { changesToken?: string; lastSyncedAt: string }): void;
+  upsertDailyMetrics(rows: readonly DailyMetricsInput[]): void;
+  dailyMetrics(date: IsoDate): DailyMetrics | undefined;
+  /** Idempotent by hcRecordId. Merges watch sessions overlapping a phone session by more than half. */
+  importExternalSessions(inputs: readonly ExternalSessionInput[]): HealthImportResult;
+  /** Saved phone sessions from `since` on that have live HR dropouts (or none) and no Health Connect HR yet. */
+  sessionsNeedingHr(since: string): HrWindow[];
+  /** Replaces the session's Health Connect samples. Empty input is a no-op, so the next sync retries. */
+  addHealthHr(sessionId: string, samples: readonly { time: string; bpm: number }[]): void;
+  pendingExternal(): ExternalSession[];
+  externalSession(id: string): ExternalSession | undefined;
+  planMatch(externalId: string): PlanMatch;
+  saveExternal(id: string, save: ExternalSave): void;
+  ignoreExternal(id: string): void;
+  /** Undo of a merge: drops the Health Connect HR it added and shows it in the modal instead. */
+  undoMerge(externalId: string): void;
 
   // Settings
   settings(): Settings;

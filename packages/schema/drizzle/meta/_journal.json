@@ -22,6 +22,13 @@
       "when": 1793038909839,
       "tag": "0002_catalog",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1793044720773,
+      "tag": "0003_health",
+      "breakpoints": true
     }
   ]
 }

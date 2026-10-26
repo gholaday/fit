@@ -12,3 +12,4 @@ export * from './schedule';
 export * from './session';
 export * from './routine';
 export * from './exercise';
+export * from './external';

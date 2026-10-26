@@ -61,12 +61,14 @@ export interface AgendaItem {
   skipReason?: SkipReason;
   /** Recorded session attached (completion level Done + data). */
   sessionId?: string;
+  /** Watch workout attached from Health Connect (also Done + data). */
+  externalSessionId?: string;
 }
 
 /** Completion level (spec §3), derived from status + what is attached. */
 export type CompletionLevel = 'done' | 'done_details' | 'done_data' | 'skipped' | 'moved' | 'pending';
 
-export function completionLevel(item: Pick<AgendaItem, 'status' | 'details' | 'date' | 'originalDate'>, hasSession = false): CompletionLevel {
+export function completionLevel(item: Pick<AgendaItem, 'status' | 'details' | 'date' | 'originalDate' | 'sessionId' | 'externalSessionId'>, hasSession = Boolean(item.sessionId ?? item.externalSessionId)): CompletionLevel {
   if (item.status === 'skipped') return 'skipped';
   if (item.status === 'done') {
     if (hasSession) return 'done_data';
