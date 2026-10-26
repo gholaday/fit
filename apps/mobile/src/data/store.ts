@@ -62,6 +62,8 @@ export interface FitState {
   /** Saved watch activities that started today. */
   todayExternal: readonly ExternalSession[];
   snack: Snack | undefined;
+  /** Missed 2+ weeks of the plan: ask "Rebuild plan from here?". */
+  rebuildPrompt: boolean;
 }
 
 const EMPTY: readonly string[] = [];
@@ -82,7 +84,7 @@ function initialWindow(today: IsoDate): { windowStart: IsoDate; windowEnd: IsoDa
 }
 
 /** Reads everything from the repository and merges it into `prev` with structural sharing. */
-function read(today: IsoDate, windowStart: IsoDate, windowEnd: IsoDate, prev?: FitState): Omit<FitState, 'snack'> {
+function read(today: IsoDate, windowStart: IsoDate, windowEnd: IsoDate, prev?: FitState): Omit<FitState, 'snack' | 'rebuildPrompt'> {
   const list = repo.agenda(windowStart, windowEnd);
   const items: Record<string, AgendaItem> = {};
   const dayKeys: Record<IsoDate, string[]> = {};
@@ -133,6 +135,7 @@ const firstWindow = initialWindow(firstToday);
 export const useFit = create<FitState>()(() => ({
   ...read(firstToday, firstWindow.windowStart, firstWindow.windowEnd),
   snack: undefined,
+  rebuildPrompt: false,
 }));
 
 // ---------- selectors (narrow, stable references) ----------
@@ -169,12 +172,28 @@ function reload(): void {
 }
 
 /** UI first, storage right after the frame, then reconcile. */
-function optimistic(apply: (s: FitState) => Partial<FitState>, write: () => void): void {
+function optimistic(apply: (s: FitState) => Partial<FitState>, write: () => void, adapt = false): void {
   useFit.setState(apply);
   setTimeout(() => {
     write();
+    if (adapt) adaptPlan(true, false);
     reload();
   }, 0);
+}
+
+/**
+ * Plan adaptation (spec §8): missed workouts move or drop, a missed week repeats. Runs at
+ * most once a day unless forced (after a save or a move). Changes show as one banner.
+ */
+function adaptPlan(force: boolean, reloadAfter = true): void {
+  const s = useFit.getState();
+  if (!s.plan) return;
+  const { events, rebuildPrompt } = repo.adaptPlan(s.today, force ? { force: true } : undefined);
+  if (rebuildPrompt && !s.rebuildPrompt) useFit.setState({ rebuildPrompt: true });
+  if (events.length === 0) return;
+  if (reloadAfter) reload();
+  // A move's own snack (with Undo) wins; the events stay on the Plan screen.
+  if (!s.snack) showSnack({ message: events.map((e) => e.message).join(' ') });
 }
 
 function patchItems(s: FitState, changes: Record<string, Partial<AgendaItem>>): Partial<FitState> {
@@ -212,6 +231,33 @@ export const actions = {
   /** Re-read after a write made outside these actions (a recorded run finishing). */
   reload,
 
+  /** App open, Plan open (daily), or forced after a recorded run is saved. */
+  adaptPlan,
+
+  /** "Rebuild plan from here?": a new plan with the same inputs, starting today. */
+  rebuildPlan(): PlanSummary {
+    const plan = repo.rebuildPlan(useFit.getState().today);
+    useFit.setState({ rebuildPrompt: false });
+    reload();
+    return plan;
+  },
+
+  dismissRebuild(): void {
+    useFit.setState({ rebuildPrompt: false });
+  },
+
+  /** Plan menu: pending workouts from today to Sunday move a day later. */
+  shiftRestOfWeek(): void {
+    repo.shiftRestOfWeek(useFit.getState().today);
+    reload();
+  },
+
+  /** Plan menu: every pending workout from today on moves a week later. */
+  pushPlanBack(): void {
+    repo.pushPlanBack(useFit.getState().today);
+    reload();
+  },
+
   refreshToday(): void {
     const today = localIsoDate(new Date());
     const s = useFit.getState();
@@ -232,6 +278,7 @@ export const actions = {
     optimistic(
       (s) => patchItems(s, { [key]: { status: 'done', completedAt, details, skipReason: undefined } }),
       () => repo.markDone(key, completedAt, details),
+      true,
     );
   },
 
@@ -257,6 +304,7 @@ export const actions = {
     optimistic(
       (s) => patchItems(s, { [key]: { date: toDate } }),
       () => repo.move(key, toDate, scope),
+      true,
     );
   },
 
@@ -268,6 +316,7 @@ export const actions = {
     optimistic(
       (st) => patchItems(st, { [keyA]: { date: b.date }, [keyB]: { date: a.date } }),
       () => repo.swap(keyA, keyB),
+      true,
     );
   },
 

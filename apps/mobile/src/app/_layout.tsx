@@ -10,6 +10,7 @@ import { reloadHealth } from '@/features/health/state';
 import { syncHealth } from '@/features/health/sync';
 import { ItemSheetHost } from '@/features/items/ItemSheet';
 import { MoveFlowHost } from '@/features/move/MoveFlowHost';
+import { RebuildPrompt } from '@/features/plan/RebuildPrompt';
 // Defines the background location task; must load at startup, before any run.
 import '@/features/run/recording';
 import { RecoveryPrompt } from '@/features/run/RecoveryPrompt';
@@ -25,6 +26,7 @@ export default function RootLayout() {
     let stop: (() => void) | undefined;
     const t = setTimeout(() => {
       void seedCatalogIfNeeded();
+      actions.adaptPlan(false);
       reloadHealth();
       void syncHealth();
       stop = startReminderSync();
@@ -40,6 +42,7 @@ export default function RootLayout() {
     const sub = AppState.addEventListener('change', (state) => {
       if (state !== 'active') return;
       actions.refreshToday();
+      actions.adaptPlan(false);
       void syncHealth();
     });
     return () => sub.remove();
@@ -73,6 +76,7 @@ export default function RootLayout() {
       <ItemSheetHost />
       <MoveFlowHost />
       <RecoveryPrompt />
+      <RebuildPrompt />
       <ActivityModalHost />
       <Snackbar />
     </GestureHandlerRootView>

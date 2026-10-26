@@ -285,6 +285,7 @@ export function saveRecovered(active: ActiveSession): void {
   });
   nameFreeRun(active.id);
   actions.reload();
+  actions.adaptPlan(true);
 }
 
 /** A free run gets a name from its day and shape ("Tuesday run and walk") once it is saved. */
@@ -455,6 +456,7 @@ export async function finishRun(): Promise<string | undefined> {
     });
     nameFreeRun(id);
     actions.reload();
+    actions.adaptPlan(true);
     // A watch that recorded the same run may already have synced.
     void syncHealth();
   }
