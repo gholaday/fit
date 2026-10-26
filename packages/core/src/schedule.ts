@@ -158,7 +158,8 @@ function mainHrRange(w: Workout, zones?: readonly HrZoneBand[]): AgendaItem['hrR
   return best?.range;
 }
 
-const planStatus = (s: PlanWorkoutRow['status']): AgendaStatus => (s === 'done' ? 'done' : s === 'skipped' ? 'skipped' : 'pending');
+// A workout the plan dropped (missed) shows like a skip: it no longer counts as pending.
+const planStatus = (s: PlanWorkoutRow['status']): AgendaStatus => (s === 'done' ? 'done' : s === 'skipped' || s === 'missed' ? 'skipped' : 'pending');
 
 export function buildAgenda(input: AgendaInput): AgendaItem[] {
   const items: AgendaItem[] = [];

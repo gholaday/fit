@@ -70,6 +70,12 @@ import {
   matchPlanItem,
   mergeHr,
   rescaleLog,
+  adaptPlan as adaptPlanRules,
+  isHardWorkout,
+  scaleItems,
+  shiftRestOfWeek as shiftRestOfWeekRule,
+  type AdaptItem,
+  type PlanEvent,
   trialResult,
   vdotBumpSuggestion,
   type PaceProfile,
@@ -148,13 +154,19 @@ function toPaceProfile(r: typeof t.paceProfiles.$inferSelect): PaceProfile {
   return p;
 }
 
-const toHrSample =(r: typeof t.hrSamples.$inferSelect): HrSample => ({ tOffsetMs: r.tOffsetMs, bpm: r.bpm, source: r.source });
+const toHrSample = (r: typeof t.hrSamples.$inferSelect): HrSample => ({ tOffsetMs: r.tOffsetMs, bpm: r.bpm, source: r.source });
+
+function toPlanEvent(r: typeof t.planEvents.$inferSelect): PlanEvent {
+  const e: PlanEvent = { id: r.id, type: r.type, message: r.message, createdAt: new Date(r.createdAt).toISOString() };
+  if (r.planWorkoutId) e.planWorkoutId = r.planWorkoutId;
+  return e;
+}
 
 /** Rows per seed insert; 50 rows of ~24 columns stays far under SQLite's variable limit. */
 const SEED_BATCH = 50;
 
 /** Settings rows the repository keeps for itself; settings() leaves them out. */
-const INTERNAL_SETTING_KEYS = new Set(['catalogVersion', 'paceBumpDismissedAt']);
+const INTERNAL_SETTING_KEYS = new Set(['catalogVersion', 'paceBumpDismissedAt', 'planAdaptedOn']);
 
 /** HR and route rows per insert (at most 8 columns each). */
 const HR_BATCH = 200;
@@ -377,7 +389,9 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     const inputs = JSON.parse(row.inputsJson) as PlanInputs;
     const info = presetInfo(row.presetId as PlanPresetId);
     const week1 = startOfWeek(row.startDate);
-    const currentWeek = Math.min(info.weeks, Math.max(1, Math.floor(diffDays(week1, onDate) / 7) + 1));
+    // From the dates, so a chosen length or a repeated week (adaptPlan) counts.
+    const weeks = Math.ceil((diffDays(week1, row.endDate) + 1) / 7);
+    const currentWeek = Math.min(weeks, Math.max(1, Math.floor(diffDays(week1, onDate) / 7) + 1));
     const rows = db
       .select({ status: t.planWorkouts.status, itemsJson: t.workouts.itemsJson })
       .from(t.planWorkouts)
@@ -399,7 +413,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       name: row.name,
       startDate: row.startDate,
       endDate: row.endDate,
-      weeks: info.weeks,
+      weeks,
       currentWeek,
       measure:
         info.measure === 'z2_minutes'
@@ -707,6 +721,137 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     abandonPlan(planId) {
       const row = db.select().from(t.plans).where(eq(t.plans.id, planId)).get();
       if (row?.status === 'active') abandonActive();
+    },
+
+    adaptPlan(onDate, opts = {}) {
+      const plan = db.select().from(t.plans).where(and(eq(t.plans.status, 'active'), notDeleted(t.plans))).get();
+      if (!plan) return { events: [], rebuildPrompt: false };
+      const last = db.select().from(t.settings).where(eq(t.settings.key, 'planAdaptedOn')).get();
+      if (!opts.force && last && (JSON.parse(last.valueJson) as string) === `${plan.id}@${onDate}`) return { events: [], rebuildPrompt: false };
+
+      const rows = db
+        .select({ pw: t.planWorkouts, w: t.workouts, rpe: t.sessions.rpe })
+        .from(t.planWorkouts)
+        .innerJoin(t.workouts, eq(t.workouts.id, t.planWorkouts.workoutId))
+        .leftJoin(t.sessions, eq(t.sessions.id, t.planWorkouts.sessionId))
+        .where(and(eq(t.planWorkouts.planId, plan.id), notDeleted(t.planWorkouts)))
+        .all();
+      const itemsOf = (json: string) => (JSON.parse(json) as { items: WorkoutItem[] }).items;
+      const result = adaptPlanRules({
+        today: onDate,
+        kind: presetInfo(plan.presetId as PlanPresetId).kind,
+        endDate: plan.endDate,
+        items: rows.map(({ pw, w, rpe }) => {
+          const a: AdaptItem = { id: pw.id, date: pw.date, weekIndex: pw.weekIndex, role: pw.role as PlanRole, status: pw.status, hard: isHardWorkout(pw.role, itemsOf(w.itemsJson)), name: w.name };
+          const r = pw.manualRpe ?? rpe;
+          if (r !== null && r !== undefined) a.rpe = r;
+          return a;
+        }),
+      });
+
+      const events: PlanEvent[] = [];
+      db.transaction((tx) => {
+        const workoutOf = (id: string) => rows.find((r) => r.pw.id === id)!;
+        const setItems = (workoutId: string, items: WorkoutItem[]) =>
+          tx.update(t.workouts)
+            .set({ itemsJson: JSON.stringify({ schemaVersion: WORKOUT_ITEMS_SCHEMA_VERSION, items }), ...stamp() })
+            .where(eq(t.workouts.id, workoutId))
+            .run();
+        for (const action of result.actions) {
+          switch (action.type) {
+            case 'missed':
+              tx.update(t.planWorkouts).set({ status: 'missed', ...stamp() }).where(eq(t.planWorkouts.id, action.id)).run();
+              break;
+            case 'move':
+              tx.update(t.planWorkouts).set({ date: action.to, ...stamp() }).where(eq(t.planWorkouts.id, action.id)).run();
+              break;
+            case 'repeat_long':
+              setItems(workoutOf(action.toId).w.id, itemsOf(workoutOf(action.fromId).w.itemsJson));
+              break;
+            case 'scale_week':
+              for (const r of rows.filter((x) => x.pw.weekIndex === action.week && x.pw.status === 'scheduled')) setItems(r.w.id, scaleItems(itemsOf(r.w.itemsJson), action.factor));
+              break;
+            case 'shift_weeks':
+              for (const r of rows.filter((x) => x.pw.weekIndex >= action.fromWeek && x.pw.status === 'scheduled')) {
+                tx.update(t.planWorkouts)
+                  .set({ date: addDays(r.pw.date, 7), originalDate: addDays(r.pw.originalDate, 7), ...stamp() })
+                  .where(eq(t.planWorkouts.id, r.pw.id))
+                  .run();
+              }
+              tx.update(t.plans).set({ endDate: addDays(plan.endDate, 7), ...stamp() }).where(eq(t.plans.id, plan.id)).run();
+              break;
+          }
+        }
+        // The easy-run hint repeats at most weekly.
+        const weekAgo = now() - 7 * 86_400_000;
+        const recentEasyHint = db
+          .select({ id: t.planEvents.id })
+          .from(t.planEvents)
+          .where(and(eq(t.planEvents.planId, plan.id), eq(t.planEvents.type, 'easy_too_hard'), gte(t.planEvents.createdAt, weekAgo)))
+          .get();
+        for (const e of result.events) {
+          if (e.type === 'easy_too_hard' && recentEasyHint) continue;
+          const id = newId();
+          const row = { id, planId: plan.id, planWorkoutId: e.planWorkoutId ?? null, type: e.type, message: e.message, deletedAt: null, ...created() };
+          tx.insert(t.planEvents).values(row).run();
+          events.push(toPlanEvent(row));
+        }
+        const valueJson = JSON.stringify(`${plan.id}@${onDate}`);
+        tx.insert(t.settings)
+          .values({ key: 'planAdaptedOn', valueJson, ...stamp() })
+          .onConflictDoUpdate({ target: t.settings.key, set: { valueJson, ...stamp() } })
+          .run();
+      });
+      return { events, rebuildPrompt: result.rebuildPrompt };
+    },
+
+    planEvents(limit) {
+      const plan = db.select({ id: t.plans.id }).from(t.plans).where(and(eq(t.plans.status, 'active'), notDeleted(t.plans))).get();
+      if (!plan) return [];
+      return db
+        .select()
+        .from(t.planEvents)
+        .where(and(eq(t.planEvents.planId, plan.id), notDeleted(t.planEvents)))
+        .orderBy(desc(t.planEvents.createdAt))
+        .limit(limit)
+        .all()
+        .map(toPlanEvent);
+    },
+
+    shiftRestOfWeek(from) {
+      const plan = db.select({ id: t.plans.id }).from(t.plans).where(and(eq(t.plans.status, 'active'), notDeleted(t.plans))).get();
+      if (!plan) return;
+      const rows = db
+        .select({ id: t.planWorkouts.id, date: t.planWorkouts.date, status: t.planWorkouts.status })
+        .from(t.planWorkouts)
+        .where(and(eq(t.planWorkouts.planId, plan.id), notDeleted(t.planWorkouts)))
+        .all();
+      db.transaction((tx) => {
+        for (const m of shiftRestOfWeekRule(rows, from)) {
+          tx.update(t.planWorkouts).set({ date: m.to, ...stamp() }).where(eq(t.planWorkouts.id, m.id)).run();
+        }
+      });
+    },
+
+    pushPlanBack(from) {
+      const plan = db.select().from(t.plans).where(and(eq(t.plans.status, 'active'), notDeleted(t.plans))).get();
+      if (!plan) return;
+      db.transaction((tx) => {
+        tx.update(t.planWorkouts)
+          .set({ date: sql`date(${t.planWorkouts.date}, '+7 days')`, originalDate: sql`date(${t.planWorkouts.originalDate}, '+7 days')`, ...stamp() })
+          .where(and(eq(t.planWorkouts.planId, plan.id), eq(t.planWorkouts.status, 'scheduled'), gte(t.planWorkouts.date, from), notDeleted(t.planWorkouts)))
+          .run();
+        tx.update(t.plans).set({ endDate: addDays(plan.endDate, 7), ...stamp() }).where(eq(t.plans.id, plan.id)).run();
+      });
+    },
+
+    rebuildPlan(onDate) {
+      const plan = db.select().from(t.plans).where(and(eq(t.plans.status, 'active'), notDeleted(t.plans))).get();
+      if (!plan) throw new Error('No active plan');
+      const inputs = JSON.parse(plan.inputsJson) as PlanInputs;
+      // Fitness plans restart today; race plans keep the race date with fewer weeks left.
+      const next: PlanInputs = presetInfo(inputs.presetId).kind === 'fitness' ? { ...inputs, startDate: onDate } : inputs;
+      return repo.createPlan(next, onDate);
     },
 
     routines(): Routine[] {

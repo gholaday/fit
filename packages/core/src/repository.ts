@@ -95,6 +95,14 @@ export interface PlanSummary {
   inputs: PlanInputs;
 }
 
+export interface PlanEvent {
+  id: string;
+  planWorkoutId?: string;
+  type: string;
+  message: string;
+  createdAt: string;
+}
+
 export interface Routine {
   id: string;
   kind: 'strength' | 'stretch';
@@ -429,6 +437,19 @@ export interface FitRepository {
   activePlan(today: IsoDate): PlanSummary | undefined;
   createPlan(inputs: PlanInputs, today: IsoDate): PlanSummary;
   abandonPlan(planId: string): void;
+  /**
+   * Applies the adaptation rules (adaptPlan) to the active plan and logs plan events.
+   * Call on plan open (it runs at most once a day), after a save and after a move.
+   */
+  adaptPlan(today: IsoDate, opts?: { force?: boolean }): { events: PlanEvent[]; rebuildPrompt: boolean };
+  /** Recent adaptation banners, newest first ("Moved Tempo run to Friday."). */
+  planEvents(limit: number): PlanEvent[];
+  /** Plan menu: pending workouts from `from` to Sunday move one day later. */
+  shiftRestOfWeek(from: IsoDate): void;
+  /** Plan menu: every pending workout from `from` on moves a week later (travel, sick). */
+  pushPlanBack(from: IsoDate): void;
+  /** "Rebuild plan from here?": a new plan with the same inputs, starting today. */
+  rebuildPlan(today: IsoDate): PlanSummary;
 
   // Weekly schedule
   routines(): Routine[];
