@@ -13,6 +13,7 @@ import { haptic } from '@/lib/haptics';
 import { createStyles, toneColor, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, IconButton, T } from '@/ui/primitives';
+import { PostRunCard } from '@/features/stretch/PostRunCard';
 import { stepAmount, stepName, stepTone } from './steps';
 
 const RouteMap = lazy(() => import('./RouteMap'));
@@ -93,6 +94,8 @@ export function SummaryScreen() {
           {session.mode === 'outdoor' && <Stat value={metersToUnit(session.distanceM, unit).toFixed(2)} label={unit === 'mi' ? 'Miles' : 'Kilometers'} />}
           {session.mode === 'outdoor' && <Stat value={pace(avgPace, unit)} label={`Pace /${unit}`} />}
         </View>
+
+        <PostRunCard endedAt={session.endedAt} />
 
         {session.steps.length > 1 && (
           <View style={s.card}>

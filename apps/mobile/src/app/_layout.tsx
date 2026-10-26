@@ -10,10 +10,25 @@ import { MoveFlowHost } from '@/features/move/MoveFlowHost';
 // Defines the background location task; must load at startup, before any run.
 import '@/features/run/recording';
 import { RecoveryPrompt } from '@/features/run/RecoveryPrompt';
+import { seedCatalogIfNeeded } from '@/features/library/catalog';
+import { startReminderSync } from '@/features/library/reminders';
 import { Snackbar } from '@/ui/Snackbar';
 
 export default function RootLayout() {
   const p = usePalette();
+
+  // The exercise catalog seeds after first paint, only when the bundled version is new.
+  useEffect(() => {
+    let stop: (() => void) | undefined;
+    const t = setTimeout(() => {
+      void seedCatalogIfNeeded();
+      stop = startReminderSync();
+    }, 300);
+    return () => {
+      clearTimeout(t);
+      stop?.();
+    };
+  }, []);
 
   // "Today" changes at midnight and while the app sits in the background.
   useEffect(() => {
@@ -34,6 +49,13 @@ export default function RootLayout() {
         <Stack.Screen name="run" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen name="summary/[id]" options={{ animation: 'fade' }} />
         <Stack.Screen name="replay/[id]" options={{ animation: 'fade', gestureEnabled: false }} />
+        <Stack.Screen name="routine/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="routine/edit" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="exercises" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="exercise/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="exercise/new" options={{ animation: 'slide_from_bottom' }} />
+        <Stack.Screen name="strength/[id]" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
+        <Stack.Screen name="stretch/[id]" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
       </Stack>
       <ItemSheetHost />
       <MoveFlowHost />

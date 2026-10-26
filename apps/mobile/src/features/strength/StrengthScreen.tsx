@@ -1,0 +1,484 @@
+/**
+ * Strength logger (spec §9, mockups Strength and WorkoutDone). Set rows prefill from last
+ * time, with last time's numbers greyed beside them. Checking a set starts the rest
+ * timer, which keeps time from timestamps and alerts at 0 even with the app in the
+ * background. Finish shows the summary and offers to update the routine.
+ */
+import {
+  formatClock,
+  kgToUnit,
+  type LoggedSet,
+  prefillSets,
+  type RoutineDetail,
+  routineFromLog,
+  type SetRow,
+  type StrengthItem,
+  unitToKg,
+  volumeKg,
+} from '@fit/core';
+import { router, useLocalSearchParams } from 'expo-router';
+import { memo, useEffect, useMemo, useState } from 'react';
+import { BackHandler, Pressable, ScrollView, View } from 'react-native';
+import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { repo } from '@/data';
+import { actions, useUnits } from '@/data/store';
+import { thousands } from '@/lib/format';
+import { haptic } from '@/lib/haptics';
+import { createStyles, usePalette } from '@/theme';
+import { Icons } from '@/ui/icons';
+import { Sheet } from '@/ui/Sheet';
+import { Button, IconButton, NumStepper, T } from '@/ui/primitives';
+import { onExercisesPicked } from '@/features/library/pick';
+import { setsSummary } from '@/features/library/ExerciseDetailScreen';
+import { cancelRest, startRest, useRest } from './rest';
+
+interface Row extends SetRow {
+  done: boolean;
+  completedAt?: string;
+}
+
+interface Block {
+  key: string;
+  exerciseId: string;
+  name: string;
+  restS: number;
+  rows: Row[];
+}
+
+function blocksFor(routine: RoutineDetail): Block[] {
+  if (routine.items.kind !== 'strength') return [];
+  const items = routine.items.items;
+  const last = repo.lastSets(items.map((i) => i.exerciseId));
+  return items.map((item, i) => ({
+    key: `${item.exerciseId}-${i}`,
+    exerciseId: item.exerciseId,
+    name: repo.exercise(item.exerciseId)?.name ?? 'Exercise',
+    restS: item.restS,
+    rows: prefillSets(item, last[item.exerciseId] ?? []).map((r) => ({ ...r, done: false })),
+  }));
+}
+
+export function StrengthScreen() {
+  const { id, key } = useLocalSearchParams<{ id: string; key?: string }>();
+  const [routine] = useState(() => repo.routine(id));
+  if (!routine || routine.items.kind !== 'strength') return null;
+  return <Logger routine={routine} scheduleKey={key} />;
+}
+
+function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?: string }) {
+  const s = useStyles();
+  const p = usePalette();
+  const insets = useSafeAreaInsets();
+  const unit = useUnits().weight;
+  const [startedAt] = useState(() => new Date());
+  const [blocks, setBlocks] = useState<Block[]>(() => blocksFor(routine));
+  const [editing, setEditing] = useState<{ b: number; r: number }>();
+  const [swapping, setSwapping] = useState<number>();
+  const [leaving, setLeaving] = useState(false);
+  const [finished, setFinished] = useState<{ endedAt: Date; sets: LoggedSet[] }>();
+
+  useEffect(() => cancelRest, []);
+  // Back asks before throwing a workout away.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (finished) return false;
+      setLeaving(true);
+      return true;
+    });
+    return () => sub.remove();
+  }, [finished]);
+
+  const doneSets = (bs: Block[]): (LoggedSet & { completedAt: string })[] =>
+    bs.flatMap((b) =>
+      b.rows
+        .filter((r) => r.done)
+        .map((r, setIdx) => ({ exerciseId: b.exerciseId, setIdx, reps: r.reps, ...(r.weightKg !== undefined ? { weightKg: r.weightKg } : {}), completedAt: r.completedAt! })),
+    );
+
+  const update = (b: number, fn: (block: Block) => Block) => setBlocks((cur) => cur.map((x, i) => (i === b ? fn(x) : x)));
+
+  const toggle = (b: number, r: number) => {
+    const block = blocks[b]!;
+    const row = block.rows[r]!;
+    const done = !row.done;
+    if (done) {
+      haptic.commit();
+      if (block.restS > 0) startRest(block.restS, block.name);
+    } else haptic.tick();
+    update(b, (x) => ({ ...x, rows: x.rows.map((y, j) => (j === r ? { ...y, done, completedAt: done ? new Date().toISOString() : undefined } : y)) }));
+  };
+
+  const addSet = (b: number) => {
+    haptic.commit();
+    update(b, (x) => {
+      const last = x.rows.at(-1);
+      return { ...x, rows: [...x.rows, { setIdx: x.rows.length, reps: last?.reps ?? 10, ...(last?.weightKg !== undefined ? { weightKg: last.weightKg } : {}), done: false }] };
+    });
+  };
+  const removeSet = (b: number, r: number) => {
+    haptic.commit();
+    setEditing(undefined);
+    update(b, (x) => ({ ...x, rows: x.rows.filter((_, j) => j !== r).map((y, j) => ({ ...y, setIdx: j })) }));
+  };
+
+  const pickExercises = (replace?: number) => {
+    onExercisesPicked((picked) => {
+      const last = repo.lastSets(picked.map((e) => e.id));
+      const fresh = picked.map((e, i): Block => {
+        const item: StrengthItem = { exerciseId: e.id, sets: 3, reps: 10, restS: routine.items.kind === 'strength' ? routine.items.restS : 90 };
+        return { key: `${e.id}-${Date.now()}-${i}`, exerciseId: e.id, name: e.name, restS: item.restS, rows: prefillSets(item, last[e.id] ?? []).map((r) => ({ ...r, done: false })) };
+      });
+      setBlocks((cur) => (replace === undefined ? [...cur, ...fresh] : cur.flatMap((x, i) => (i === replace ? fresh.slice(0, 1).map((f) => ({ ...f, restS: x.restS })) : [x]))));
+    });
+    router.push({ pathname: '/exercises', params: { pick: 'strength' } });
+  };
+
+  const finish = () => {
+    const sets = doneSets(blocks);
+    cancelRest();
+    if (sets.length === 0) {
+      setLeaving(true);
+      return;
+    }
+    const endedAt = new Date();
+    repo.saveStrengthSession({ name: routine.name, routineId: routine.id, ...(scheduleKey ? { scheduleKey } : {}), startedAt: startedAt.toISOString(), endedAt: endedAt.toISOString(), sets });
+    actions.reload();
+    haptic.success();
+    setFinished({ endedAt, sets });
+  };
+
+  if (finished) return <Finished routine={routine} startedAt={startedAt} endedAt={finished.endedAt} sets={finished.sets} blocks={blocks} />;
+
+  const edit = editing ? blocks[editing.b]?.rows[editing.r] : undefined;
+  const weightStep = unit === 'lb' ? 5 : 2.5;
+  return (
+    <View style={s.screen}>
+      <View style={[s.top, { paddingTop: insets.top + 8 }]}>
+        <IconButton label="Leave workout" size={40} onPress={() => setLeaving(true)}>
+          <Icons.x size={20} color={p.text} />
+        </IconButton>
+        <View style={{ flex: 1, alignItems: 'center' }}>
+          <T v="labelStrong" numberOfLines={1}>
+            {routine.name}
+          </T>
+          <Elapsed since={startedAt} />
+        </View>
+        <Button label="Finish" size="sm" onPress={finish} />
+      </View>
+      <RestBanner />
+
+      <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+        {blocks.map((block, b) => (
+          <Animated.View key={block.key} layout={LinearTransition.duration(200)} style={s.card}>
+            <View style={s.cardHead}>
+              <T v="bodyStrong" numberOfLines={1} style={{ flex: 1 }}>
+                {block.name}
+              </T>
+              <IconButton label={`Swap ${block.name}`} size={32} bg="none" onPress={() => setSwapping(b)}>
+                <Icons.swap size={18} color={p.textSecondary} />
+              </IconButton>
+            </View>
+            <View style={s.headRow}>
+              <T v="micro" tone="tertiary" style={s.colSet}>
+                Set
+              </T>
+              <T v="micro" tone="tertiary" style={s.colPrev}>
+                Previous
+              </T>
+              <T v="micro" tone="tertiary" style={s.colNum}>
+                {unit}
+              </T>
+              <T v="micro" tone="tertiary" style={s.colNum}>
+                Reps
+              </T>
+              <View style={s.colCheck} />
+            </View>
+            {block.rows.map((row, r) => (
+              <SetLine key={r} row={row} unit={unit} onEdit={() => setEditing({ b, r })} onToggle={() => toggle(b, r)} />
+            ))}
+            <Pressable accessibilityRole="button" onPress={() => addSet(b)} style={({ pressed }) => [s.addSet, pressed && { opacity: 0.6 }]}>
+              <Icons.plus size={14} color={p.textSecondary} />
+              <T v="label" tone="secondary">
+                Add set
+              </T>
+            </Pressable>
+          </Animated.View>
+        ))}
+        <Button label="Add exercise" kind="outline" icon={<Icons.plus size={16} color={p.text} />} onPress={() => pickExercises()} />
+      </ScrollView>
+
+      <Sheet visible={!!edit} onClose={() => setEditing(undefined)} title={editing && edit ? `${blocks[editing.b]!.name}, set ${editing.r + 1}` : ''}>
+        {editing && edit && (
+          <View style={{ gap: 12 }}>
+            <View style={s.sheetRow}>
+              <T v="bodyMedium">Weight</T>
+              <NumStepper
+                label="Weight"
+                value={edit.weightKg ? Math.round(kgToUnit(edit.weightKg, unit) / weightStep) * weightStep : 0}
+                min={0}
+                max={unit === 'lb' ? 700 : 320}
+                step={weightStep}
+                format={(n) => (n === 0 ? 'None' : `${n} ${unit}`)}
+                onChange={(n) => update(editing.b, (x) => ({ ...x, rows: x.rows.map((y, j) => (j === editing.r ? { ...y, weightKg: n === 0 ? undefined : unitToKg(n, unit) } : y)) }))}
+              />
+            </View>
+            <View style={s.sheetRow}>
+              <T v="bodyMedium">Reps</T>
+              <NumStepper label="Reps" value={edit.reps} min={0} max={100} onChange={(reps) => update(editing.b, (x) => ({ ...x, rows: x.rows.map((y, j) => (j === editing.r ? { ...y, reps } : y)) }))} />
+            </View>
+            <Button label="Done" onPress={() => setEditing(undefined)} />
+            <Button label="Remove set" kind="quiet" onPress={() => removeSet(editing.b, editing.r)} />
+          </View>
+        )}
+      </Sheet>
+
+      <Sheet visible={swapping !== undefined} onClose={() => setSwapping(undefined)} title="Swap exercise">
+        <View style={{ gap: 10 }}>
+          <T v="body" tone="secondary">
+            For this session only. The routine keeps its exercise.
+          </T>
+          <Button
+            label="Pick a different exercise"
+            onPress={() => {
+              const b = swapping;
+              setSwapping(undefined);
+              pickExercises(b);
+            }}
+          />
+          <Button
+            label="Remove from this session"
+            kind="quiet"
+            onPress={() => {
+              const b = swapping;
+              setSwapping(undefined);
+              haptic.commit();
+              setBlocks((cur) => cur.filter((_, i) => i !== b));
+            }}
+          />
+        </View>
+      </Sheet>
+
+      <Sheet visible={leaving} onClose={() => setLeaving(false)} title="Leave workout">
+        <View style={{ gap: 10 }}>
+          <T v="body" tone="secondary">
+            {doneSets(blocks).length === 0 ? 'No sets are checked yet, so there is nothing to save.' : 'Finish saves the checked sets. Leaving throws them away.'}
+          </T>
+          {doneSets(blocks).length > 0 && (
+            <Button
+              label="Finish workout"
+              onPress={() => {
+                setLeaving(false);
+                finish();
+              }}
+            />
+          )}
+          <Button label="Keep going" kind="outline" onPress={() => setLeaving(false)} />
+          <Button
+            label="Leave without saving"
+            kind="quiet"
+            onPress={() => {
+              cancelRest();
+              setLeaving(false);
+              router.back();
+            }}
+          />
+        </View>
+      </Sheet>
+    </View>
+  );
+}
+
+const SetLine = memo(function SetLine({ row, unit, onEdit, onToggle }: { row: Row; unit: 'lb' | 'kg'; onEdit: () => void; onToggle: () => void }) {
+  const s = useStyles();
+  const p = usePalette();
+  const prev = row.previous ? (row.previous.weightKg ? `${Math.round(kgToUnit(row.previous.weightKg, unit))} x ${row.previous.reps}` : `${row.previous.reps}`) : '-';
+  return (
+    <View style={[s.setRow, row.done && { backgroundColor: p.success + '1F' }]}>
+      <T v="labelStrong" tone="secondary" style={s.colSet} num>
+        {String(row.setIdx + 1)}
+      </T>
+      <T v="label" tone="tertiary" style={s.colPrev} num>
+        {prev}
+      </T>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Weight, set ${row.setIdx + 1}`} onPress={onEdit} style={[s.colNum, s.cell]}>
+        <T v="bodyStrong" num>
+          {row.weightKg ? String(Math.round(kgToUnit(row.weightKg, unit) * 10) / 10) : '-'}
+        </T>
+      </Pressable>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Reps, set ${row.setIdx + 1}`} onPress={onEdit} style={[s.colNum, s.cell]}>
+        <T v="bodyStrong" num>
+          {String(row.reps)}
+        </T>
+      </Pressable>
+      <Pressable
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: row.done }}
+        accessibilityLabel={`Set ${row.setIdx + 1} done`}
+        hitSlop={6}
+        onPress={onToggle}
+        style={[s.colCheck, s.check, row.done && { backgroundColor: p.success, borderColor: p.success }]}
+      >
+        {row.done && <Icons.check size={16} color={p.onPrimary} />}
+      </Pressable>
+    </View>
+  );
+});
+
+/** Workout clock: only this text re-renders each second. */
+function Elapsed({ since }: { since: Date }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  return (
+    <T v="micro" tone="secondary" num>
+      {formatClock(Math.floor((now - since.getTime()) / 1000))}
+    </T>
+  );
+}
+
+/** Rest countdown under the top bar, with +30 s and skip. */
+function RestBanner() {
+  const s = useStyles();
+  const p = usePalette();
+  const endsAt = useRest((r) => r.endsAt);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!endsAt) return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 250);
+    return () => clearInterval(t);
+  }, [endsAt]);
+  if (!endsAt) return null;
+  const left = Math.max(0, Math.ceil((endsAt - now) / 1000));
+  return (
+    <Animated.View entering={FadeIn.duration(150)} exiting={FadeOut.duration(150)} style={s.rest}>
+      <T v="labelStrong" color={p.onPrimary}>
+        Rest
+      </T>
+      <T v="title" num color={p.onPrimary} style={{ flex: 1 }}>
+        {left === 0 ? 'Go' : formatClock(left)}
+      </T>
+      <Pressable accessibilityRole="button" accessibilityLabel="Add 30 seconds of rest" onPress={() => startRest(Math.max(0, (endsAt - Date.now()) / 1000) + 30)} style={s.restBtn}>
+        <T v="labelStrong" color={p.onPrimary}>
+          +30 s
+        </T>
+      </Pressable>
+      <IconButton label="Skip rest" size={36} bg="none" onPress={cancelRest}>
+        <Icons.x size={18} color={p.onPrimary} />
+      </IconButton>
+    </Animated.View>
+  );
+}
+
+/** Finish summary (mockup WorkoutDone) and "Update routine with these values?". */
+function Finished({ routine, startedAt, endedAt, sets, blocks }: { routine: RoutineDetail; startedAt: Date; endedAt: Date; sets: LoggedSet[]; blocks: Block[] }) {
+  const s = useStyles();
+  const insets = useSafeAreaInsets();
+  const unit = useUnits().weight;
+  const [answered, setAnswered] = useState(false);
+  const suggestion = useMemo(() => (routine.items.kind === 'strength' ? routineFromLog(routine.items, sets) : undefined), [routine, sets]);
+  const minutes = Math.max(1, Math.round((endedAt.getTime() - startedAt.getTime()) / 60000));
+  const volume = volumeKg(sets);
+  const starter = routine.origin === 'starter';
+
+  const apply = () => {
+    if (!suggestion) return;
+    if (starter) {
+      const copy = repo.duplicateRoutine(routine.id, `${routine.name} (mine)`);
+      repo.updateRoutine(copy, { name: `${routine.name} (mine)`, items: suggestion });
+    } else repo.updateRoutine(routine.id, { name: routine.name, items: suggestion, ...(routine.notes ? { notes: routine.notes } : {}) });
+    actions.reload();
+    haptic.success();
+    setAnswered(true);
+  };
+
+  return (
+    <View style={s.screen}>
+      <ScrollView contentContainerStyle={[s.content, { paddingTop: insets.top + 24 }]} showsVerticalScrollIndicator={false}>
+        <T v="caption" tone="secondary">
+          Workout finished
+        </T>
+        <T v="display" accessibilityRole="header">
+          {routine.name}
+        </T>
+        <View style={s.stats}>
+          <Stat value={`${minutes} min`} label="Duration" />
+          <Stat value={String(sets.length)} label="Sets" />
+          <Stat value={volume > 0 ? `${thousands(Math.round(kgToUnit(volume, unit)))} ${unit}` : '-'} label="Volume" />
+        </View>
+        <View style={s.card}>
+          {blocks
+            .filter((b) => b.rows.some((r) => r.done))
+            .map((b, i) => (
+              <View key={b.key} style={[s.doneRow, i > 0 && s.divider]}>
+                <T v="bodyMedium" numberOfLines={1} style={{ flex: 1 }}>
+                  {b.name}
+                </T>
+                <T v="label" tone="secondary" num>
+                  {setsSummary(
+                    sets.filter((x) => x.exerciseId === b.exerciseId),
+                    unit,
+                  )}
+                </T>
+              </View>
+            ))}
+        </View>
+        {suggestion && !answered && (
+          <Animated.View entering={FadeIn.duration(200)} style={[s.card, { paddingVertical: 14, gap: 10 }]}>
+            <T v="bodyStrong">{starter ? `Save these weights as your own ${routine.name}?` : `Update ${routine.name} with these values?`}</T>
+            <T v="caption" tone="secondary">
+              {starter ? 'Starter routines are read-only, so this makes a copy. Next time starts from the new numbers.' : 'Next time starts from the new numbers.'}
+            </T>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Button label="Keep as is" kind="outline" size="md" style={{ flex: 1 }} onPress={() => setAnswered(true)} />
+              <Button label={starter ? 'Save a copy' : 'Update'} size="md" style={{ flex: 1 }} onPress={apply} />
+            </View>
+          </Animated.View>
+        )}
+      </ScrollView>
+      <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>
+        <Button label="Done" onPress={() => router.back()} />
+      </View>
+    </View>
+  );
+}
+
+function Stat({ value, label }: { value: string; label: string }) {
+  return (
+    <View style={{ flex: 1 }}>
+      <T v="title" num>
+        {value}
+      </T>
+      <T v="caption" tone="secondary">
+        {label}
+      </T>
+    </View>
+  );
+}
+
+const useStyles = createStyles((p) => ({
+  screen: { flex: 1, backgroundColor: p.bg },
+  top: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 16, paddingBottom: 8 },
+  content: { paddingHorizontal: 16, paddingTop: 8, gap: 12 },
+  card: { backgroundColor: p.surface, borderRadius: 16, paddingHorizontal: 12, paddingBottom: 4 },
+  cardHead: { flexDirection: 'row', alignItems: 'center', paddingTop: 10 },
+  headRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 4 },
+  setRow: { flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: 10 },
+  colSet: { width: 36, textAlign: 'center' },
+  colPrev: { flex: 1 },
+  colNum: { width: 72, alignItems: 'center', textAlign: 'center' },
+  colCheck: { width: 44, alignItems: 'center' },
+  cell: { height: 38, justifyContent: 'center', borderRadius: 10, backgroundColor: p.inset, marginHorizontal: 4 },
+  check: { width: 32, height: 32, borderRadius: 10, borderWidth: 1.5, borderColor: p.dashed, justifyContent: 'center', marginLeft: 6 },
+  addSet: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40 },
+  rest: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 8, paddingLeft: 16, paddingRight: 6, height: 56, borderRadius: 16, backgroundColor: p.primary },
+  restBtn: { height: 36, paddingHorizontal: 12, borderRadius: 12, justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.14)' },
+  sheetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  stats: { flexDirection: 'row', gap: 10, paddingVertical: 8 },
+  doneRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
+  divider: { borderTopWidth: 1, borderTopColor: p.divider },
+  footer: { paddingHorizontal: 20, paddingTop: 8 },
+}));

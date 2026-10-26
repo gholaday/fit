@@ -5,6 +5,7 @@
   "dependencies": {
     "@expo-google-fonts/inter": "^0.4.2",
     "@fit/core": "workspace:*",
+    "@fit/exercise-catalog": "workspace:*",
     "@fit/schema": "workspace:*",
     "@maplibre/maplibre-react-native": "11.5.0",
     "@shopify/flash-list": "2.3.2",
@@ -23,6 +24,7 @@
     "expo-keep-awake": "~58.0.3",
     "expo-linking": "~58.0.14",
     "expo-location": "~58.0.19",
+    "expo-notifications": "~58.1.6",
     "expo-router": "~58.0.26",
     "expo-secure-store": "~58.0.2",
     "expo-speech": "~58.0.3",

@@ -1,4 +1,5 @@
 import { type AgendaItem, type IsoDate, type SkipReason, addDays, dateRange, formatMinutes, metersToUnit, startOfWeek, unitToMeters, weekdayOf } from '@fit/core';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { create } from 'zustand';
@@ -81,10 +82,23 @@ function Actions({ item }: { item: AgendaItem }) {
       </View>
     );
   }
+  // Workouts and stretches open the logger or the guided player; runs start from Today.
+  const guided = item.source.type === 'schedule' ? (item.lane === 'stretch' ? '/stretch/[id]' : '/strength/[id]') : undefined;
   return (
     <View style={{ gap: 8 }}>
+      {guided && (
+        <Button
+          label="Start"
+          onPress={() => {
+            close();
+            haptic.commit();
+            router.push({ pathname: guided, params: { id: item.refId, key: item.key } });
+          }}
+        />
+      )}
       <Button
         label="Done"
+        kind={guided ? 'outline' : 'primary'}
         onPress={() => {
           close();
           markDoneNow(item);

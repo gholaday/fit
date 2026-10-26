@@ -1,5 +1,3 @@
-import { Placeholder } from '@/ui/Placeholder';
+import { LibraryScreen } from '@/features/library/LibraryScreen';
 
-export default function Library() {
-  return <Placeholder title="Library" body="Workouts, stretch routines and custom runs will be listed here. Not available yet." />;
-}
+export default LibraryScreen;

@@ -14,8 +14,10 @@ import IconCalendar from '@tabler/icons-react-native/IconCalendar';
 import IconCalendarEvent from '@tabler/icons-react-native/IconCalendarEvent';
 import IconChartBar from '@tabler/icons-react-native/IconChartBar';
 import IconCheck from '@tabler/icons-react-native/IconCheck';
+import IconChevronDown from '@tabler/icons-react-native/IconChevronDown';
 import IconChevronLeft from '@tabler/icons-react-native/IconChevronLeft';
 import IconChevronRight from '@tabler/icons-react-native/IconChevronRight';
+import IconChevronUp from '@tabler/icons-react-native/IconChevronUp';
 import IconClock from '@tabler/icons-react-native/IconClock';
 import IconCurrentLocation from '@tabler/icons-react-native/IconCurrentLocation';
 import IconDots from '@tabler/icons-react-native/IconDots';
@@ -29,6 +31,7 @@ import IconMap from '@tabler/icons-react-native/IconMap';
 import IconMountain from '@tabler/icons-react-native/IconMountain';
 import IconPlayerPauseFilled from '@tabler/icons-react-native/IconPlayerPauseFilled';
 import IconPlayerPlayFilled from '@tabler/icons-react-native/IconPlayerPlayFilled';
+import IconPlayerSkipBackFilled from '@tabler/icons-react-native/IconPlayerSkipBackFilled';
 import IconPlayerSkipForwardFilled from '@tabler/icons-react-native/IconPlayerSkipForwardFilled';
 import IconPlayerStopFilled from '@tabler/icons-react-native/IconPlayerStopFilled';
 import IconPlus from '@tabler/icons-react-native/IconPlus';
@@ -75,6 +78,8 @@ export const Icons = {
   check: wrap(IconCheck),
   chevronLeft: wrap(IconChevronLeft),
   chevronRight: wrap(IconChevronRight),
+  chevronUp: wrap(IconChevronUp),
+  chevronDown: wrap(IconChevronDown),
   clock: wrap(IconClock),
   dots: wrap(IconDots),
   info: wrap(IconInfoCircle),
@@ -98,6 +103,7 @@ export const Icons = {
   battery: wrap(IconBattery),
   pause: wrap(IconPlayerPauseFilled),
   play: wrap(IconPlayerPlayFilled),
+  previous: wrap(IconPlayerSkipBackFilled),
   skip: wrap(IconPlayerSkipForwardFilled),
   stop: wrap(IconPlayerStopFilled),
 } as const;
