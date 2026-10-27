@@ -333,6 +333,8 @@ function Controls({ step, onEnd, light }: { step: Step; onEnd: () => void; light
   const phase = useRun((r) => r.phase);
   const paused = phase === 'paused';
   const open = step.duration.type === 'open';
+  // Skipping the last step would end the run outright; it asks first, like Stop.
+  const last = useRun((r) => r.stepIdx >= r.steps.length - 1);
   const side = [s.ctrl, light ? { backgroundColor: 'rgba(255,255,255,0.7)' } : null];
   return (
     <View style={s.controls}>
@@ -359,15 +361,16 @@ function Controls({ step, onEnd, light }: { step: Step; onEnd: () => void; light
       </Pressable>
       <Pressable
         accessibilityRole="button"
-        accessibilityLabel={open ? 'Lap' : 'Skip step'}
+        accessibilityLabel={open ? 'Lap' : last ? 'Finish' : 'Skip step'}
         style={side}
         onPress={() => {
           haptic.commit();
           if (open) lap();
+          else if (last) onEnd();
           else skipStep();
         }}
       >
-        {open ? <Icons.flag size={20} color={p.text} /> : <Icons.skip size={20} color={p.text} />}
+        {open ? <Icons.flag size={20} color={p.text} /> : last ? <Icons.check size={20} color={p.text} /> : <Icons.skip size={20} color={p.text} />}
       </Pressable>
     </View>
   );
