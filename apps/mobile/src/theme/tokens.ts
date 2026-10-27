@@ -46,6 +46,8 @@ export interface Palette {
   sprint: ActivityColor;
   walk: string;
   success: string;
+  /** Gold for record trophies, the one saturated accent. */
+  trophy: string;
 }
 
 export const light: Palette = {
@@ -77,6 +79,7 @@ export const light: Palette = {
   sprint: { color: '#B97A5B', tint: '#F5E4DC', onTint: '#7E4630', pending: '#EED8CD' },
   walk: '#C9CACF',
   success: '#5F9370',
+  trophy: '#E0A800',
 };
 
 export const dark: Palette = {
@@ -109,6 +112,7 @@ export const dark: Palette = {
   sprint: { color: '#CC9479', tint: '#2E221D', onTint: '#E7BCA7', pending: '#382821' },
   walk: '#4B4E57',
   success: '#8DB596',
+  trophy: '#F2C230',
 };
 
 export function laneColor(p: Palette, lane: Lane): ActivityColor {

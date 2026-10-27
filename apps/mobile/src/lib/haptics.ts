@@ -33,6 +33,10 @@ export const haptic = {
   lift(): void {
     fire(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium));
   },
+  /** A checked set beat a record: the trophy on the set row. */
+  record(): void {
+    fire(() => Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Soft));
+  },
   /** Finishing a flow: plan created, zones saved. */
   success(): void {
     fire(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success));

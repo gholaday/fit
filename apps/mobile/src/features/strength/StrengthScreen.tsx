@@ -10,6 +10,7 @@ import {
   formatWeight,
   localIsoDate,
   kgToUnit,
+  type LiftRecordKind,
   type LoggedSet,
   prefillSets,
   type RoutineDetail,
@@ -39,6 +40,7 @@ import { setsSummary } from '@/features/library/ExerciseDetailScreen';
 import { NumPad, PAD_HEIGHT, type PadKey, pressKey } from './NumPad';
 import { cancelRest, startRest, useRest } from './rest';
 import { StatusShade } from '@/ui/StatusShade';
+import { type Bests, RecordRow, replaySets, Trophy, workoutRecords } from '@/features/records/records';
 
 interface Row extends SetRow {
   done: boolean;
@@ -78,6 +80,16 @@ function blocksFor(routine: RoutineDetail): Block[] {
   }));
 }
 
+/** The checked rows that beat a record, replayed in the order they were checked. */
+function trophies(blocks: Block[], bests: Bests): Map<Row, LiftRecordKind[]> {
+  const checked = blocks
+    .flatMap((b) => b.rows.filter((r) => r.done).map((row) => ({ exerciseId: b.exerciseId, reps: row.reps, ...(row.weightKg !== undefined ? { weightKg: row.weightKg } : {}), row })))
+    .sort((a, b) => a.row.completedAt!.localeCompare(b.row.completedAt!));
+  return new Map([...replaySets(checked, bests).beaten].map(([set, kinds]) => [set.row, kinds]));
+}
+
+const unchecked = (blocks: Block[]) => blocks.reduce((n, b) => n + b.rows.filter((r) => !r.done).length, 0);
+
 /** `/strength/new` is an empty workout: no routine, lifts added as you go. */
 export const EMPTY_WORKOUT = 'new';
 const EMPTY_NAME = 'Workout';
@@ -98,12 +110,15 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail | undefined; 
   const unit = useUnits().weight;
   const [startedAt] = useState(() => new Date());
   const [blocks, setBlocks] = useState<Block[]>(() => (routine ? blocksFor(routine) : []));
+  // Records from before this session; trophies are judged against them as sets are checked.
+  const [bests, setBests] = useState<Bests>(() => (routine?.items.kind === 'strength' ? repo.liftBests(routine.items.items.map((i) => i.exerciseId)) : {}));
   const [pad, setPad] = useState<Pad>();
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   const scrollY = useRef(0);
   const winH = useWindowDimensions().height;
   const [swapping, setSwapping] = useState<number>();
   const [leaving, setLeaving] = useState(false);
+  const [ending, setEnding] = useState(false);
   const [finished, setFinished] = useState<{ endedAt: Date; sets: LoggedSet[] }>();
 
   useEffect(() => cancelRest, []);
@@ -132,11 +147,14 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail | undefined; 
     const block = blocks[b]!;
     const row = block.rows[r]!;
     const done = !row.done;
+    const nextRow: Row = { ...row, done, completedAt: done ? new Date().toISOString() : undefined };
+    const next = blocks.map((x, i) => (i === b ? { ...x, rows: x.rows.map((y, j) => (j === r ? nextRow : y)) } : x));
+    setBlocks(next);
     if (done) {
-      haptic.commit();
+      if (trophies(next, bests).has(nextRow)) haptic.record();
+      else haptic.commit();
       if (block.restS > 0) startRest(block.restS, block.name);
     } else haptic.tick();
-    update(b, (x) => ({ ...x, rows: x.rows.map((y, j) => (j === r ? { ...y, done, completedAt: done ? new Date().toISOString() : undefined } : y)) }));
   };
 
   const addSet = (b: number) => {
@@ -190,6 +208,8 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail | undefined; 
   const pickExercises = (replace?: number) => {
     onExercisesPicked((picked) => {
       const last = repo.lastSets(picked.map((e) => e.id));
+      const picks = repo.liftBests(picked.map((e) => e.id));
+      setBests((cur) => ({ ...picks, ...cur }));
       const fresh = picked.map((e, i): Block => {
         const item: StrengthItem = { exerciseId: e.id, sets: 3, reps: 10, restS: routine?.items.kind === 'strength' ? routine.items.restS : DEFAULT_REST_S };
         return { key: `${e.id}-${Date.now()}-${i}`, exerciseId: e.id, name: e.name, restS: item.restS, rows: prefillSets(item, last[e.id] ?? []).map((r) => ({ ...r, done: false })) };
@@ -218,7 +238,8 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail | undefined; 
     actions.reload();
   };
 
-  if (finished) return <Finished routine={routine} name={name} startedAt={startedAt} endedAt={finished.endedAt} sets={finished.sets} blocks={blocks} onSave={save} />;
+  if (finished) return <Finished routine={routine} name={name} startedAt={startedAt} endedAt={finished.endedAt} sets={finished.sets} blocks={blocks} bests={bests} onSave={save} />;
+  const won = trophies(blocks, bests);
 
   return (
     <View style={s.screen}>
@@ -232,7 +253,15 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail | undefined; 
           </T>
           <Elapsed since={startedAt} />
         </View>
-        <Button label="Finish" size="sm" onPress={finish} />
+        <Button
+          label="Finish"
+          size="sm"
+          onPress={() => {
+            setPad(undefined);
+            if (doneSets(blocks).length === 0) setLeaving(true);
+            else setEnding(true);
+          }}
+        />
       </View>
       <RestBanner />
 
@@ -275,6 +304,7 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail | undefined; 
               <SetLine
                 key={r}
                 row={row}
+                record={won.has(row)}
                 unit={unit}
                 focused={pad && pad.b === b && pad.r === r ? pad.field : undefined}
                 buf={pad && pad.b === b && pad.r === r ? pad.buf : undefined}
@@ -333,6 +363,22 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail | undefined; 
         </View>
       </Sheet>
 
+      <Sheet visible={ending} onClose={() => setEnding(false)} title="Finish workout">
+        <View style={{ gap: 10 }}>
+          <T v="body" tone="secondary">
+            {unchecked(blocks) > 0 ? `${unchecked(blocks)} ${unchecked(blocks) === 1 ? 'set is' : 'sets are'} not checked and will not be saved.` : 'Every set is checked.'}
+          </T>
+          <Button
+            label="Finish workout"
+            onPress={() => {
+              setEnding(false);
+              finish();
+            }}
+          />
+          <Button label="Keep going" kind="outline" onPress={() => setEnding(false)} />
+        </View>
+      </Sheet>
+
       <Sheet visible={leaving} onClose={() => setLeaving(false)} title="Leave workout">
         <View style={{ gap: 10 }}>
           <T v="body" tone="secondary">
@@ -365,6 +411,7 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail | undefined; 
 
 const SetLine = memo(function SetLine({
   row,
+  record,
   unit,
   focused,
   buf,
@@ -372,6 +419,8 @@ const SetLine = memo(function SetLine({
   onToggle,
 }: {
   row: Row;
+  /** Checked and beat a record: a trophy between Previous and the weight. */
+  record: boolean;
   unit: 'lb' | 'kg';
   /** The cell the number pad is editing, if it is on this row. */
   focused: Field | undefined;
@@ -391,9 +440,16 @@ const SetLine = memo(function SetLine({
       <T v="labelStrong" tone="secondary" style={s.colSet} num>
         {String(row.setIdx + 1)}
       </T>
-      <T v="label" tone="tertiary" style={s.colPrev} num>
-        {prev}
-      </T>
+      <View style={[s.colPrev, s.prevCell]}>
+        <T v="label" tone="tertiary" num numberOfLines={1} style={{ flexShrink: 1 }}>
+          {prev}
+        </T>
+        {record && (
+          <Animated.View entering={FadeIn.duration(200)} accessible accessibilityLabel="New record">
+            <Trophy size={18} />
+          </Animated.View>
+        )}
+      </View>
       <Pressable accessibilityRole="button" accessibilityLabel={`Weight, set ${row.setIdx + 1}`} accessibilityState={{ selected: focused === 'weight' }} onPress={(e) => onEdit('weight', e.nativeEvent.pageY)} style={[s.colNum, s.cell, focused === 'weight' && on]}>
         <T v="bodyStrong" num>
           {weight}
@@ -470,11 +526,31 @@ function RestBanner() {
  * Finish summary (mockup WorkoutDone), effort and a note, and "Update routine with these
  * values?". Nothing is saved until Done (or back); Discard drops the workout.
  */
-function Finished({ routine, name, startedAt, endedAt, sets, blocks, onSave }: { routine: RoutineDetail | undefined; name: string; startedAt: Date; endedAt: Date; sets: LoggedSet[]; blocks: Block[]; onSave: (feel: { rpe?: number; notes?: string }) => void }) {
+function Finished({
+  routine,
+  name,
+  startedAt,
+  endedAt,
+  sets,
+  blocks,
+  bests,
+  onSave,
+}: {
+  routine: RoutineDetail | undefined;
+  name: string;
+  startedAt: Date;
+  endedAt: Date;
+  sets: LoggedSet[];
+  blocks: Block[];
+  bests: Bests;
+  onSave: (feel: { rpe?: number; notes?: string }) => void;
+}) {
   const s = useStyles();
   const p = usePalette();
   const insets = useSafeAreaInsets();
-  const unit = useUnits().weight;
+  const units = useUnits();
+  const unit = units.weight;
+  const [records] = useState(() => workoutRecords(sets, bests, localIsoDate(startedAt)));
   const [answered, setAnswered] = useState(false);
   const [rpe, setRpe] = useState<number>();
   const [notes, setNotes] = useState('');
@@ -537,6 +613,17 @@ function Finished({ routine, name, startedAt, endedAt, sets, blocks, onSave }: {
           <Stat value={String(sets.length)} label="Sets" />
           <Stat value={volume > 0 ? `${thousands(Math.round(kgToUnit(volume, unit)))} ${unit}` : '-'} label="Volume" />
         </View>
+        {records.length > 0 && (
+          <View style={[s.card, { paddingTop: 12 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 4 }}>
+              <Trophy size={20} />
+              <T v="headline">New records</T>
+            </View>
+            {records.map((e, i) => (
+              <RecordRow key={e.key} e={e} units={units} withExercise first={i === 0} />
+            ))}
+          </View>
+        )}
         <View style={s.card}>
           {blocks
             .filter((b) => b.rows.some((r) => r.done))
@@ -622,6 +709,7 @@ const useStyles = createStyles((p) => ({
   setRow: { flexDirection: 'row', alignItems: 'center', height: 48, borderRadius: 10 },
   colSet: { width: 36, textAlign: 'center' },
   colPrev: { flex: 1 },
+  prevCell: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 6, paddingRight: 4 },
   colNum: { width: 72, alignItems: 'center', textAlign: 'center' },
   colCheck: { width: 44, alignItems: 'center' },
   cell: { height: 38, justifyContent: 'center', borderRadius: 10, backgroundColor: p.inset, marginHorizontal: 4 },
