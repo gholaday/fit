@@ -28,7 +28,7 @@ const SLOP = 14;
 const LAYOUT: RingLayout = { stepsR: Number.POSITIVE_INFINITY, dayR: DAY_R, width: WIDTH, slop: SLOP };
 /** The touch band reaches past the drawing. */
 const HIT_SLOP = DAY_R + WIDTH / 2 + SLOP - CX;
-/** Space between lane arcs, as a fraction of the circle: about 2 px on the day ring. */
+/** Space between lane arcs, as a fraction of the circle: none, the lanes meet. */
 const LANE_GAP = 0;
 const MOTION_MS = 200;
 const DIM = 0.25;
@@ -40,14 +40,12 @@ export const LANE_NAME: Record<Lane, string> = { run: 'Run', workout: 'Workout',
 
 /**
  * One arc: a track in `track`, filled clockwise in `color` by `fill`, dimmed when another
- * lane is selected. Ends are round; a segment is trimmed by half the stroke at each end so
- * the caps stay inside its share and the gaps between lanes stay clear.
+ * lane is selected. Ends are square, so neighboring lanes meet with no gap.
  */
 function ArcStroke({ r, start, end, fill, color, track, dim }: { r: number; start: number; end: number; fill: number; color: string; track: string; dim: boolean }) {
   const c = 2 * Math.PI * r;
   const full = end - start >= 1;
-  const trim = 0;
-  const len = (end - start) * c - 2 * trim;
+  const len = (end - start) * c;
   const f = useSharedValue(fill);
   const o = useSharedValue(dim ? DIM : 1);
   useEffect(() => {
@@ -56,10 +54,10 @@ function ArcStroke({ r, start, end, fill, color, track, dim }: { r: number; star
   useEffect(() => {
     o.value = withTiming(dim ? DIM : 1, { duration: MOTION_MS });
   }, [dim, o]);
-  // A zero-length dash with round caps would still draw a dot, so an empty fill hides.
+  // An empty fill hides outright rather than leaning on a zero-length dash.
   const fillProps = useAnimatedProps(() => ({ strokeDasharray: [f.value * len, c], strokeOpacity: f.value > 0.001 ? 1 : 0 }));
   const groupProps = useAnimatedProps(() => ({ opacity: o.value }));
-  const common = { cx: CX, cy: CX, r, fill: 'none', strokeWidth: WIDTH, strokeLinecap: 'butt', strokeDashoffset: -(start * c + trim), transform: `rotate(-90 ${CX} ${CX})` } as const;
+  const common = { cx: CX, cy: CX, r, fill: 'none', strokeWidth: WIDTH, strokeLinecap: 'butt', strokeDashoffset: -start * c, transform: `rotate(-90 ${CX} ${CX})` } as const;
   return (
     <AnimatedG animatedProps={groupProps}>
       {full ? <Circle cx={CX} cy={CX} r={r} fill="none" strokeWidth={WIDTH} stroke={track} /> : <Circle {...common} stroke={track} strokeDasharray={`${len} ${c}`} />}
