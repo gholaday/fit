@@ -589,7 +589,7 @@ function Finished({ routine, name, startedAt, endedAt, sets, blocks, onSave }: {
       <Sheet visible={discarding} onClose={() => setDiscarding(false)} title="Discard workout">
         <View style={{ gap: 10 }}>
           <T v="body" tone="secondary">
-            The sets are not saved, and the workout stays due.
+            {routine ? 'The sets are not saved, and the workout stays due.' : 'The sets are not saved.'}
           </T>
           <Button label="Discard workout" onPress={discard} />
           <Button label="Keep it" kind="outline" onPress={() => setDiscarding(false)} />

@@ -2,7 +2,7 @@
  * Run plan manager (spec §14): goal and race day, weekly volume across the plan, training
  * paces with Re-test, and one week's runs with their structure. Opened from the plan card.
  */
-import { type AgendaItem, type PlanSummary, formatClock, formatDistance, formatMinutes, metersToUnit, presetInfo, weekdayOf } from '@fit/core';
+import { type AgendaItem, type PlanSummary, type WeekKind, type Weekday, formatClock, formatDistance, formatMinutes, metersToUnit, presetInfo, weekKind, weekdayOf } from '@fit/core';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -18,7 +18,8 @@ import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { NotFound } from '@/ui/NotFound';
-import { Button, IconButton, StructureBar, T } from '@/ui/primitives';
+import { Button, Chip, IconButton, StructureBar, T } from '@/ui/primitives';
+import { Sheet } from '@/ui/Sheet';
 import { StatusShade } from '@/ui/StatusShade';
 
 /** The plan's runs, every week, from the store (the screen loads the plan's date range). */
@@ -37,6 +38,7 @@ export function PlanManagerScreen() {
   const today = useToday();
   const units = useUnits();
   const runs = usePlanRuns(plan?.id);
+  const [daysOpen, setDaysOpen] = useState(false);
   const [week, setWeek] = useState(() => (plan && today >= plan.startDate ? plan.currentWeek : 1));
 
   useEffect(() => {
@@ -51,11 +53,16 @@ export function PlanManagerScreen() {
   const volumeOf = (items: AgendaItem[]) => (byMinutes ? items.reduce((t, i) => t + i.estSeconds / 60, 0) : items.reduce((t, i) => t + (i.estMeters ?? 0), 0));
   const volumeText = (v: number) => (byMinutes ? formatMinutes(v * 60) : formatDistance(v, units.distance));
   const weeks = Array.from({ length: plan.weeks }, (_, i) => runs.filter((r) => weekOf(r) === i + 1));
+  const kinds = weeks.map((_, i) => weekKind(i + 1, plan.weeks, info.cutbackEvery, info.taperWeeks));
   const bars: Bar[] = weeks.map((w, i) => ({
     label: plan.weeks > 12 && i % 2 === 1 ? '' : `W${i + 1}`,
     current: i + 1 === week,
-    parts: [{ value: byMinutes ? volumeOf(w) : metersToUnit(volumeOf(w), units.distance), color: p.run.color }],
+    parts: [{ value: byMinutes ? volumeOf(w) : metersToUnit(volumeOf(w), units.distance), color: kinds[i] === 'build' ? p.run.color : p.run.pending }],
   }));
+  const kindWeeks = (k: WeekKind) => kinds.flatMap((x, i) => (x === k ? [i + 1] : []));
+  const lighter = [kindWeeks('cutback').length > 0 ? `Cutback ${andList(kindWeeks('cutback'))}` : undefined, kindWeeks('taper').length > 0 ? `taper ${andList(kindWeeks('taper'))}` : undefined]
+    .filter(Boolean)
+    .join(', ');
   const shown = (weeks[week - 1] ?? []).slice().sort((a, b) => a.date.localeCompare(b.date));
 
   const go = (n: number) => {
@@ -83,7 +90,12 @@ export function PlanManagerScreen() {
         <GoalStats plan={plan} />
 
         <Card title={byMinutes ? 'Weekly minutes' : units.distance === 'mi' ? 'Weekly miles' : 'Weekly kilometers'} right={`${plan.weeks} weeks`}>
-          <StackBars bars={bars} height={64} accessibilityLabel={`Planned volume by week, ${plan.weeks} weeks`} />
+          <StackBars bars={bars} height={64} accessibilityLabel={`Planned volume by week, ${plan.weeks} weeks${lighter ? `, ${lighter}` : ''}`} />
+          {lighter !== '' && (
+            <T v="caption" tone="secondary">
+              {lighter.charAt(0).toUpperCase() + lighter.slice(1)}
+            </T>
+          )}
         </Card>
 
         <Paces beginner={info.beginner} />
@@ -129,11 +141,89 @@ export function PlanManagerScreen() {
               }}
             />
           )}
-          <Button label="Change plan or run days" kind="quiet" onPress={() => router.push({ pathname: '/setup', params: { only: 'plan' } })} />
+          <Button label="Change run days" kind="outline" onPress={() => setDaysOpen(true)} />
+          <Button label="Change plan" kind="quiet" onPress={() => router.push({ pathname: '/setup', params: { only: 'plan' } })} />
         </View>
       </ScrollView>
       <StatusShade />
+      {/* Keyed on open, so it starts from the plan's current days each time. */}
+      <RunDaysSheet key={String(daysOpen)} plan={plan} open={daysOpen} onClose={() => setDaysOpen(false)} />
     </View>
+  );
+}
+
+/** "2, 4 and 6". */
+function andList(ns: readonly number[]): string {
+  return ns.length < 2 ? ns.join('') : `${ns.slice(0, -1).join(', ')} and ${ns.at(-1)}`;
+}
+
+const WEEK: readonly Weekday[] = [1, 2, 3, 4, 5, 6, 7];
+
+/** Run days and the long run day; upcoming runs move inside their weeks, nothing is rebuilt. */
+function RunDaysSheet({ plan, open, onClose }: { plan: PlanSummary; open: boolean; onClose: () => void }) {
+  const p = usePalette();
+  const today = useToday();
+  const [days, setDays] = useState<Weekday[]>(plan.inputs.preferredDays);
+  const [long, setLong] = useState<Weekday>(plan.inputs.longRunDay);
+  const [error, setError] = useState<string>();
+  const runs = plan.inputs.daysPerWeek;
+  const toggle = (d: Weekday) => {
+    haptic.tick();
+    setError(undefined);
+    setDays(days.includes(d) ? days.filter((x) => x !== d) : [...days, d].sort((a, b) => a - b));
+  };
+  const save = () => {
+    const picked = days.includes(long) ? days : [...days, long].sort((a, b) => a - b);
+    try {
+      repo.changeRunDays(picked, long, today);
+    } catch {
+      haptic.warn();
+      setError(`These days cannot hold ${runs} runs a week with rest between hard days. Pick more days.`);
+      return;
+    }
+    actions.reload();
+    haptic.commit();
+    showSnack({ message: 'Run days changed' });
+    onClose();
+  };
+  return (
+    <Sheet visible={open} onClose={onClose} title="Change run days">
+      <View style={{ gap: 14 }}>
+        <View style={{ gap: 8 }}>
+          <T v="labelStrong" tone="secondary">{`Run days, ${runs} runs a week`}</T>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {WEEK.map((d) => (
+              <Chip key={d} label={weekdayShort(d)} on={days.includes(d)} onPress={() => toggle(d)} />
+            ))}
+          </View>
+        </View>
+        <View style={{ gap: 8 }}>
+          <T v="labelStrong" tone="secondary">
+            Long run
+          </T>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {WEEK.map((d) => (
+              <Chip
+                key={d}
+                label={weekdayShort(d)}
+                on={long === d}
+                onPress={() => {
+                  haptic.tick();
+                  setError(undefined);
+                  setLong(d);
+                }}
+              />
+            ))}
+          </View>
+        </View>
+        {error && (
+          <T v="caption" color={p.sprint.onTint}>
+            {error}
+          </T>
+        )}
+        <Button label="Save" disabled={days.length < runs} onPress={save} />
+      </View>
+    </Sheet>
   );
 }
 
