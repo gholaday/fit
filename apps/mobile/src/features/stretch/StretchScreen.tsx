@@ -18,6 +18,7 @@ import { actions, showSnack, useSettings } from '@/data/store';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
+import { NotFound } from '@/ui/NotFound';
 import { Sheet } from '@/ui/Sheet';
 import { Button, IconButton, T } from '@/ui/primitives';
 import { services } from '@/features/run/services';
@@ -43,7 +44,7 @@ const itemOf = (step: Step): number => Number(step.id.split(':')[0]);
 export function StretchScreen() {
   const { id, key } = useLocalSearchParams<{ id: string; key?: string }>();
   const [routine] = useState(() => repo.routine(id));
-  if (!routine || routine.items.kind !== 'stretch' || routine.items.items.length === 0) return null;
+  if (!routine || routine.items.kind !== 'stretch' || routine.items.items.length === 0) return <NotFound message="Routine not found" />;
   return <Player routine={routine} scheduleKey={key} />;
 }
 

@@ -23,6 +23,7 @@ import { useUnits } from '@/data/store';
 import { haptic } from '@/lib/haptics';
 import { createStyles, type Palette, toneColor, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
+import { NotFound } from '@/ui/NotFound';
 import { IconButton, Segmented, T } from '@/ui/primitives';
 import { buildRoute, distanceAt, MAP_STYLE, pausedBefore, type RouteGeometry } from './route';
 import { RouteLayers } from './RouteMap';
@@ -41,20 +42,7 @@ const PACE_WINDOW_MS = 30_000;
 export function ReplayScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [session] = useState<SessionDetail | undefined>(() => repo.session(id));
-  const p = usePalette();
-  const s = useStyles();
-  if (!session || session.points.length < 2) {
-    return (
-      <View style={[s.screen, { alignItems: 'center', justifyContent: 'center' }]}>
-        <T v="bodyMedium" tone="secondary">
-          No route to replay
-        </T>
-        <IconButton label="Close" size={44} onPress={() => router.back()}>
-          <Icons.x size={20} color={p.text} />
-        </IconButton>
-      </View>
-    );
-  }
+  if (!session || session.points.length < 2) return <NotFound message="No route to replay" />;
   return <Replay session={session} />;
 }
 

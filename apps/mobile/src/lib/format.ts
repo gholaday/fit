@@ -76,22 +76,6 @@ export function thousands(n: number): string {
   return Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-/** "25:30" from seconds, for goal times. */
-export function mmss(seconds: number): string {
-  const s = Math.max(0, Math.round(seconds));
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
-}
-
-/** Parses "25:30" or "25" to seconds. */
-export function parseMmss(text: string): number | undefined {
-  const m = /^\s*(\d{1,3})(?::(\d{1,2}))?\s*$/.exec(text);
-  if (!m) return undefined;
-  const min = Number(m[1]);
-  const sec = m[2] ? Number(m[2]) : 0;
-  if (sec >= 60) return undefined;
-  return min * 60 + sec;
-}
-
 /** "Morning, Evening" style list joins with commas only (copy rules). */
 export function list(items: readonly string[]): string {
   return items.join(', ');

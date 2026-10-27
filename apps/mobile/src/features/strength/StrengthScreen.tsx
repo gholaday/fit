@@ -28,6 +28,7 @@ import { thousands } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
+import { NotFound } from '@/ui/NotFound';
 import { Sheet } from '@/ui/Sheet';
 import { Button, IconButton, NumStepper, T } from '@/ui/primitives';
 import { onExercisesPicked } from '@/features/library/pick';
@@ -64,7 +65,7 @@ function blocksFor(routine: RoutineDetail): Block[] {
 export function StrengthScreen() {
   const { id, key } = useLocalSearchParams<{ id: string; key?: string }>();
   const [routine] = useState(() => repo.routine(id));
-  if (!routine || routine.items.kind !== 'strength') return null;
+  if (!routine || routine.items.kind !== 'strength') return <NotFound message="Workout not found" />;
   return <Logger routine={routine} scheduleKey={key} />;
 }
 
