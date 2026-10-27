@@ -90,6 +90,13 @@ import {
   type AerobicTest,
   type HistoryItem,
   type HistoryKind,
+  computeRecords,
+  currentRecords,
+  type LiftBests,
+  type LiftRecordInput,
+  type LiftRecordKind,
+  type RecordEvent,
+  type RunRecordInput,
   type RunRow,
   type SessionStats,
 } from '@fit/core';
@@ -591,6 +598,68 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     db.transaction((tx) => {
       for (const c of computed) tx.update(t.sessions).set({ statsJson: c.json, ...stamp() }).where(eq(t.sessions.id, c.id)).run();
     });
+    recordCache = undefined;
+  };
+
+  /**
+   * Record events, replayed from every saved run and set and kept in memory until a write
+   * that can move a record (save, delete, distance fix, watch save) clears them.
+   */
+  let recordCache: RecordEvent[] | undefined;
+  const invalidateRecords = () => {
+    recordCache = undefined;
+  };
+  const recordEvents = (): RecordEvent[] => {
+    backfillStats();
+    if (recordCache) return recordCache;
+    const runs: RunRecordInput[] = db
+      .select({ id: t.sessions.id, startedAt: t.sessions.startedAt, distanceM: t.sessions.distanceM, elapsedMs: t.sessions.elapsedMs, statsJson: t.sessions.statsJson })
+      .from(t.sessions)
+      .where(and(eq(t.sessions.status, 'saved'), eq(t.sessions.kind, 'run'), notDeleted(t.sessions)))
+      .all()
+      .map((r) => {
+        const stats = r.statsJson ? parseStats(r.id, r.statsJson) : undefined;
+        return {
+          sessionId: r.id,
+          date: localIsoDate(new Date(r.startedAt)),
+          startedAt: new Date(r.startedAt).toISOString(),
+          distanceM: r.distanceM,
+          durationS: Math.round(r.elapsedMs / 1000),
+          ...(stats ? { stats: { bests: stats.bests, nonstopS: stats.nonstopS } } : {}),
+        };
+      });
+    // Watch runs count for distance and time records; they have no track here for efforts.
+    for (const e of db
+      .select({ id: t.externalSessions.id, startedAt: t.externalSessions.startedAt, endedAt: t.externalSessions.endedAt, distanceM: t.externalSessions.distanceM })
+      .from(t.externalSessions)
+      .where(and(eq(t.externalSessions.status, 'saved'), inArray(t.externalSessions.activity, ['run', 'treadmill']), notDeleted(t.externalSessions)))
+      .all()) {
+      runs.push({
+        sessionId: e.id,
+        date: localIsoDate(new Date(e.startedAt)),
+        startedAt: new Date(e.startedAt).toISOString(),
+        distanceM: e.distanceM ?? 0,
+        durationS: Math.round((e.endedAt - e.startedAt) / 1000),
+      });
+    }
+    const lifts = new Map<string, LiftRecordInput>();
+    for (const [sessionId, startedAt, exerciseId, setIdx, reps, weightKg, durationS] of db.values<
+      [string, number, string, number, number, number | null, number | null]
+    >(sql`SELECT ss.session_id, s.started_at, ss.exercise_id, ss.set_idx, ss.reps, ss.weight_kg, ss.duration_s
+          FROM strength_sets ss JOIN sessions s ON s.id = ss.session_id
+          WHERE s.status = 'saved' AND s.deleted_at IS NULL AND ss.deleted_at IS NULL AND ss.type = 'normal'`)) {
+      let entry = lifts.get(sessionId);
+      if (!entry) {
+        entry = { sessionId, date: localIsoDate(new Date(startedAt)), startedAt: new Date(startedAt).toISOString(), sets: [] };
+        lifts.set(sessionId, entry);
+      }
+      const set: LoggedSet = { exerciseId, setIdx, reps };
+      if (weightKg !== null) set.weightKg = weightKg;
+      if (durationS !== null) set.durationS = durationS;
+      (entry.sets as LoggedSet[]).push(set);
+    }
+    recordCache = computeRecords(runs, [...lifts.values()]);
+    return recordCache;
   };
 
   const repo: FitRepository = {
@@ -1265,6 +1334,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     },
 
     finishSession(id, finish) {
+      invalidateRecords();
       const row = db.select().from(t.sessions).where(eq(t.sessions.id, id)).get();
       if (!row) throw new Error(`Unknown session ${id}`);
       const results = stepResults(finish.player.steps, finish.player.log);
@@ -1329,6 +1399,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     },
 
     deleteSession(id) {
+      invalidateRecords();
       db.transaction((tx) => {
         tx.update(t.sessions).set({ status: 'discarded', deletedAt: now(), ...stamp() }).where(eq(t.sessions.id, id)).run();
         tx.delete(t.trackPoints).where(eq(t.trackPoints.sessionId, id)).run();
@@ -1428,6 +1499,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     },
 
     correctDistance(id, totalM) {
+      invalidateRecords();
       const row = db.select().from(t.sessions).where(eq(t.sessions.id, id)).get();
       if (!row) throw new Error(`Unknown session ${id}`);
       const player = JSON.parse(row.playerJson) as PlayerState;
@@ -1701,6 +1773,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     },
 
     saveStrengthSession(input) {
+      invalidateRecords();
       const id = newId();
       const startedAt = Date.parse(input.startedAt);
       const endedAt = Date.parse(input.endedAt);
@@ -1994,6 +2067,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     },
 
     saveExternal(id, save) {
+      invalidateRecords();
       const ext = repo.externalSession(id);
       if (!ext) throw new Error(`Unknown external session ${id}`);
       db.update(t.externalSessions)
@@ -2017,6 +2091,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     },
 
     ignoreExternal(id) {
+      invalidateRecords();
       db.update(t.externalSessions)
         .set({ status: 'ignored', ...stamp() })
         .where(eq(t.externalSessions.id, id))
@@ -2024,6 +2099,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     },
 
     deleteExternal(id) {
+      invalidateRecords();
       // Ignored rather than removed, so the next Health Connect sync does not import it again.
       const ext = db.select({ linkedPlanKey: t.externalSessions.linkedPlanKey }).from(t.externalSessions).where(eq(t.externalSessions.id, id)).get();
       db.transaction((tx) => {
@@ -2266,6 +2342,35 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
 
     learnedZone2Pace(today) {
       return medianZone2Pace(repo.runRows(addDays(today, -120), today));
+    },
+
+    records() {
+      return currentRecords(recordEvents());
+    },
+
+    recentRecords(limit) {
+      return recordEvents()
+        .filter((e) => e.celebrate)
+        .slice(-limit)
+        .reverse();
+    },
+
+    sessionRecords(sessionId) {
+      return recordEvents().filter((e) => e.celebrate && e.sessionId === sessionId);
+    },
+
+    exerciseRecords(exerciseId) {
+      return recordEvents().filter((e) => e.exerciseId === exerciseId);
+    },
+
+    liftBests(exerciseIds) {
+      const wanted = new Set(exerciseIds);
+      const out: Record<string, LiftBests> = {};
+      for (const e of currentRecords(recordEvents())) {
+        if (!e.exerciseId || !wanted.has(e.exerciseId)) continue;
+        (out[e.exerciseId] ??= {})[e.kind as LiftRecordKind] = e.value;
+      }
+      return out;
     },
 
     settings(): Settings {

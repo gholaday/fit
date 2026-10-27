@@ -17,3 +17,4 @@ export * from './builder';
 export * from './pace';
 export * from './adapt';
 export * from './stats';
+export * from './records';

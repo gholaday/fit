@@ -5,7 +5,7 @@ import type { RunWalkSegment, StepLogEntry } from './session/player';
 import { runWalkTotals } from './session/runwalk';
 import type { DistancePoint, StepResult } from './session/track';
 import { METERS_PER_MILE } from './units';
-import { isHardStep, type SessionMode } from './workout';
+import { isHardStep, type SessionMode, type Step } from './workout';
 
 /**
  * Stats and history math (spec §12). Pure: the repository stores one SessionStats per
@@ -61,7 +61,7 @@ export function bestEfforts(
 }
 
 /** Bump when SessionStats gains fields, so stored stats are recomputed on first use. */
-export const SESSION_STATS_VERSION = 2;
+export const SESSION_STATS_VERSION = 3;
 
 /** Stored per saved run (`sessions.stats_json`). */
 export interface SessionStats {
@@ -73,6 +73,8 @@ export interface SessionStats {
   easyM: number;
   easyS: number;
   bests: BestEffort[];
+  /** Longest stretch of running without a walk, active seconds (records). */
+  nonstopS: number;
   /** With HR (live or Health Connect): seconds in Zone 2, any mode. */
   z2S?: number;
   /** Outdoor distance and time covered while in Zone 2, for the pace at Zone 2 trend. */
@@ -98,7 +100,16 @@ export interface SessionStatsInput {
 
 /** Splits a run's distance by step activity (run/walk phases by phase). Distance outside any step counts as running. */
 export function sessionStats(input: SessionStatsInput): SessionStats {
-  const s: SessionStats = { v: SESSION_STATS_VERSION, runM: 0, walkM: 0, sprintM: 0, easyM: 0, easyS: 0, bests: bestEfforts(input.samples, input.pauses) };
+  const s: SessionStats = {
+    v: SESSION_STATS_VERSION,
+    runM: 0,
+    walkM: 0,
+    sprintM: 0,
+    easyM: 0,
+    easyS: 0,
+    bests: bestEfforts(input.samples, input.pauses),
+    nonstopS: input.log ? longestNonstopS(input.log.map((e, i) => ({ ...e, step: input.steps[i]?.step })), input.runWalk) : 0,
+  };
   for (const r of input.steps) {
     const a = r.step.activity;
     if (a === 'walk' || a === 'rest') s.walkM += r.distanceM;
@@ -141,6 +152,34 @@ export function sessionStats(input: SessionStatsInput): SessionStats {
     if (d !== undefined) s.decouplingPct = d;
   }
   return s;
+}
+
+/**
+ * Longest stretch of running without a walk: contiguous run and sprint steps, broken by
+ * walk or rest steps and by the walk phases of HR run/walk steps. Active seconds.
+ */
+export function longestNonstopS(
+  entries: readonly (Pick<StepLogEntry, 'startActiveMs' | 'endActiveMs'> & { step?: Step })[],
+  runWalk: readonly RunWalkSegment[] = [],
+): number {
+  const runs: [number, number][] = [];
+  for (const e of entries) {
+    if (e.step?.activity !== 'run' && e.step?.activity !== 'sprint') continue;
+    const last = runs.at(-1);
+    if (last && last[1] === e.startActiveMs) last[1] = e.endActiveMs;
+    else runs.push([e.startActiveMs, e.endActiveMs]);
+  }
+  let pieces = runs;
+  for (const w of runWalk.filter((g) => g.phase === 'walk')) {
+    pieces = pieces.flatMap(([a, b]): [number, number][] => {
+      if (w.endActiveMs <= a || w.startActiveMs >= b) return [[a, b]];
+      const out: [number, number][] = [];
+      if (w.startActiveMs > a) out.push([a, w.startActiveMs]);
+      if (w.endActiveMs < b) out.push([w.endActiveMs, b]);
+      return out;
+    });
+  }
+  return Math.round(Math.max(0, ...pieces.map(([a, b]) => b - a)) / 1000);
 }
 
 /** Distance and seconds covered while HR was within [minBpm, maxBpm]. Gaps over 10 s and paused time are skipped. */

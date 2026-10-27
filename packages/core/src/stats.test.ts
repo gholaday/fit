@@ -58,7 +58,7 @@ describe('sessionStats', () => {
       samples: [],
       pauses: [],
     });
-    expect(s).toEqual({ v: 2, runM: 1900, walkM: 300, sprintM: 200, easyM: 1000, easyS: 360, bests: [] });
+    expect(s).toEqual({ v: 3, runM: 1900, walkM: 300, sprintM: 200, easyM: 1000, easyS: 360, bests: [], nonstopS: 0 });
   });
 });
 
@@ -84,7 +84,7 @@ describe('heart rate progress', () => {
   });
 });
 
-const stats = (over: Partial<SessionStats> = {}): SessionStats => ({ v: 2, runM: 0, walkM: 0, sprintM: 0, easyM: 0, easyS: 0, bests: [], ...over });
+const stats = (over: Partial<SessionStats> = {}): SessionStats => ({ v: 3, runM: 0, walkM: 0, sprintM: 0, easyM: 0, easyS: 0, bests: [], nonstopS: 0, ...over });
 
 describe('aggregates', () => {
   it('buckets runs by week, zero-filled, with imported walks as walking', () => {

@@ -4,6 +4,7 @@ import type { HrProfileInput, HrZoneBand } from './hr';
 import type { ExternalActivity, PlanMatch } from './external';
 import type { TrialResult } from './pace';
 import type { PersonalBest, RunRow, SessionStats } from './stats';
+import type { LiftBests, LiftRecordKind, RecordEvent } from './records';
 import type { CuePrefs } from './session/cues';
 import type { HrSample } from './session/heart';
 import type { TreadmillPrefs } from './session/treadmill';
@@ -635,6 +636,18 @@ export interface FitRepository {
   aerobicTests(): AerobicTest[];
   /** Typical pace in Zone 2 from recent outdoor runs, the target when there is no live HR (spec §7). */
   learnedZone2Pace(today: IsoDate): number | undefined;
+
+  // Records (Hevy-style trophies): derived from saved runs and sets, never stored.
+  /** The standing record for every key, runs and lifts. */
+  records(): RecordEvent[];
+  /** Records worth a trophy (improvements and firsts), newest first. */
+  recentRecords(limit: number): RecordEvent[];
+  /** Trophies a session earned: Fit run, strength session or watch activity. */
+  sessionRecords(sessionId: string): RecordEvent[];
+  /** Every record event of one exercise, oldest first, for its history. */
+  exerciseRecords(exerciseId: string): RecordEvent[];
+  /** Current lift bests per exercise, for setRecords() while logging. */
+  liftBests(exerciseIds: readonly string[]): Record<string, LiftBests>;
 
   // Settings
   settings(): Settings;
