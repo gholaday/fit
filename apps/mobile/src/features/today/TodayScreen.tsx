@@ -1,8 +1,8 @@
 import { type IsoDate, addDays, formatClock, formatDistance, formatMinutes, localIsoDate, weekdayOf } from '@fit/core';
 import { router } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { RefreshControl, View } from 'react-native';
-import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
+import Animated, { Extrapolation, interpolate, useAnimatedRef, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { repo } from '@/data';
@@ -19,7 +19,7 @@ import { Icons, QUICK_LOG_ICON } from '@/ui/icons';
 import { Button, IconButton, T } from '@/ui/primitives';
 import { Sheet } from '@/ui/Sheet';
 import { ChecklistCard } from './ChecklistCard';
-import { DayWidget, SlimBar } from './DayWidget';
+import { DayWidget, type DayWidgetHandle, SlimBar } from './DayWidget';
 import { type DoneActivity, DoneActivityCard } from './DoneActivityCard';
 import { summarizeDay } from './daySummary';
 import { StartWorkoutSheet } from './StartWorkoutSheet';
@@ -172,6 +172,17 @@ export function TodayScreen() {
     setDeleting(undefined);
   };
 
+  // The day widget's lane rows scroll the checklist to a card, clear of the slim bar.
+  const widget = useRef<DayWidgetHandle>(null);
+  const scroll = useAnimatedRef<Animated.ScrollView>();
+  const cardY = useRef<Record<string, number>>({});
+  const jump = (key: string) => {
+    const y = cardY.current[key];
+    if (y === undefined) return;
+    haptic.tap();
+    scroll.current?.scrollTo({ y: Math.max(0, y - insets.top - 72), animated: true });
+  };
+
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler((e) => {
     scrollY.value = e.contentOffset.y;
@@ -182,8 +193,8 @@ export function TodayScreen() {
   }));
 
   return (
-    <View style={s.screen}>
-      <Animated.ScrollView refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} progressViewOffset={insets.top} />} onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} showsVerticalScrollIndicator={false}>
+    <View style={s.screen} onTouchStart={(e) => widget.current?.touch(e.nativeEvent.pageX, e.nativeEvent.pageY)}>
+      <Animated.ScrollView ref={scroll} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={refresh} progressViewOffset={insets.top} />} onScroll={onScroll} scrollEventThrottle={16} contentContainerStyle={[s.content, { paddingTop: insets.top + 16 }]} showsVerticalScrollIndicator={false}>
         <View style={s.header}>
           <View style={{ flex: 1 }}>
             <T v="label" tone="secondary">
@@ -204,7 +215,7 @@ export function TodayScreen() {
         </View>
 
         <WeekStrip today={today} selected={day} onSelect={select} />
-        {isToday && <DayWidget summary={summary} stepGoal={settings.stepGoal} steps={metrics?.steps} />}
+        {isToday && <DayWidget ref={widget} summary={summary} items={items} stepGoal={settings.stepGoal} steps={metrics?.steps} lastSyncedAt={lastSyncedAt} units={settings.units} onJump={jump} />}
         {isToday && metrics?.restingHr !== undefined && (
           <View style={s.health}>
             <Icons.heart size={20} color={p.run.color} />
@@ -245,7 +256,16 @@ export function TodayScreen() {
             )}
           </View>
         ) : (
-          items.map((i) => <ChecklistCard key={i.key} itemKey={i.key} hero={i.key === heroKey} />)
+          items.map((i) => (
+            <View
+              key={i.key}
+              onLayout={(e) => {
+                cardY.current[i.key] = e.nativeEvent.layout.y;
+              }}
+            >
+              <ChecklistCard itemKey={i.key} hero={i.key === heroKey} />
+            </View>
+          ))
         )}
         {done.map((a) => (
           <DoneActivityCard key={a.key} activity={a} />
