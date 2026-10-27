@@ -59,6 +59,41 @@ export function oneRepMax(weightKg: number, reps: number): number | undefined {
 
 const lowerIsBetter = (kind: RecordEvent['kind']) => kind === 'effort';
 
+export const LIFT_RECORD_KINDS: readonly LiftRecordKind[] = ['heaviest', 'one_rep_max', 'set_volume', 'session_volume', 'most_reps', 'longest_hold'];
+
+/**
+ * What one set scores on each lift record: weighted sets give heaviest, estimated 1 rep
+ * max and set volume; bodyweight sets give reps; timed sets give the hold.
+ */
+export function setValues(set: Pick<LoggedSet, 'reps' | 'weightKg' | 'durationS'>): LiftBests {
+  const w = set.weightKg ?? 0;
+  if (w > 0 && set.reps > 0) {
+    const out: LiftBests = { heaviest: w, set_volume: Math.round(w * set.reps * 10) / 10 };
+    const orm = oneRepMax(w, set.reps);
+    if (orm !== undefined) out.one_rep_max = orm;
+    return out;
+  }
+  if ((set.durationS ?? 0) > 0) return { longest_hold: set.durationS! };
+  if (set.reps > 0) return { most_reps: set.reps };
+  return {};
+}
+
+/** One exercise's sets in a session, on every lift record (session volume sums the weighted sets). */
+export function liftValues(sets: readonly Pick<LoggedSet, 'reps' | 'weightKg' | 'durationS'>[]): LiftBests {
+  const out: LiftBests = {};
+  let volume = 0;
+  for (const s of sets) {
+    const v = setValues(s);
+    for (const kind of LIFT_RECORD_KINDS) {
+      const x = v[kind];
+      if (x !== undefined && (out[kind] === undefined || x > out[kind]!)) out[kind] = x;
+    }
+    if (v.heaviest !== undefined) volume += s.weightKg! * s.reps;
+  }
+  if (volume > 0) out.session_volume = Math.round(volume * 10) / 10;
+  return out;
+}
+
 export interface RecordItem {
   run?: RunRecordInput;
   lift?: LiftRecordInput;
@@ -146,20 +181,11 @@ export function recordBook(): RecordBook {
       for (const s of lift.sets) byExercise.set(s.exerciseId, [...(byExercise.get(s.exerciseId) ?? []), s]);
       for (const [exerciseId, sets] of byExercise) {
         const base = { group: 'lift' as const, exerciseId, sessionId: lift.sessionId, date: lift.date };
-        const k = (kind: LiftRecordKind) => `lift:${exerciseId}:${kind}`;
-        const weighted = sets.filter((s) => (s.weightKg ?? 0) > 0 && s.reps > 0);
-        if (weighted.length > 0) {
-          consider({ ...base, key: k('heaviest'), kind: 'heaviest', value: Math.max(...weighted.map((s) => s.weightKg!)) });
-          const orm = weighted.flatMap((s) => oneRepMax(s.weightKg!, s.reps) ?? []);
-          if (orm.length > 0) consider({ ...base, key: k('one_rep_max'), kind: 'one_rep_max', value: Math.max(...orm) });
-          const volumes = weighted.map((s) => s.weightKg! * s.reps);
-          consider({ ...base, key: k('set_volume'), kind: 'set_volume', value: Math.round(Math.max(...volumes) * 10) / 10 });
-          consider({ ...base, key: k('session_volume'), kind: 'session_volume', value: Math.round(volumes.reduce((a, b) => a + b, 0) * 10) / 10 });
+        const values = liftValues(sets);
+        for (const kind of LIFT_RECORD_KINDS) {
+          const value = values[kind];
+          if (value !== undefined) consider({ ...base, key: `lift:${exerciseId}:${kind}`, kind, value });
         }
-        const bodyweight = sets.filter((s) => !s.weightKg && !s.durationS && s.reps > 0);
-        if (bodyweight.length > 0) consider({ ...base, key: k('most_reps'), kind: 'most_reps', value: Math.max(...bodyweight.map((s) => s.reps)) });
-        const holds = sets.filter((s) => (s.durationS ?? 0) > 0);
-        if (holds.length > 0) consider({ ...base, key: k('longest_hold'), kind: 'longest_hold', value: Math.max(...holds.map((s) => s.durationS!)) });
       }
     }
     return events.slice(start);
@@ -195,19 +221,12 @@ export type LiftBests = Partial<Record<LiftRecordKind, number>>;
  * judged at finish. Nothing is beaten without an earlier value (the quiet first rule).
  */
 export function setRecords(set: Pick<LoggedSet, 'reps' | 'weightKg' | 'durationS'>, bests: LiftBests): LiftRecordKind[] {
-  const out: LiftRecordKind[] = [];
-  const beats = (kind: LiftRecordKind, value: number | undefined) => {
+  const values = setValues(set);
+  return LIFT_RECORD_KINDS.filter((kind) => {
+    const value = values[kind];
     const prev = bests[kind];
-    if (value !== undefined && prev !== undefined && value > prev) out.push(kind);
-  };
-  const w = set.weightKg ?? 0;
-  if (w > 0 && set.reps > 0) {
-    beats('heaviest', w);
-    beats('one_rep_max', oneRepMax(w, set.reps));
-    beats('set_volume', Math.round(w * set.reps * 10) / 10);
-  } else if ((set.durationS ?? 0) > 0) beats('longest_hold', set.durationS);
-  else if (set.reps > 0) beats('most_reps', set.reps);
-  return out;
+    return value !== undefined && prev !== undefined && value > prev;
+  });
 }
 
 /** The standing record for each key: the last event, since events only move a record forward. */
