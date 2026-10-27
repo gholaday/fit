@@ -1,4 +1,4 @@
-import { type IsoDate, type Lane, addDays, formatClock, formatDistance, formatMinutes, localIsoDate, weekdayOf } from '@fit/core';
+import { type IsoDate, addDays, formatClock, formatDistance, formatMinutes, localIsoDate, weekdayOf } from '@fit/core';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { RefreshControl, View } from 'react-native';
@@ -97,7 +97,7 @@ export function TodayScreen() {
             key: r.id,
             title: r.name,
             detail: formatMinutes(r.durationS),
-            lane: 'workout',
+            type: 'strength',
             icon: Icons.barbell,
             onDelete: ask({ title: r.name, note: 'The sets are deleted.', run: () => repo.deleteSession(r.id) }),
           };
@@ -107,7 +107,7 @@ export function TodayScreen() {
           key: r.id,
           title: r.name,
           detail: r.distanceM && r.distanceM > 20 ? `${formatDistance(r.distanceM, unit, 2)}, ${time}` : time,
-          lane: 'run',
+          type: 'run',
           icon: Icons.run,
           onPress: () => router.push({ pathname: '/summary/[id]', params: { id: r.id } }),
           onDelete: ask({ title: r.name, note: 'The route and stats are deleted.', run: () => repo.deleteSession(r.id) }),
@@ -122,7 +122,7 @@ export function TodayScreen() {
           key: x.id,
           title,
           detail: x.distanceM ? `${formatDistance(x.distanceM, unit, 2)}, ${minutes}` : minutes,
-          lane: x.activity === 'strength' ? 'workout' : x.activity === 'stretch' ? 'stretch' : 'run',
+          type: x.activity,
           icon: ACTIVITY_ICON[x.activity],
           onPress: () => router.push({ pathname: '/activity/[id]', params: { id: x.id } }),
           onDelete: ask({
@@ -141,7 +141,7 @@ export function TodayScreen() {
         key: l.id,
         title,
         detail: l.distanceM ? `${formatDistance(l.distanceM, unit, 2)}, ${formatMinutes(l.minutes * 60)}` : formatMinutes(l.minutes * 60),
-        lane: (l.activityType === 'lift' ? 'workout' : l.activityType === 'stretch' ? 'stretch' : 'run') as Lane,
+        type: l.activityType,
         icon: QUICK_LOG_ICON[l.activityType],
         onDelete: ask({ title, note: 'The quick log is removed.', run: () => repo.deleteQuickLog(l.id) }),
       };

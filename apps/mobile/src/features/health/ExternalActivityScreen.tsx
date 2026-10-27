@@ -11,7 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
 import { showSnack, useUnits } from '@/data/store';
 import { haptic } from '@/lib/haptics';
-import { createStyles, usePalette } from '@/theme';
+import { activityColor, createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, IconButton, T } from '@/ui/primitives';
 import { StatusShade } from '@/ui/StatusShade';
@@ -97,8 +97,8 @@ export function ExternalActivityScreen() {
           </Suspense>
         ) : (
           <View style={[s.mapSlot, s.center, { paddingHorizontal: 24 }]}>
-            <View style={s.badge}>
-              <Icon size={22} color={p.run.onTint} />
+            <View style={[s.badge, { backgroundColor: activityColor(p, ext.activity).tint }]}>
+              <Icon size={22} color={activityColor(p, ext.activity).onTint} />
             </View>
             <T v="bodyMedium" align="center">
               No route from Health Connect

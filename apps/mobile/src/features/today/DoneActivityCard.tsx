@@ -3,11 +3,10 @@
  * or a saved Health Connect workout. Drawn like a done checklist row; recorded runs open
  * their summary, and a long press asks to delete it.
  */
-import type { Lane } from '@fit/core';
 import { memo } from 'react';
 import { Pressable, View } from 'react-native';
 import { haptic } from '@/lib/haptics';
-import { createStyles, laneColor, usePalette } from '@/theme';
+import { type ActivityType, activityColor, createStyles, usePalette } from '@/theme';
 import { type AppIcon, Icons } from '@/ui/icons';
 import { T } from '@/ui/primitives';
 
@@ -15,8 +14,8 @@ export interface DoneActivity {
   key: string;
   title: string;
   detail: string;
-  /** Tile color. */
-  lane: Lane;
+  /** Tile color, from the activity's family. */
+  type: ActivityType;
   icon: AppIcon;
   onPress?: () => void;
   /** Long press: asks to delete it (logged activities only; planned items keep Skip). */
@@ -26,7 +25,7 @@ export interface DoneActivity {
 export const DoneActivityCard = memo(function DoneActivityCard({ activity: a }: { activity: DoneActivity }) {
   const s = useStyles();
   const p = usePalette();
-  const c = laneColor(p, a.lane);
+  const c = activityColor(p, a.type);
   const Icon = a.icon;
   const onPress = a.onPress;
   const onDelete = a.onDelete;

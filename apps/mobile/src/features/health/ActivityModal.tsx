@@ -11,7 +11,7 @@ import { actions, showSnack, useUnits } from '@/data/store';
 import { useFormStyles } from '@/features/items/ItemSheet';
 import { shortDate } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
-import { createStyles, laneColor, usePalette } from '@/theme';
+import { activityColor, createStyles, laneColor, usePalette } from '@/theme';
 import { Icons, LANE_ICON, QUICK_LOG_ICON } from '@/ui/icons';
 import { Button, T } from '@/ui/primitives';
 import { RatingSlider, RPE_WORDS } from '@/ui/RatingSlider';
@@ -107,8 +107,8 @@ function Form({ ext, position, total }: { ext: ExternalSession; position: number
         </T>
       )}
       <View style={s.head}>
-        <View style={s.tile}>
-          <Icon size={22} color={p.text} />
+        <View style={[s.tile, { backgroundColor: activityColor(p, ext.activity).tint }]}>
+          <Icon size={22} color={activityColor(p, ext.activity).color} />
         </View>
         <View style={{ flex: 1 }}>
           <T v="bodyStrong" numberOfLines={1}>

@@ -4,7 +4,7 @@ import { Pressable, TextInput, View } from 'react-native';
 import { actions, showSnack, useToday, useUnits } from '@/data/store';
 import { useFormStyles } from '@/features/items/ItemSheet';
 import { shortDate } from '@/lib/format';
-import { usePalette } from '@/theme';
+import { activityColor, usePalette } from '@/theme';
 import { Button, Group, IconButton, Row, Stepper, T, NumStepper } from '@/ui/primitives';
 import { Icons, QUICK_LOG_ICON } from '@/ui/icons';
 import { Sheet } from '@/ui/Sheet';
@@ -84,17 +84,17 @@ function Form({ onClose }: { onClose: () => void }) {
             {row.map((t) => {
               const on = t.value === kind;
               const Icon = QUICK_LOG_ICON[t.value];
-              const fg = on ? p.onPrimary : p.textBody;
+              const c = activityColor(p, t.value);
               return (
                 <Pressable
                   key={t.value}
                   accessibilityRole="button"
                   accessibilityState={{ selected: on }}
                   onPress={() => pick(t.value)}
-                  style={{ flex: 1, height: 68, borderRadius: 14, backgroundColor: on ? p.primary : p.inset, alignItems: 'center', justifyContent: 'center', gap: 6 }}
+                  style={{ flex: 1, height: 68, borderRadius: 14, borderWidth: 1.5, borderColor: on ? c.color : 'transparent', backgroundColor: on ? c.tint : p.inset, alignItems: 'center', justifyContent: 'center', gap: 6 }}
                 >
-                  <Icon size={22} color={fg} />
-                  <T v="captionMedium" color={fg}>
+                  <Icon size={22} color={c.color} />
+                  <T v="captionMedium" color={on ? c.onTint : p.textBody}>
                     {t.label}
                   </T>
                 </Pressable>

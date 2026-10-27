@@ -4,7 +4,7 @@
  * here following the same rule as the other activity colors: the color lifts in
  * lightness, the tint is the color at low opacity over the dark surface.
  */
-import type { Lane, StructureTone } from '@fit/core';
+import type { ExternalActivity, Lane, QuickLogType, StructureTone } from '@fit/core';
 
 export interface ActivityColor {
   /** Icons, filled strip segments, progress fills. */
@@ -117,6 +117,31 @@ export const dark: Palette = {
 
 export function laneColor(p: Palette, lane: Lane): ActivityColor {
   return lane === 'run' ? p.run : lane === 'workout' ? p.strength : p.stretch;
+}
+
+/** Quick log, watch and history types: a run, a quick log or a watch activity. */
+export type ActivityType = QuickLogType | ExternalActivity;
+
+/** Other activity types reuse the five families, icon and tint alike (design.md, Other activity types). */
+export function activityColor(p: Palette, type: ActivityType): ActivityColor {
+  switch (type) {
+    case 'run':
+    case 'treadmill':
+    case 'swim':
+      return p.run;
+    case 'hike':
+    case 'stretch':
+      return p.stretch;
+    case 'lift':
+    case 'strength':
+      return p.strength;
+    case 'bike':
+      return p.hard;
+    case 'walk':
+    case 'other':
+      // p.walk is a bar color, too pale for an icon on a tile.
+      return { color: p.textMuted, tint: p.inset, onTint: p.textSecondary, pending: p.walk };
+  }
 }
 
 export function toneColor(p: Palette, tone: StructureTone): string {

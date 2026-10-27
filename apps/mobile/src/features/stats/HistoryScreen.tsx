@@ -12,7 +12,7 @@ import { repo } from '@/data';
 import { useUnits } from '@/data/store';
 import { useFocusedDataVersion } from '@/lib/focusedVersion';
 import { haptic } from '@/lib/haptics';
-import { createStyles, usePalette } from '@/theme';
+import { activityColor, createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Chip, IconButton, LaneTile, T } from '@/ui/primitives';
 
@@ -163,8 +163,8 @@ const HistoryRow = memo(function HistoryRow({ item }: { item: HistoryItem }) {
       {lane ? (
         <LaneTile lane={lane} size={36} />
       ) : (
-        <View style={s.tile}>
-          <Icon size={20} color={p.textSecondary} />
+        <View style={[s.tile, { backgroundColor: activityColor(p, item.kind).tint }]}>
+          <Icon size={20} color={activityColor(p, item.kind).color} />
         </View>
       )}
       <View style={{ flex: 1, gap: 2 }}>
