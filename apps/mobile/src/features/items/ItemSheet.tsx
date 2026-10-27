@@ -12,8 +12,10 @@ import { monthDay, weekdayShort } from '@/lib/format';
 import { createStyles, usePalette } from '@/theme';
 import { type as typeRamp } from '@/theme/type';
 import { Button, Chip, Group, LaneTile, Row, Stepper, T, NumStepper } from '@/ui/primitives';
+import { RatingSlider, RPE_WORDS } from '@/ui/RatingSlider';
 import { Sheet } from '@/ui/Sheet';
 import { dayName, isPast, plannedLine } from './meta';
+import { WorkoutPreview } from './WorkoutPreview';
 import { haptic } from '@/lib/haptics';
 
 export type ItemSheetMode = 'actions' | 'details' | 'skip' | 'move';
@@ -28,13 +30,6 @@ function close(): void {
   useItemSheet.setState({ key: undefined });
 }
 
-/** Done with one tap, with haptic and Undo. */
-export function markDoneNow(item: AgendaItem): void {
-  haptic.commit();
-  actions.markDone(item.key);
-  showSnack({ message: `${item.title} done`, actionLabel: 'Undo', onAction: () => actions.reopen(item.key) });
-}
-
 export function ItemSheetHost() {
   const { key, mode } = useItemSheet();
   const item = useFit((s) => (key ? s.items[key] : undefined));
@@ -45,7 +40,7 @@ export function ItemSheetHost() {
       <LaneTile lane={item.lane} size={40} />
       <View style={{ flex: 1 }}>
         <T v="sheetTitle" numberOfLines={1}>
-          {mode === 'move' ? `Move ${item.title}` : mode === 'skip' ? `Skip ${item.title}` : item.title}
+          {mode === 'move' ? `Move ${item.title}` : mode === 'skip' ? `Skip ${item.title}` : mode === 'details' && item.status === 'pending' ? `Complete ${item.title}` : item.title}
         </T>
         <T v="label" tone="secondary" style={{ fontWeight: '400' }}>
           {plannedLine(item)}
@@ -54,7 +49,7 @@ export function ItemSheetHost() {
     </View>
   );
   return (
-    <Sheet visible onClose={close} header={header} scroll={mode === 'move' || mode === 'details'}>
+    <Sheet visible onClose={close} header={header} scroll={mode !== 'skip'}>
       {mode === 'actions' && <Actions item={item} />}
       {mode === 'details' && <Details item={item} />}
       {mode === 'skip' && <Skip item={item} />}
@@ -70,6 +65,8 @@ function Actions({ item }: { item: AgendaItem }) {
   if (item.status !== 'pending') {
     return (
       <View style={{ gap: 8 }}>
+        <WorkoutPreview item={item} />
+        <View style={{ height: 6 }} />
         {item.status === 'done' && <Button label="Edit details" kind="outline" onPress={() => go('details')} />}
         <Button
           label={item.status === 'done' ? 'Mark not done' : 'Undo skip'}
@@ -87,6 +84,8 @@ function Actions({ item }: { item: AgendaItem }) {
   const guided = item.source.type === 'schedule' ? (item.lane === 'stretch' ? '/stretch/[id]' : '/strength/[id]') : undefined;
   return (
     <View style={{ gap: 8 }}>
+      <WorkoutPreview item={item} />
+      <View style={{ height: 6 }} />
       {guided && (
         <Button
           label="Start"
@@ -97,15 +96,7 @@ function Actions({ item }: { item: AgendaItem }) {
           }}
         />
       )}
-      <Button
-        label="Done"
-        kind={guided ? 'outline' : 'primary'}
-        onPress={() => {
-          close();
-          markDoneNow(item);
-        }}
-      />
-      <Button label="Done with details" kind="outline" onPress={() => go('details')} />
+      <Button label="Complete" kind={guided ? 'outline' : 'primary'} onPress={() => go('details')} />
       <View style={{ flexDirection: 'row', gap: 8 }}>
         <Button label="Skip" kind="outline" style={{ flex: 1 }} onPress={() => go('skip')} />
         {item.date !== tomorrow && (
@@ -170,12 +161,14 @@ function Skip({ item }: { item: AgendaItem }) {
   );
 }
 
+/** Completing any item: time, distance, effort and a note, prefilled from what is known. */
 function Details({ item }: { item: AgendaItem }) {
   const units = useUnits();
   const s = useFormStyles();
   const p = usePalette();
   const [minutes, setMinutes] = useState(item.details?.minutes ?? Math.max(1, Math.round(item.estSeconds / 60)));
-  const [distance, setDistance] = useState(item.details?.distanceM ? Math.round(metersToUnit(item.details.distanceM, units.distance) * 10) / 10 : 0);
+  const knownM = item.details?.distanceM ?? (item.status === 'pending' && item.lane === 'run' ? item.estMeters : undefined);
+  const [distance, setDistance] = useState(knownM ? Math.round(metersToUnit(knownM, units.distance) * 10) / 10 : 0);
   const [rpe, setRpe] = useState<number | undefined>(item.details?.rpe);
   const [note, setNote] = useState(item.details?.note ?? '');
   const save = () => {
@@ -189,7 +182,7 @@ function Details({ item }: { item: AgendaItem }) {
     haptic.commit();
     const wasDone = item.status === 'done';
     actions.markDone(item.key, details);
-    showSnack({ message: wasDone ? 'Details saved' : `${item.title} done`, actionLabel: wasDone ? undefined : 'Undo', onAction: wasDone ? undefined : () => actions.reopen(item.key) });
+    showSnack({ message: wasDone ? 'Details saved' : `${item.title} complete`, actionLabel: wasDone ? undefined : 'Undo', onAction: wasDone ? undefined : () => actions.reopen(item.key) });
   };
   return (
     <View style={{ gap: 14 }}>
@@ -200,34 +193,16 @@ function Details({ item }: { item: AgendaItem }) {
         <Row label="Distance">
           <NumStepper label="Distance" value={distance} min={0} max={100} step={0.1} format={(n) => (n === 0 ? 'None' : `${n.toFixed(1)} ${units.distance}`)} onChange={setDistance} />
         </Row>
-        <View style={{ padding: 16, gap: 10 }}>
-          <T v="bodyMedium">Effort, RPE 1-10</T>
-          <View style={{ flexDirection: 'row', gap: 4 }}>
-            {Array.from({ length: 10 }, (_, i) => i + 1).map((n) => (
-              <Pressable
-                key={n}
-                accessibilityRole="button"
-                accessibilityLabel={`RPE ${n}`}
-                accessibilityState={{ selected: rpe === n }}
-                onPress={() => {
-                  haptic.tick();
-                  setRpe(rpe === n ? undefined : n);
-                }}
-                style={[s.rpe, rpe === n && { backgroundColor: p.primary }]}
-              >
-                <T v="labelStrong" num color={rpe === n ? p.onPrimary : p.textBody}>
-                  {n}
-                </T>
-              </Pressable>
-            ))}
-          </View>
+        <View style={{ padding: 16, paddingBottom: 4, gap: 4 }}>
+          <T v="bodyMedium">Effort</T>
+          <RatingSlider value={rpe} words={RPE_WORDS} label="Effort, 1 to 10" prompt="Tap or slide to rate" ends={['1 very easy', '10 all out']} onChange={setRpe} />
         </View>
-        <View style={{ paddingHorizontal: 16, paddingBottom: 16, gap: 8 }}>
+        <View style={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 16, gap: 8 }}>
           <T v="bodyMedium">Note</T>
           <TextInput value={note} onChangeText={setNote} placeholder="How it went" placeholderTextColor={p.textTertiary} style={s.input} accessibilityLabel="Note" />
         </View>
       </Group>
-      <Button label="Save" onPress={save} />
+      <Button label={item.status === 'done' ? 'Save' : 'Complete'} onPress={save} />
     </View>
   );
 }
@@ -235,7 +210,6 @@ function Details({ item }: { item: AgendaItem }) {
 export const useFormStyles = createStyles((p) => ({
   input: { ...typeRamp.body, color: p.text, height: 40, borderRadius: 10, backgroundColor: p.inset, paddingHorizontal: 12, paddingVertical: 0 },
   inputWrap: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rpe: { flex: 1, height: 36, borderRadius: 10, backgroundColor: p.inset, alignItems: 'center', justifyContent: 'center' },
 }));
 
 /** Move.html: this week and next, each day showing what is already on it. */

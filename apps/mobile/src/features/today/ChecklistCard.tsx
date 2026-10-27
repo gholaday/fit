@@ -3,7 +3,7 @@ import { router } from 'expo-router';
 import { memo } from 'react';
 import { Pressable, View } from 'react-native';
 import { useItem, usePlan, useRoutines, useUnits } from '@/data/store';
-import { markDoneNow, openItemSheet } from '@/features/items/ItemSheet';
+import { openItemSheet } from '@/features/items/ItemSheet';
 import { itemSubtitle } from '@/features/items/meta';
 import { clockTime } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
@@ -12,8 +12,8 @@ import { Icons } from '@/ui/icons';
 import { Button, IconButton, LaneTile, StructureBar, T } from '@/ui/primitives';
 
 /**
- * One checklist card. Done is one tap; long-press Done opens Done + details; the card
- * body opens the actions sheet (Skip, Move to tomorrow, Move to another day).
+ * One checklist card. Complete opens the details (time, distance, effort, note); the card
+ * body opens the item sheet (the workout, Skip, Move to tomorrow, Move to another day).
  */
 export const ChecklistCard = memo(function ChecklistCard({ itemKey, hero }: { itemKey: string; hero: boolean }) {
   const item = useItem(itemKey);
@@ -22,6 +22,11 @@ export const ChecklistCard = memo(function ChecklistCard({ itemKey, hero }: { it
   if (hero) return <HeroRunCard item={item} />;
   return <CompactCard item={item} />;
 });
+
+function complete(item: AgendaItem): void {
+  haptic.tap();
+  openItemSheet(item.key, 'details');
+}
 
 function HeroRunCard({ item }: { item: AgendaItem }) {
   const s = useStyles();
@@ -62,17 +67,7 @@ function HeroRunCard({ item }: { item: AgendaItem }) {
           }}
           icon={<Icons.play size={16} color={p.onPrimary} />}
         />
-        <Button
-          label="Done"
-          size="md"
-          kind="outline"
-          style={{ width: 96 }}
-          accessibilityHint="Hold for details"
-          onPress={() => markDoneNow(item)}
-          onLongPress={() => openItemSheet(item.key, 'details')}
-          delayLongPress={350}
-          icon={<Icons.check size={18} color={p.text} />}
-        />
+        <Button label="Complete" size="md" kind="outline" style={{ width: 132 }} accessibilityHint="Opens time, distance, effort and a note" onPress={() => complete(item)} icon={<Icons.check size={18} color={p.text} />} />
       </View>
     </Pressable>
   );
@@ -110,7 +105,7 @@ function CompactCard({ item }: { item: AgendaItem }) {
           {item.time ? `${clockTime(item.time)}, ${sub}` : sub}
         </T>
       </View>
-      <IconButton label={`Done, ${item.title}`} bg="none" size={40} onPress={() => markDoneNow(item)} onLongPress={() => openItemSheet(item.key, 'details')} delayLongPress={350} style={{ borderWidth: 1, borderColor: p.border, borderRadius: 12 }}>
+      <IconButton label={`Complete ${item.title}`} bg="none" size={40} onPress={() => complete(item)} style={{ borderWidth: 1, borderColor: p.border, borderRadius: 12 }}>
         <Icons.check size={18} color={p.text} />
       </IconButton>
     </Pressable>

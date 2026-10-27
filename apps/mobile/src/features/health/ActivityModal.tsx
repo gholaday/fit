@@ -14,6 +14,7 @@ import { haptic } from '@/lib/haptics';
 import { createStyles, laneColor, usePalette } from '@/theme';
 import { Icons, LANE_ICON, QUICK_LOG_ICON } from '@/ui/icons';
 import { Button, T } from '@/ui/primitives';
+import { RatingSlider, RPE_WORDS } from '@/ui/RatingSlider';
 import { Sheet } from '@/ui/Sheet';
 import { closeActivities, markHandled, reloadHealth, useHealth } from './state';
 
@@ -73,6 +74,7 @@ function Form({ ext, position, total }: { ext: ExternalSession; position: number
   const [choice, setChoice] = useState<string>(match.suggested?.key ?? NONE);
   const [title, setTitle] = useState(ext.title);
   const [rpe, setRpe] = useState<number>();
+  const [note, setNote] = useState('');
   const Icon = ACTIVITY_ICON[ext.activity];
   const seconds = (Date.parse(ext.endedAt) - Date.parse(ext.startedAt)) / 1000;
   const facts = [formatMinutes(seconds), ext.distanceM ? formatDistance(ext.distanceM, units.distance, 2) : undefined, ext.avgHr ? `${Math.round(ext.avgHr)} bpm avg` : undefined].filter(Boolean).join(', ');
@@ -87,7 +89,7 @@ function Form({ ext, position, total }: { ext: ExternalSession; position: number
   const save = () => {
     haptic.commit();
     const planKey = choice === NONE ? undefined : choice;
-    repo.saveExternal(ext.id, { planKey, title: title.trim() || ext.title, activity: ext.activity, rpe });
+    repo.saveExternal(ext.id, { planKey, title: title.trim() || ext.title, activity: ext.activity, rpe, note: note.trim() || undefined });
     after(planKey ? 'Saved to your plan' : 'Saved, not part of your plan');
   };
 
@@ -137,30 +139,8 @@ function Form({ ext, position, total }: { ext: ExternalSession; position: number
         </View>
       </View>
 
-      <View style={{ gap: 8 }}>
-        <T v="labelStrong" tone="secondary">
-          How hard was it
-        </T>
-        <View style={{ flexDirection: 'row', gap: 4 }}>
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-            <Pressable
-              key={n}
-              accessibilityRole="button"
-              accessibilityLabel={`Effort ${n} of 10`}
-              accessibilityState={{ selected: rpe === n }}
-              onPress={() => {
-                haptic.tick();
-                setRpe(rpe === n ? undefined : n);
-              }}
-              style={[f.rpe, rpe === n && { backgroundColor: p.primary }]}
-            >
-              <T v="label" num color={rpe === n ? p.onPrimary : p.text}>
-                {String(n)}
-              </T>
-            </Pressable>
-          ))}
-        </View>
-      </View>
+      <RatingSlider value={rpe} words={RPE_WORDS} label="Effort, 1 to 10" prompt="Tap or slide to rate" ends={['1 very easy', '10 all out']} onChange={setRpe} />
+      <TextInput value={note} onChangeText={setNote} placeholder="Note, optional" placeholderTextColor={p.textTertiary} style={f.input} accessibilityLabel="Note" />
 
       <Button label="Save" onPress={save} />
       <View style={{ flexDirection: 'row', gap: 8 }}>

@@ -2,21 +2,21 @@
  * A run workout in the library: its structure, steps and estimates, with Start (the usual
  * pre-start with this workout), Edit, Duplicate and Delete.
  */
-import { formatDistance, formatMinutes, isRepeat, structureSegments, totalMeters, totalSeconds } from '@fit/core';
+import { formatDistance, formatMinutes, structureSegments, totalMeters, totalSeconds } from '@fit/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
 import { actions, showSnack, useUnits, useWorkouts } from '@/data/store';
-import { stepName, stepTone } from '@/features/run/steps';
 import { haptic } from '@/lib/haptics';
-import { createStyles, toneColor, usePalette } from '@/theme';
+import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Sheet } from '@/ui/Sheet';
 import { Button, IconButton, StructureBar, T } from '@/ui/primitives';
 import { StatusShade } from '@/ui/StatusShade';
-import { paceLookup, stepLine } from './describe';
+import { paceLookup } from './describe';
+import { WorkoutSteps } from './WorkoutSteps';
 
 const MODE_LABEL = { outdoor: 'Outdoor', treadmill: 'Treadmill', timer: 'Timer' } as const;
 
@@ -84,24 +84,7 @@ export function WorkoutScreen() {
         </View>
         <StructureBar segments={structureSegments(workout.items, pace)} height={12} />
 
-        <View style={s.card}>
-          {workout.items.map((it, i) =>
-            isRepeat(it) ? (
-              <View key={it.id} style={[s.block, i > 0 && s.divider]}>
-                <T v="labelStrong" tone="secondary">{`${it.repeat}x`}</T>
-                <View style={{ flex: 1, gap: 8 }}>
-                  {it.steps.map((st) => (
-                    <StepLine key={st.id} name={stepName(st)} line={stepLine(st, unit, vdot)} color={toneColor(p, stepTone(st))} />
-                  ))}
-                </View>
-              </View>
-            ) : (
-              <View key={it.id} style={[s.block, i > 0 && s.divider]}>
-                <StepLine name={stepName(it)} line={stepLine(it, unit, vdot)} color={toneColor(p, stepTone(it))} />
-              </View>
-            ),
-          )}
-        </View>
+        <WorkoutSteps items={workout.items} vdot={vdot} />
 
         <View style={{ gap: 8 }}>
           <Button label="Duplicate" kind="outline" size="md" onPress={duplicate} />
@@ -126,27 +109,10 @@ export function WorkoutScreen() {
   );
 }
 
-function StepLine({ name, line, color }: { name: string; line: string; color: string }) {
-  return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
-      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: color }} />
-      <View style={{ flex: 1 }}>
-        <T v="bodyMedium">{name}</T>
-        <T v="caption" tone="secondary" num>
-          {line}
-        </T>
-      </View>
-    </View>
-  );
-}
-
 const useStyles = createStyles((p) => ({
   screen: { flex: 1, backgroundColor: p.bg },
   center: { alignItems: 'center', justifyContent: 'center', gap: 12 },
   content: { paddingHorizontal: 20, paddingBottom: 32, gap: 16 },
   top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  card: { backgroundColor: p.surface, borderRadius: 16, paddingHorizontal: 14 },
-  block: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, paddingVertical: 12 },
-  divider: { borderTopWidth: 1, borderTopColor: p.divider },
   footer: { paddingHorizontal: 20, paddingTop: 8 },
 }));
