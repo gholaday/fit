@@ -63,7 +63,7 @@ export function RunScreen() {
 
   // A finished workout (last step done) goes straight to its summary.
   useEffect(() => {
-    if (phase === 'finished' && sessionId) router.replace({ pathname: '/summary/[id]', params: { id: sessionId } });
+    if (phase === 'finished' && sessionId) router.replace({ pathname: '/summary/[id]', params: { id: sessionId, saved: '1' } });
   }, [phase, sessionId]);
 
   // Hardware back never drops a run: it asks first.

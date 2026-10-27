@@ -2,9 +2,9 @@
  * Run summary (spec §5 "Post-session summary", mockup Summary). Reads the stored session
  * once; the map and replay are lazy-loaded so opening a summary never waits on MapLibre.
  */
-import { type DistanceUnit, type SessionDetail, cumulativeDistance, formatClock, formatDistance, hrStats, metersToUnit, paceToUnit, splits as splitsOf, unitToMeters } from '@fit/core';
+import { type DistanceUnit, METERS_PER_MILE, type RecordEvent, type SessionDetail, cumulativeDistance, formatClock, formatDistance, hrStats, metersToUnit, paceToUnit, splits as splitsOf, unitToMeters } from '@fit/core';
 import { router, useLocalSearchParams } from 'expo-router';
-import { lazy, Suspense, useState } from 'react';
+import { lazy, Suspense, useEffect, useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
@@ -15,6 +15,7 @@ import { createStyles, toneColor, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, IconButton, T } from '@/ui/primitives';
 import { PostRunCard } from '@/features/stretch/PostRunCard';
+import { RecordRow, Trophy } from '@/features/records/records';
 import { HrCard } from './HrCard';
 import { SessionProfile } from './SessionProfile';
 import { stepAmount, stepName, stepTone } from './steps';
@@ -38,14 +39,31 @@ function startedLabel(iso: string): string {
 
 const pace = (secPerKm: number | undefined, unit: DistanceUnit) => (secPerKm === undefined || !Number.isFinite(secPerKm) ? '-' : formatClock(paceToUnit(secPerKm, unit)));
 
+/** Trophies this run earned. Records are rebuilt after a save, so time the first read. */
+function newRecords(id: string): RecordEvent[] {
+  const t0 = performance.now();
+  const out = repo.sessionRecords(id).filter((e) => e.celebrate);
+  if (__DEV__) console.log(`[records] sessionRecords ${Math.round(performance.now() - t0)} ms`);
+  return out;
+}
+
 export function SummaryScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  // `saved` is set when the run screen opens the summary right after Save.
+  const { id, saved } = useLocalSearchParams<{ id: string; saved?: string }>();
   // One read for the whole screen.
   const [session, setSession] = useState<SessionDetail | undefined>(() => repo.session(id));
   const s = useStyles();
   const p = usePalette();
   const insets = useSafeAreaInsets();
-  const unit = useUnits().distance;
+  const units = useUnits();
+  const unit = units.distance;
+  const [records] = useState(() => (session ? newRecords(id) : []));
+  // A small pop-up on Save; opening the summary later from History stays quiet.
+  useEffect(() => {
+    if (!saved || records.length === 0) return;
+    haptic.success();
+    showSnack({ message: records.length === 1 ? '1 new record' : `${records.length} new records` });
+  }, []);
   const zones = useHrProfile()?.zones;
   const vdot = useVdot();
   const bump = usePaceBump();
@@ -85,6 +103,10 @@ export function SummaryScreen() {
   const hasDistance = session.distanceM > 20;
   const avgPace = hasDistance ? session.elapsedMs / session.distanceM : undefined;
   const splitRows = hasRoute ? splitsOf(cumulativeDistance(session.points), unit, session.pauses) : [];
+  // A new 1 km (or 1 mi) record puts a trophy on the fastest full split of that length.
+  const splitM = unit === 'mi' ? METERS_PER_MILE : 1000;
+  const splitRecord = records.some((e) => e.kind === 'effort' && Math.abs((e.meters ?? 0) - splitM) < 1);
+  const fastest = splitRecord ? splitRows.filter((x) => !x.partial).reduce<(typeof splitRows)[number] | undefined>((b, x) => (!b || x.durationS < b.durationS ? x : b), undefined)?.index : undefined;
 
   return (
     <View style={s.screen}>
@@ -117,6 +139,18 @@ export function SummaryScreen() {
           {hasDistance && <Stat value={metersToUnit(session.distanceM, unit).toFixed(2)} label={unit === 'mi' ? 'Miles' : 'Kilometers'} />}
           {hasDistance && <Stat value={pace(avgPace, unit)} label={`Pace /${unit}`} />}
         </View>
+
+        {records.length > 0 && (
+          <View style={s.card}>
+            <View style={[s.cardTitle, { flexDirection: 'row', alignItems: 'center', gap: 8 }]}>
+              <Trophy size={20} />
+              <T v="headline">New records</T>
+            </View>
+            {records.map((e, i) => (
+              <RecordRow key={e.key} e={e} units={units} first={i === 0} />
+            ))}
+          </View>
+        )}
 
         {trial && <TrialCard sessionId={session.id} trial={trial} current={vdot} />}
         {bump && !trial && <PaceBumpCard bump={bump} />}
@@ -169,9 +203,12 @@ export function SummaryScreen() {
                 <T v="bodyMedium" num style={{ width: 64 }}>
                   {sp.partial ? formatDistance(sp.distanceM, unit, 2) : `${sp.index} ${unit}`}
                 </T>
-                <T v="bodyStrong" num style={{ flex: 1 }}>
-                  {`${pace(sp.paceSecPerKm, unit)} /${unit}`}
-                </T>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <T v="bodyStrong" num>
+                    {`${pace(sp.paceSecPerKm, unit)} /${unit}`}
+                  </T>
+                  {sp.index === fastest && <Trophy size={14} />}
+                </View>
                 <T v="label" tone="secondary" num>
                   {formatClock(Math.round(sp.durationS))}
                 </T>
