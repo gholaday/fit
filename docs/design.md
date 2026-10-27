@@ -59,6 +59,16 @@ Font: **Inter** (400, 500, 600, 700). Numbers use tabular figures.
 | Sprint | `#B97A5B` / `#F5E4DC` / `#7E4630` | to define |
 | Walk, recovery | `#D0D0D5` | `#4B4E57` |
 
+Other activity types (quick log, watch imports) reuse the nearest family above, icon and tint alike, so the palette stays at five hues:
+
+| Activity | Family |
+|---|---|
+| Run, treadmill, swim | Run (blue) |
+| Hike, stretch | Stretch (green) |
+| Lift, strength | Strength (violet) |
+| Bike | Pace (amber) |
+| Walk, other | Walk (grey) |
+
 ### Shape and motion
 - Card radius 14-20, buttons 12-14, pills fully rounded. Touch targets at least 44 px.
 - Motion 150-250 ms, UI thread only, never delays an action.
