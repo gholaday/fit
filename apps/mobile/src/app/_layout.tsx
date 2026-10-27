@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { AppState } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { repo } from '@/data';
 import { actions } from '@/data/store';
 import { usePalette } from '@/theme';
 import { ActivityModalHost } from '@/features/health/ActivityModal';
@@ -31,8 +32,15 @@ export default function RootLayout() {
       void syncHealth();
       stop = startReminderSync();
     }, 300);
+    // Records build once, after the first paint settles, so Summary and Stats read them free.
+    const warm = requestIdleCallback(() => {
+      const t0 = Date.now();
+      repo.warmRecords();
+      if (__DEV__) console.log(`[records] warm ${Date.now() - t0} ms`);
+    });
     return () => {
       clearTimeout(t);
+      cancelIdleCallback(warm);
       stop?.();
     };
   }, []);
