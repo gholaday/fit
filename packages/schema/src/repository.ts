@@ -128,6 +128,7 @@ const DEFAULT_SETTINGS: Settings = {
   postRunStretch: true,
   healthConnect: { importWorkouts: true, addHr: true, writeSessions: false, allSources: false, autoMatch: false },
   treadmill: DEFAULT_TREADMILL,
+  appearance: 'system',
 };
 
 const ACTIVITY_TITLES: Record<ExternalActivity, string> = {

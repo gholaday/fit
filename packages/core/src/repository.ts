@@ -264,6 +264,8 @@ export interface Settings {
   healthConnect: HealthConnectPrefs;
   /** Remembered treadmill speeds (spec §5 Treadmill, "remember last"). */
   treadmill: TreadmillPrefs;
+  /** App theme; system follows the phone. */
+  appearance: 'system' | 'light' | 'dark';
 }
 
 /** Spec §11 Settings. */
