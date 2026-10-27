@@ -90,7 +90,9 @@ import {
   type AerobicTest,
   type HistoryItem,
   type HistoryKind,
-  computeRecords,
+  replay,
+  type RecordBook,
+  type RecordItem,
   currentRecords,
   type StrengthSessionDetail,
   runDayChanges,
@@ -607,13 +609,22 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
    * Record events, replayed from every saved run and set and kept in memory until a write
    * that can move a record (save, delete, distance fix, watch save) clears them.
    */
-  let recordCache: RecordEvent[] | undefined;
+  let recordCache: RecordBook | undefined;
   const invalidateRecords = () => {
     recordCache = undefined;
   };
+  /**
+   * After a save: extend the book with the new session when it is the latest one (the
+   * normal case), so the summary's trophies cost one session, not a full replay.
+   */
+  const extendRecords = (item: RecordItem) => {
+    const at = (item.run ?? item.lift)!.startedAt;
+    if (recordCache && at >= recordCache.lastAt) recordCache.add(item);
+    else recordCache = undefined;
+  };
   const recordEvents = (): RecordEvent[] => {
     backfillStats();
-    if (recordCache) return recordCache;
+    if (recordCache) return recordCache.events;
     const runs: RunRecordInput[] = db
       .select({ id: t.sessions.id, startedAt: t.sessions.startedAt, distanceM: t.sessions.distanceM, elapsedMs: t.sessions.elapsedMs, statsJson: t.sessions.statsJson })
       .from(t.sessions)
@@ -660,8 +671,8 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       if (durationS !== null) set.durationS = durationS;
       (entry.sets as LoggedSet[]).push(set);
     }
-    recordCache = computeRecords(runs, [...lifts.values()]);
-    return recordCache;
+    recordCache = replay(runs, [...lifts.values()]);
+    return recordCache.events;
   };
 
   const repo: FitRepository = {
@@ -1356,7 +1367,6 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     },
 
     finishSession(id, finish) {
-      invalidateRecords();
       const row = db.select().from(t.sessions).where(eq(t.sessions.id, id)).get();
       if (!row) throw new Error(`Unknown session ${id}`);
       const results = stepResults(finish.player.steps, finish.player.log);
@@ -1417,6 +1427,16 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
             .where(eq(t.planWorkouts.id, row.planWorkoutId))
             .run();
         }
+      });
+      extendRecords({
+        run: {
+          sessionId: id,
+          date: localIsoDate(new Date(row.startedAt)),
+          startedAt: new Date(row.startedAt).toISOString(),
+          distanceM: finish.distanceM,
+          durationS: Math.round(finish.elapsedMs / 1000),
+          stats: { bests: stats.bests, nonstopS: stats.nonstopS },
+        },
       });
     },
 
@@ -1800,7 +1820,6 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     },
 
     saveStrengthSession(input) {
-      invalidateRecords();
       const id = newId();
       const startedAt = Date.parse(input.startedAt);
       const endedAt = Date.parse(input.endedAt);
@@ -1840,6 +1859,14 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         }
       });
       if (input.scheduleKey) upsertCompletion(input.scheduleKey, 'done', { completedAt: endedAt, sessionId: id });
+      extendRecords({
+        lift: {
+          sessionId: id,
+          date: localIsoDate(new Date(startedAt)),
+          startedAt: new Date(startedAt).toISOString(),
+          sets: input.sets.map(({ completedAt: _c, ...s }) => s),
+        },
+      });
       return id;
     },
 
@@ -2419,6 +2446,10 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
 
     exerciseRecords(exerciseId) {
       return recordEvents().filter((e) => e.exerciseId === exerciseId);
+    },
+
+    warmRecords() {
+      recordEvents();
     },
 
     liftBests(exerciseIds) {

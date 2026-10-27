@@ -59,11 +59,26 @@ export function oneRepMax(weightKg: number, reps: number): number | undefined {
 
 const lowerIsBetter = (kind: RecordEvent['kind']) => kind === 'effort';
 
-export function computeRecords(runs: readonly RunRecordInput[], lifts: readonly LiftRecordInput[]): RecordEvent[] {
-  type Item = { at: string; run?: RunRecordInput; lift?: LiftRecordInput };
-  const items: Item[] = [...runs.map((run) => ({ at: run.startedAt, run })), ...lifts.map((lift) => ({ at: lift.startedAt, lift }))].sort((a, b) =>
-    a.at.localeCompare(b.at),
-  );
+export interface RecordItem {
+  run?: RunRecordInput;
+  lift?: LiftRecordInput;
+}
+
+export interface RecordBook {
+  /** Every record move so far, in session order. */
+  readonly events: RecordEvent[];
+  /** Start of the latest session added. A session that started earlier needs a full replay. */
+  readonly lastAt: string;
+  /** Adds the next session in start order and returns the record moves it made. */
+  add(item: RecordItem): RecordEvent[];
+}
+
+/**
+ * Replays sessions one at a time in start order. Keep the book to extend it after a save
+ * instead of replaying every session again.
+ */
+export function recordBook(): RecordBook {
+  let lastAt = '';
   const best = new Map<string, number>();
   const events: RecordEvent[] = [];
 
@@ -79,7 +94,9 @@ export function computeRecords(runs: readonly RunRecordInput[], lifts: readonly 
   let bestWeek: { week: IsoDate; m: number } | undefined;
   const firsts = new Set<string>();
 
-  for (const { run, lift } of items) {
+  const add = ({ run, lift }: RecordItem): RecordEvent[] => {
+    const start = events.length;
+    lastAt = (run ?? lift)?.startedAt ?? lastAt;
     if (run) {
       const base = { group: 'run' as const, sessionId: run.sessionId, date: run.date };
       for (const b of run.stats?.bests ?? []) consider({ ...base, key: `run:effort:${b.meters}`, kind: 'effort', meters: b.meters, value: b.seconds });
@@ -145,8 +162,30 @@ export function computeRecords(runs: readonly RunRecordInput[], lifts: readonly 
         if (holds.length > 0) consider({ ...base, key: k('longest_hold'), kind: 'longest_hold', value: Math.max(...holds.map((s) => s.durationS!)) });
       }
     }
-  }
-  return events;
+    return events.slice(start);
+  };
+
+  return {
+    events,
+    add,
+    get lastAt() {
+      return lastAt;
+    },
+  };
+}
+
+const startOf = (i: RecordItem) => (i.run ?? i.lift)!.startedAt;
+
+/** Replays every session in start order: a full record book. */
+export function computeRecords(runs: readonly RunRecordInput[], lifts: readonly LiftRecordInput[]): RecordEvent[] {
+  return replay(runs, lifts).events;
+}
+
+export function replay(runs: readonly RunRecordInput[], lifts: readonly LiftRecordInput[]): RecordBook {
+  const items: RecordItem[] = [...runs.map((run) => ({ run })), ...lifts.map((lift) => ({ lift }))].sort((a, b) => startOf(a).localeCompare(startOf(b)));
+  const book = recordBook();
+  for (const item of items) book.add(item);
+  return book;
 }
 
 export type LiftBests = Partial<Record<LiftRecordKind, number>>;

@@ -666,6 +666,11 @@ export interface FitRepository {
   exerciseRecords(exerciseId: string): RecordEvent[];
   /** Current lift bests per exercise, for setRecords() while logging. */
   liftBests(exerciseIds: readonly string[]): Record<string, LiftBests>;
+  /**
+   * Builds the record book now (a full replay), so the first records read later is free.
+   * Call after first paint; saves then extend the book one session at a time.
+   */
+  warmRecords(): void;
 
   // Settings
   settings(): Settings;
