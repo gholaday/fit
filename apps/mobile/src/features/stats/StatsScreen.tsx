@@ -4,12 +4,14 @@
  * strength and stretching, then Activity (steps against the goal, resting heart rate).
  * A section with no data is hidden, not explained.
  */
-import { type IsoDate, type Weekday, PB_DISTANCES, addDays, formatClock, formatDistance, formatMinutes, formatPace, paceToUnit } from '@fit/core';
+import { type IsoDate, type Weekday, addDays, formatDistance, formatMinutes, formatPace, paceToUnit } from '@fit/core';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { repo } from '@/data';
 import { useSettings, useToday } from '@/data/store';
+import { RecordsCard } from '@/features/records/RecordsCard';
 import { readAt, useFocusedDataVersion } from '@/lib/focusedVersion';
 import { dateRangeLabel, dayOfMonth, monthDay, thousands, weekdayLetter } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
@@ -37,6 +39,8 @@ export function StatsScreen() {
   const [period, setPeriod] = useState<Period>('week');
   const [offset, setOffset] = useState(0);
   const data = useMemo(() => readAt(version, () => loadStats(period, offset, today)), [period, offset, today, version]);
+  // Records span all time, so the period does not change them.
+  const records = useMemo(() => readAt(version, () => ({ all: repo.records(), recent: repo.recentRecords(10) })), [version]);
 
   const go = (n: number) => {
     haptic.tick();
@@ -75,7 +79,7 @@ export function StatsScreen() {
         <CompletionCard data={data} period={period} />
         <RunningCard data={data} />
         <HeartCard data={data} />
-        <BestsCard data={data} />
+        <RecordsCard records={records.all} recent={records.recent} streak={data.streak} />
         <PlanWeeksCard data={data} />
         <StrengthCard data={data} />
         <StretchCard data={data} />
@@ -245,49 +249,6 @@ function HeartCard({ data }: { data: StatsData }) {
           <T v="bodyMedium">Resting heart rate</T>
           <T v="labelStrong" num>{`${resting.bpm} bpm`}</T>
         </View>
-      )}
-    </Card>
-  );
-}
-
-function BestsCard({ data }: { data: StatsData }) {
-  const s = useStyles();
-  const p = usePalette();
-  const unit = useSettings().units.distance;
-  const longest = data.longest;
-  if (data.bests.length === 0 && !longest) return null;
-  return (
-    <Card title="Personal bests" right={data.streak > 0 ? `${data.streak} week streak` : undefined}>
-      {data.bests.map((b, i) => {
-        const label = PB_DISTANCES.find((x) => Math.abs(x.meters - b.meters) < 1)?.label ?? formatDistance(b.meters, unit);
-        return (
-          <Pressable key={b.meters} accessibilityRole="button" onPress={() => router.push({ pathname: '/summary/[id]', params: { id: b.sessionId } })} style={[s.row, i > 0 && s.divider]}>
-            <T v="bodyMedium" style={{ width: 120 }}>
-              {label}
-            </T>
-            <T v="bodyStrong" num style={{ flex: 1 }}>
-              {formatClock(b.seconds)}
-            </T>
-            <T v="caption" tone="secondary" num>
-              {`${formatPace(b.seconds / (b.meters / 1000), unit)}, ${monthDay(b.date)}`}
-            </T>
-            <Icons.chevronRight size={14} color={p.textTertiary} />
-          </Pressable>
-        );
-      })}
-      {longest && (
-        <Pressable accessibilityRole="button" onPress={() => router.push({ pathname: '/summary/[id]', params: { id: longest.sessionId } })} style={[s.row, data.bests.length > 0 && s.divider]}>
-          <T v="bodyMedium" style={{ width: 120 }}>
-            Longest run
-          </T>
-          <T v="bodyStrong" num style={{ flex: 1 }}>
-            {formatDistance(longest.distanceM, unit, 2)}
-          </T>
-          <T v="caption" tone="secondary" num>
-            {monthDay(longest.date)}
-          </T>
-          <Icons.chevronRight size={14} color={p.textTertiary} />
-        </Pressable>
       )}
     </Card>
   );
