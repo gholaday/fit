@@ -3,7 +3,7 @@ import type { IsoDate, Weekday } from './dates';
 import type { HrProfileInput, HrZoneBand } from './hr';
 import type { ExternalActivity, PlanMatch } from './external';
 import type { TrialResult } from './pace';
-import type { PersonalBest, RunRow } from './stats';
+import type { PersonalBest, RunRow, SessionStats } from './stats';
 import type { CuePrefs } from './session/cues';
 import type { HrSample } from './session/heart';
 import type { TreadmillPrefs } from './session/treadmill';
@@ -458,6 +458,8 @@ export interface SessionDetail extends SessionListItem {
   log: StepLogEntry[];
   /** Wall-clock pause ranges; pass to splits() and mark as gaps in replay. */
   pauses: [number, number][];
+  /** Saved runs: distance split, Zone 2, decoupling, run/walk and best efforts. */
+  stats?: SessionStats;
   /** Full-resolution track; simplify with simplifyTo() for drawing. */
   points: TrackPoint[];
   /** Live samples with Health Connect filling dropouts (mergeHr); pass to hrStats(). */

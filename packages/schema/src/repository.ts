@@ -179,7 +179,6 @@ function toPaceProfile(r: typeof t.paceProfiles.$inferSelect): PaceProfile {
   return p;
 }
 
-const toHrSample = (r: typeof t.hrSamples.$inferSelect): HrSample => ({ tOffsetMs: r.tOffsetMs, bpm: r.bpm, source: r.source });
 
 function toPlanEvent(r: typeof t.planEvents.$inferSelect): PlanEvent {
   const e: PlanEvent = { id: r.id, type: r.type, message: r.message, createdAt: new Date(r.createdAt).toISOString() };
@@ -261,7 +260,12 @@ function toExercise(r: typeof t.exercises.$inferSelect): Exercise & { custom: bo
   return ex;
 }
 
-function toSummary(r: typeof t.exercises.$inferSelect): ExerciseSummary {
+type SummaryRow = Pick<
+  typeof t.exercises.$inferSelect,
+  'id' | 'slug' | 'name' | 'kind' | 'musclePrimary' | 'equipment' | 'tracking' | 'sides' | 'origin' | 'defaultHoldS'
+>;
+
+function toSummary(r: SummaryRow): ExerciseSummary {
   const s: ExerciseSummary = {
     id: r.id,
     slug: r.slug,
@@ -476,9 +480,28 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
   // -------------------------------------------------------------------------
   // Repository
 
+  // Tracks and HR traces run to thousands of rows, so they are read as arrays: drizzle's
+  // per-row mapping was most of the cost of opening a long run's summary.
+  const trackPointsOf = (id: string): TrackPoint[] =>
+    db
+      .values<[number, number, number, number | null, number, number | null]>(
+        sql`SELECT t_offset_ms, lat, lng, alt, accuracy, speed FROM track_points WHERE session_id = ${id} ORDER BY t_offset_ms`,
+      )
+      .map((r) => {
+        const p: TrackPoint = { tOffsetMs: r[0], lat: r[1], lng: r[2], accuracy: r[4] };
+        if (r[3] !== null) p.alt = r[3];
+        if (r[5] !== null) p.speed = r[5];
+        return p;
+      });
+
+  const hrSamplesOf = (id: string): HrSample[] =>
+    db
+      .values<[number, number, HrSample['source']]>(sql`SELECT t_offset_ms, bpm, source FROM hr_samples WHERE session_id = ${id} ORDER BY t_offset_ms`)
+      .map((r) => ({ tOffsetMs: r[0], bpm: r[1], source: r[2] }));
+
   /** Live HR with Health Connect filling its gaps, as the summary shows it. */
   const sessionHr = (id: string, endMs: number): HrSample[] => {
-    const samples = db.select().from(t.hrSamples).where(eq(t.hrSamples.sessionId, id)).orderBy(asc(t.hrSamples.tOffsetMs)).all().map(toHrSample);
+    const samples = hrSamplesOf(id);
     return mergeHr(
       samples.filter((h) => h.source === 'ble'),
       samples.filter((h) => h.source === 'health_connect'),
@@ -496,8 +519,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
 
   /** SessionStats for a run, from its step log, (outdoor) track and HR. */
   const statsFor = (row: StatsSource, player: PlayerState, distanceM: number, endedAt: number): SessionStats => {
-    const points =
-      row.mode === 'outdoor' ? db.select().from(t.trackPoints).where(eq(t.trackPoints.sessionId, row.id)).orderBy(asc(t.trackPoints.tOffsetMs)).all().map(toTrackPoint) : [];
+    const points = row.mode === 'outdoor' ? trackPointsOf(row.id) : [];
     const endMs = endedAt - row.startedAt;
     const zones = zonesFor(row.hrProfileId);
     return sessionStats({
@@ -513,11 +535,37 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     });
   };
 
+  /** Parsed stats by session, reused while the stored JSON is unchanged (Stats reads every run). */
+  const statsCache = new Map<string, { json: string; stats: SessionStats }>();
+  const parseStats = (id: string, json: string): SessionStats => {
+    const hit = statsCache.get(id);
+    if (hit?.json === json) return hit.stats;
+    const stats = JSON.parse(json) as SessionStats;
+    statsCache.set(id, { json, stats });
+    return stats;
+  };
+
+  type FullStatsSource = StatsSource & Pick<typeof t.sessions.$inferSelect, 'endedAt' | 'playerJson' | 'distanceM' | 'statsJson'>;
+
+  /** Stored stats when current, else computed and stored now. */
+  const currentStats = (row: FullStatsSource): SessionStats => {
+    const stored = row.statsJson ? parseStats(row.id, row.statsJson) : undefined;
+    if (stored?.v === SESSION_STATS_VERSION) return stored;
+    const stats = statsFor(row, JSON.parse(row.playerJson) as PlayerState, row.distanceM, row.endedAt ?? row.startedAt);
+    db.update(t.sessions).set({ statsJson: JSON.stringify(stats), ...stamp() }).where(eq(t.sessions.id, row.id)).run();
+    return stats;
+  };
+
+  /** False once every saved run has current stats; set again whenever a write clears some. */
+  let statsStale = true;
+
   /**
    * Runs without current stats get them on first use: saved before stats_json existed,
    * saved under an older SESSION_STATS_VERSION, or cleared when Health Connect HR changed.
    */
   const backfillStats = () => {
+    if (!statsStale) return;
+    statsStale = false;
     const rows = db
       .select({
         id: t.sessions.id,
@@ -1127,8 +1175,15 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
 
     sessionTrial(sessionId) {
       if (internalSetting<string[]>('dismissedTrials')?.includes(sessionId)) return undefined;
-      const s = repo.session(sessionId);
-      return s?.endedAt ? trialResult(s.steps) : undefined;
+      // Only the step log is needed; session() would also read the whole track and HR trace.
+      const row = db
+        .select({ playerJson: t.sessions.playerJson, endedAt: t.sessions.endedAt })
+        .from(t.sessions)
+        .where(and(eq(t.sessions.id, sessionId), notDeleted(t.sessions)))
+        .get();
+      if (!row?.endedAt) return undefined;
+      const player = JSON.parse(row.playerJson) as PlayerState;
+      return trialResult(stepResults(player.steps, player.log));
     },
 
     dismissTrial(sessionId) {
@@ -1143,7 +1198,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       const rows = db
         .select({ playerJson: t.sessions.playerJson })
         .from(t.sessions)
-        .where(and(eq(t.sessions.status, 'saved'), notDeleted(t.sessions), gte(t.sessions.startedAt, since)))
+        .where(and(eq(t.sessions.status, 'saved'), eq(t.sessions.kind, 'run'), notDeleted(t.sessions), gte(t.sessions.startedAt, since)))
         .orderBy(desc(t.sessions.startedAt))
         .limit(20)
         .all();
@@ -1320,7 +1375,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       const row = db.select().from(t.sessions).where(and(eq(t.sessions.id, id), notDeleted(t.sessions))).get();
       if (!row) return undefined;
       const player = JSON.parse(row.playerJson) as PlayerState;
-      const points = db.select().from(t.trackPoints).where(eq(t.trackPoints.sessionId, id)).orderBy(asc(t.trackPoints.tOffsetMs)).all().map(toTrackPoint);
+      const points = trackPointsOf(id);
       const detail: SessionDetail = {
         id: row.id,
         name: row.name,
@@ -1336,7 +1391,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         hr: [],
         hrFromHealth: false,
       };
-      const samples = db.select().from(t.hrSamples).where(eq(t.hrSamples.sessionId, id)).orderBy(asc(t.hrSamples.tOffsetMs)).all().map(toHrSample);
+      const samples = hrSamplesOf(id);
       const health = samples.filter((h) => h.source === 'health_connect');
       detail.hr = mergeHr(
         samples.filter((h) => h.source === 'ble'),
@@ -1344,6 +1399,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         (row.endedAt ?? now()) - row.startedAt,
       );
       detail.hrFromHealth = health.length > 0;
+      if (row.status === 'saved' && row.kind === 'run') detail.stats = currentStats(row);
       if (row.endedAt) detail.endedAt = new Date(row.endedAt).toISOString();
       if (row.avgPaceSPerKm !== null) detail.avgPaceSecPerKm = row.avgPaceSPerKm;
       if (row.rpe !== null) detail.rpe = row.rpe;
@@ -1426,7 +1482,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
     },
 
     externalRoute(externalId) {
-      return db.select().from(t.trackPoints).where(eq(t.trackPoints.sessionId, externalId)).orderBy(asc(t.trackPoints.tOffsetMs)).all().map(toTrackPoint);
+      return trackPointsOf(externalId);
     },
 
     catalogVersion() {
@@ -1509,7 +1565,25 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       if (filter.equipment) conds.push(eq(t.exercises.equipment, filter.equipment));
       const q = filter.query?.trim().toLowerCase();
       if (q) conds.push(like(t.exercises.searchText, `% ${q.replace(/[^a-z0-9]+/g, ' ').trim()}%`));
-      return db.select().from(t.exercises).where(and(...conds)).orderBy(asc(t.exercises.name)).all().map(toSummary);
+      // Only the list columns: instructions, aliases and images are most of each row.
+      return db
+        .select({
+          id: t.exercises.id,
+          slug: t.exercises.slug,
+          name: t.exercises.name,
+          kind: t.exercises.kind,
+          musclePrimary: t.exercises.musclePrimary,
+          equipment: t.exercises.equipment,
+          tracking: t.exercises.tracking,
+          sides: t.exercises.sides,
+          origin: t.exercises.origin,
+          defaultHoldS: t.exercises.defaultHoldS,
+        })
+        .from(t.exercises)
+        .where(and(...conds))
+        .orderBy(asc(t.exercises.name))
+        .all()
+        .map(toSummary);
     },
 
     exerciseCounts() {
@@ -1875,6 +1949,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
           .where(eq(t.sessions.id, sessionId))
           .run();
       });
+      statsStale = true;
     },
 
     pendingExternal() {
@@ -1983,6 +2058,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
           .where(eq(t.sessions.id, sessionId))
           .run();
       });
+      statsStale = true;
     },
 
     runRows(start, end) {
@@ -1990,16 +2066,25 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       const from = dayStartMs(start);
       const to = dayStartMs(addDays(end, 1));
       const rows: RunRow[] = db
-        .select({ id: t.sessions.id, startedAt: t.sessions.startedAt, distanceM: t.sessions.distanceM, elapsedMs: t.sessions.elapsedMs, statsJson: t.sessions.statsJson })
+        .select({
+          id: t.sessions.id,
+          mode: t.sessions.mode,
+          startedAt: t.sessions.startedAt,
+          distanceM: t.sessions.distanceM,
+          elapsedMs: t.sessions.elapsedMs,
+          statsJson: t.sessions.statsJson,
+        })
         .from(t.sessions)
         .where(and(eq(t.sessions.status, 'saved'), eq(t.sessions.kind, 'run'), notDeleted(t.sessions), gte(t.sessions.startedAt, from), lt(t.sessions.startedAt, to)))
         .all()
         .map((r) => ({
           sessionId: r.id,
+          source: 'fit' as const,
+          mode: r.mode,
           date: localIsoDate(new Date(r.startedAt)),
           distanceM: r.distanceM,
           durationS: Math.round(r.elapsedMs / 1000),
-          ...(r.statsJson ? { stats: JSON.parse(r.statsJson) as SessionStats } : {}),
+          ...(r.statsJson ? { stats: parseStats(r.id, r.statsJson) } : {}),
         }));
       const external = db
         .select()
@@ -2017,6 +2102,8 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       for (const e of external) {
         rows.push({
           sessionId: e.id,
+          source: 'external',
+          ...(e.activity === 'treadmill' ? { mode: 'treadmill' as const } : {}),
           date: localIsoDate(new Date(e.startedAt)),
           distanceM: e.distanceM ?? 0,
           durationS: Math.round((e.endedAt - e.startedAt) / 1000),
@@ -2034,7 +2121,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         .where(and(eq(t.sessions.status, 'saved'), eq(t.sessions.kind, 'run'), eq(t.sessions.mode, 'outdoor'), notDeleted(t.sessions)))
         .all();
       return fastestEfforts(
-        rows.flatMap((r) => (r.statsJson ? [{ sessionId: r.id, date: localIsoDate(new Date(r.startedAt)), stats: JSON.parse(r.statsJson) as SessionStats }] : [])),
+        rows.flatMap((r) => (r.statsJson ? [{ sessionId: r.id, date: localIsoDate(new Date(r.startedAt)), stats: parseStats(r.id, r.statsJson) }] : [])),
       );
     },
 

@@ -78,7 +78,7 @@ describe('heart rate progress', () => {
   });
 
   it('learned Zone 2 pace is the median of the last six qualifying runs, after three', () => {
-    const row = (date: string, secPerKm: number): RunRow => ({ sessionId: date, date, distanceM: 0, durationS: 0, stats: stats({ z2PaceM: 2000, z2PaceS: secPerKm * 2 }) });
+    const row = (date: string, secPerKm: number): RunRow => ({ sessionId: date, source: 'fit', date, distanceM: 0, durationS: 0, stats: stats({ z2PaceM: 2000, z2PaceS: secPerKm * 2 }) });
     expect(learnedZone2Pace([row('2026-10-01', 400), row('2026-10-02', 420)])).toBeUndefined();
     expect(learnedZone2Pace([row('2026-10-01', 400), row('2026-10-02', 420), row('2026-10-03', 380)])).toBe(400);
   });
@@ -89,8 +89,8 @@ const stats = (over: Partial<SessionStats> = {}): SessionStats => ({ v: 2, runM:
 describe('aggregates', () => {
   it('buckets runs by week, zero-filled, with imported walks as walking', () => {
     const rows: RunRow[] = [
-      { sessionId: 'a', date: '2026-10-27', distanceM: 5000, durationS: 1800, stats: stats({ runM: 4500, walkM: 500 }) },
-      { sessionId: 'b', date: '2026-11-11', distanceM: 3000, durationS: 2400, walk: true },
+      { sessionId: 'a', source: 'fit', date: '2026-10-27', distanceM: 5000, durationS: 1800, stats: stats({ runM: 4500, walkM: 500 }) },
+      { sessionId: 'b', source: 'external', date: '2026-11-11', distanceM: 3000, durationS: 2400, walk: true },
     ];
     expect(periodTotals(rows, 'week', '2026-10-26', '2026-11-15').map((w) => [w.start, w.runs, w.runM, w.walkM])).toEqual([
       ['2026-10-26', 1, 4500, 500],

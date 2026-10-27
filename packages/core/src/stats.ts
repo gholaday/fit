@@ -5,7 +5,7 @@ import type { RunWalkSegment, StepLogEntry } from './session/player';
 import { runWalkTotals } from './session/runwalk';
 import type { DistancePoint, StepResult } from './session/track';
 import { METERS_PER_MILE } from './units';
-import { isHardStep } from './workout';
+import { isHardStep, type SessionMode } from './workout';
 
 /**
  * Stats and history math (spec §12). Pure: the repository stores one SessionStats per
@@ -218,6 +218,10 @@ function mainStepDecoupling(
 
 export interface RunRow {
   sessionId: string;
+  /** Recorded in Fit, or a saved watch activity. */
+  source: 'fit' | 'external';
+  /** Fit sessions, and watch treadmill runs. */
+  mode?: SessionMode;
   date: IsoDate;
   distanceM: number;
   durationS: number;
@@ -257,14 +261,32 @@ export function periodTotals(rows: readonly RunRow[], period: 'week' | 'month', 
     b.runs++;
     b.distanceM += r.distanceM;
     b.durationS += r.durationS;
-    if (r.stats) {
-      b.runM += r.stats.runM;
-      b.walkM += r.stats.walkM;
-      b.sprintM += r.stats.sprintM;
-    } else if (r.walk) b.walkM += r.distanceM;
-    else b.runM += r.distanceM;
+    addSplit(b, r);
   }
   return [...buckets.values()];
+}
+
+export interface RunSplit {
+  runM: number;
+  walkM: number;
+  sprintM: number;
+}
+
+/** Imported sessions have no steps: a walk counts as walking, anything else as running. */
+function addSplit(to: RunSplit, r: RunRow): void {
+  if (r.stats) {
+    to.runM += r.stats.runM;
+    to.walkM += r.stats.walkM;
+    to.sprintM += r.stats.sprintM;
+  } else if (r.walk) to.walkM += r.distanceM;
+  else to.runM += r.distanceM;
+}
+
+/** Run, walk and sprint distance across rows, split the same way periodTotals splits a period. */
+export function runSplit(rows: readonly RunRow[]): RunSplit {
+  const s: RunSplit = { runM: 0, walkM: 0, sprintM: 0 };
+  for (const r of rows) addSplit(s, r);
+  return s;
 }
 
 /** Weekly average pace of easy running (s/km), only for weeks with at least 1 km of it. */
