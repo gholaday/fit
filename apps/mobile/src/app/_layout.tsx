@@ -39,8 +39,13 @@ export default function RootLayout() {
 
   // "Today" changes at midnight and while the app sits in the background.
   useEffect(() => {
+    // Only a real return from the background: Android also reports 'active' once on a cold
+    // start, and the first-paint effect above already adapts and syncs then.
+    let away = false;
     const sub = AppState.addEventListener('change', (state) => {
-      if (state !== 'active') return;
+      if (state === 'background') away = true;
+      if (state !== 'active' || !away) return;
+      away = false;
       actions.refreshToday();
       actions.adaptPlan(false);
       void syncHealth();
