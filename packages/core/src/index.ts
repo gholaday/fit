@@ -19,3 +19,4 @@ export * from './adapt';
 export * from './stats';
 export * from './records';
 export * from './dayring';
+export * from './weight';

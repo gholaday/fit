@@ -728,6 +728,7 @@ Garmin Connect writes natively to Android **Health Connect**: steps, heart rate 
 | `HeartRate` | HR during your phone-recorded runs, workout HR |
 | `RestingHeartRate` | Daily resting HR trend |
 | `ExerciseSession` | Import runs/walks/strength recorded on the watch |
+| `Weight` | Weigh-ins from a smart scale or another app (§12 Weight), from every app |
 | `Distance`, `ActiveCaloriesBurned` | Session and daily totals |
 | `Sleep` *(optional)* | Context for readiness (display only in v1) |
 
@@ -817,7 +818,7 @@ Track weight toward a goal, with a quick weigh-in on Today. Stored in kg, shown 
 
 **Trend** (core `weightTrend`)
 - A smoothed line that ignores day-to-day water swings: `trend += (w - trend) * (1 - e^(-days / 7))`. `days` is the gap since the last weigh-in, so missed days are handled. It starts at the first weigh-in.
-- Rate: the slope of the trend over the last 14 days, per week. It needs weigh-ins on at least 2 days across 7 or more days; before that, no rate is shown.
+- Rate (core `weightRate`): a least-squares line through the last 14 days of daily weigh-ins, per week. Fitting the trend would lag a steady change. It needs weigh-ins on at least 2 days across 7 or more days; before that, no rate is shown.
 - Every Fit number for weight uses the trend. The last weigh-in shows beside it, smaller.
 
 **Goal** (one active goal, set from the Plan screen)

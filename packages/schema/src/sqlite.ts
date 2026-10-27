@@ -381,3 +381,31 @@ export const hcSyncState = sqliteTable('hc_sync_state', {
   changesToken: text('changes_token'),
   lastSyncedAt: integer('last_synced_at'),
 });
+
+/** Spec §12 Weight. Manual entries and Health Connect records (deduped by record id). */
+export const weighIns = sqliteTable(
+  'weigh_ins',
+  {
+    id: text('id').primaryKey(),
+    measuredAt: integer('measured_at').notNull(),
+    /** Local date of measured_at; the trend uses each day's first weigh-in. */
+    date: text('date').notNull(),
+    kg: real('kg').notNull(),
+    source: text('source', { enum: ['manual', 'health_connect'] }).notNull(),
+    hcRecordId: text('hc_record_id'),
+    ...syncColumns,
+  },
+  (t) => [uniqueIndex('weigh_ins_hc').on(t.hcRecordId), index('weigh_ins_date').on(t.date)],
+);
+
+/** One active goal at a time; reached and stopped goals keep their history. */
+export const weightGoals = sqliteTable('weight_goals', {
+  id: text('id').primaryKey(),
+  startDate: text('start_date').notNull(),
+  startKg: real('start_kg').notNull(),
+  targetKg: real('target_kg').notNull(),
+  paceKgWeek: real('pace_kg_week').notNull(),
+  status: text('status', { enum: ['active', 'reached', 'stopped'] }).notNull(),
+  reachedAt: text('reached_at'),
+  ...syncColumns,
+});

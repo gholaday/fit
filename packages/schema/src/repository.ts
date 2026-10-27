@@ -103,6 +103,12 @@ import {
   type RunRecordInput,
   type RunRow,
   type SessionStats,
+  goalProgress,
+  goalReached,
+  weightRate,
+  weightTrend,
+  type WeighIn,
+  type WeightGoal,
 } from '@fit/core';
 import { and, asc, desc, eq, getTableColumns, gte, inArray, isNull, like, lt, lte, ne, or, sql } from 'drizzle-orm';
 import type { BaseSQLiteDatabase } from 'drizzle-orm/sqlite-core';
@@ -319,6 +325,43 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
 
   // -------------------------------------------------------------------------
   // Helpers
+
+  function toWeighIn(r: Pick<typeof t.weighIns.$inferSelect, 'id' | 'measuredAt' | 'date' | 'kg' | 'source'>): WeighIn {
+    return { id: r.id, measuredAt: new Date(r.measuredAt).toISOString(), date: r.date, kg: r.kg, source: r.source };
+  }
+
+  function toWeightGoal(r: Omit<typeof t.weightGoals.$inferSelect, 'deletedAt' | 'reachedAt'> & { reachedAt?: string | null }): WeightGoal {
+    const g: WeightGoal = { id: r.id, startDate: r.startDate, startKg: r.startKg, targetKg: r.targetKg, paceKgWeek: r.paceKgWeek, status: r.status };
+    if (r.reachedAt) g.reachedAt = r.reachedAt;
+    return g;
+  }
+
+  function trendPoints() {
+    const rows = db
+      .select({ date: t.weighIns.date, measuredAt: t.weighIns.measuredAt, kg: t.weighIns.kg })
+      .from(t.weighIns)
+      .where(notDeleted(t.weighIns))
+      .all();
+    // ISO instants sort the same as epoch ms for the first-of-day pick.
+    return weightTrend(rows.map((r) => ({ date: r.date, measuredAt: new Date(r.measuredAt).toISOString(), kg: r.kg })));
+  }
+
+  /** Marks the active goal reached once the trend crosses its target. A reached goal stays reached. */
+  function checkWeightGoal() {
+    const goal = db
+      .select()
+      .from(t.weightGoals)
+      .where(and(eq(t.weightGoals.status, 'active'), notDeleted(t.weightGoals)))
+      .get();
+    if (!goal) return;
+    const last = trendPoints().filter((p) => p.date >= goal.startDate).at(-1);
+    if (last && goalReached(goal, last.kg)) {
+      db.update(t.weightGoals)
+        .set({ status: 'reached', reachedAt: last.date, ...stamp() })
+        .where(eq(t.weightGoals.id, goal.id))
+        .run();
+    }
+  }
 
   function currentZones(): HrZoneBand[] | undefined {
     const row = db.select().from(t.hrProfiles).where(and(eq(t.hrProfiles.isCurrent, true), notDeleted(t.hrProfiles))).get();
@@ -1968,6 +2011,117 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       if (r.activeKcal !== null) m.activeKcal = r.activeKcal;
       if (r.sleepMin !== null) m.sleepMin = r.sleepMin;
       return m;
+    },
+
+    addWeighIn(kg, measuredAt) {
+      const ms = measuredAt ? Date.parse(measuredAt) : now();
+      const row = { id: newId(), measuredAt: ms, date: localIsoDate(new Date(ms)), kg, source: 'manual' as const, ...created() };
+      db.insert(t.weighIns).values(row).run();
+      checkWeightGoal();
+      return toWeighIn(row);
+    },
+
+    updateWeighIn(id, kg) {
+      db.update(t.weighIns)
+        .set({ kg, ...stamp() })
+        .where(and(eq(t.weighIns.id, id), eq(t.weighIns.source, 'manual')))
+        .run();
+      checkWeightGoal();
+    },
+
+    deleteWeighIn(id) {
+      db.update(t.weighIns)
+        .set({ deletedAt: now(), ...stamp() })
+        .where(eq(t.weighIns.id, id))
+        .run();
+    },
+
+    weighIns(limit, before) {
+      const conds = [notDeleted(t.weighIns)];
+      if (before !== undefined) conds.push(lt(t.weighIns.measuredAt, Date.parse(before)));
+      return db
+        .select()
+        .from(t.weighIns)
+        .where(and(...conds))
+        .orderBy(desc(t.weighIns.measuredAt))
+        .limit(limit)
+        .all()
+        .map(toWeighIn);
+    },
+
+    weightTrend(start) {
+      const points = trendPoints();
+      return start === undefined ? points : points.filter((p) => p.date >= start);
+    },
+
+    importHealthWeights(inputs) {
+      if (inputs.length === 0) return 0;
+      let added = 0;
+      db.transaction((tx) => {
+        for (const i of inputs) {
+          const ms = Date.parse(i.measuredAt);
+          const res = tx
+            .insert(t.weighIns)
+            .values({ id: newId(), measuredAt: ms, date: localIsoDate(new Date(ms)), kg: i.kg, source: 'health_connect', hcRecordId: i.hcRecordId, ...created() })
+            .onConflictDoNothing({ target: t.weighIns.hcRecordId })
+            .run() as { changes?: number };
+          added += res.changes ?? 0;
+        }
+      });
+      if (added > 0) checkWeightGoal();
+      return added;
+    },
+
+    weightGoal() {
+      const r = db.select().from(t.weightGoals).where(notDeleted(t.weightGoals)).orderBy(desc(t.weightGoals.createdAt)).limit(1).get();
+      return r && r.status !== 'stopped' ? toWeightGoal(r) : undefined;
+    },
+
+    setWeightGoal({ startKg, targetKg, paceKgWeek, startDate }) {
+      const row = { id: newId(), startDate: startDate ?? today(), startKg, targetKg, paceKgWeek, status: 'active' as const, ...created() };
+      db.transaction((tx) => {
+        tx.update(t.weightGoals)
+          .set({ status: 'stopped', ...stamp() })
+          .where(eq(t.weightGoals.status, 'active'))
+          .run();
+        tx.insert(t.weightGoals).values(row).run();
+      });
+      checkWeightGoal();
+      return repo.weightGoal() ?? toWeightGoal(row);
+    },
+
+    updateWeightGoal(input) {
+      db.update(t.weightGoals)
+        .set({ ...input, ...stamp() })
+        .where(and(eq(t.weightGoals.status, 'active'), notDeleted(t.weightGoals)))
+        .run();
+      checkWeightGoal();
+    },
+
+    stopWeightGoal() {
+      db.update(t.weightGoals)
+        .set({ status: 'stopped', ...stamp() })
+        .where(eq(t.weightGoals.status, 'active'))
+        .run();
+    },
+
+    weightSummary() {
+      const points = trendPoints();
+      const latest = db.select().from(t.weighIns).where(notDeleted(t.weighIns)).orderBy(desc(t.weighIns.measuredAt)).limit(1).get();
+      if (points.length === 0 || !latest) return undefined;
+      const trendKg = points[points.length - 1]!.kg;
+      const goal = repo.weightGoal();
+      const rate = weightRate(points, today());
+      const since = addDays(today(), -30);
+      return {
+        trendKg,
+        last: toWeighIn(latest),
+        ...(rate !== undefined ? { rateKgWeek: rate } : {}),
+        changeKg: trendKg - (goal ? goal.startKg : points[0]!.kg),
+        changeSince: goal ? goal.startDate : points[0]!.date,
+        ...(goal ? { goal, progress: goalProgress(goal, trendKg, today()) } : {}),
+        recent: points.filter((p) => p.date >= since),
+      };
     },
 
     importExternalSessions(inputs) {

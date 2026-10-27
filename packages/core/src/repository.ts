@@ -5,6 +5,7 @@ import type { ExternalActivity, PlanMatch } from './external';
 import type { TrialResult } from './pace';
 import type { PersonalBest, RunRow, SessionStats } from './stats';
 import type { LiftBests, RecordEvent } from './records';
+import type { GoalProgress, TrendPoint, WeighIn, WeightGoal } from './weight';
 import type { CuePrefs } from './session/cues';
 import type { HrSample } from './session/heart';
 import type { TreadmillPrefs } from './session/treadmill';
@@ -286,6 +287,28 @@ export const GARMIN_CONNECT_PACKAGE = 'com.garmin.android.apps.connectmobile';
 
 // Health Connect (M2). The app reads Health Connect and hands normalized records to the
 // repository; the repository decides merges, matches and storage. Instants are ISO strings.
+
+/** A Health Connect `Weight` record. */
+export interface WeightInput {
+  hcRecordId: string;
+  measuredAt: string;
+  kg: number;
+}
+
+/** What the Today weight card shows (spec §12 Weight). */
+export interface WeightSummary {
+  trendKg: number;
+  last: WeighIn;
+  /** Per week, negative when losing. Undefined until there is enough data. */
+  rateKgWeek?: number;
+  /** Trend change since the goal start, or since the first weigh-in without a goal. */
+  changeKg: number;
+  changeSince: IsoDate;
+  goal?: WeightGoal;
+  progress?: GoalProgress;
+  /** Trend points over the last 30 days, for the small line. */
+  recent: TrendPoint[];
+}
 
 export interface DailyMetricsInput {
   date: IsoDate;
@@ -625,6 +648,29 @@ export interface FitRepository {
   setHealthSyncState(state: { changesToken?: string; lastSyncedAt: string }): void;
   upsertDailyMetrics(rows: readonly DailyMetricsInput[]): void;
   dailyMetrics(date: IsoDate): DailyMetrics | undefined;
+
+  // Weight (spec §12). Weigh-ins are stored in kg.
+  /** A manual weigh-in, now unless `measuredAt` is given. */
+  addWeighIn(kg: number, measuredAt?: string): WeighIn;
+  /** Manual weigh-ins only; Health Connect rows are read-only. */
+  updateWeighIn(id: string, kg: number): void;
+  /** Soft delete; a deleted Health Connect weigh-in is never imported again. */
+  deleteWeighIn(id: string): void;
+  /** Newest first, for the Weight screen list. Paging with `before` (ISO instant). */
+  weighIns(limit: number, before?: string): WeighIn[];
+  /** Trend points from `start` on (all when omitted), oldest first, for the chart. */
+  weightTrend(start?: IsoDate): TrendPoint[];
+  /** Idempotent by hcRecordId, from every app (scales write their own records). Returns how many were new. */
+  importHealthWeights(inputs: readonly WeightInput[]): number;
+  /** The active goal, or the last reached one until a new goal is set. */
+  weightGoal(): WeightGoal | undefined;
+  /** Starts a new goal and stops any active one. `startDate` defaults to today. */
+  setWeightGoal(input: { startKg: number; targetKg: number; paceKgWeek: number; startDate?: IsoDate }): WeightGoal;
+  /** Edits the active goal in place. */
+  updateWeightGoal(input: Partial<{ startKg: number; targetKg: number; paceKgWeek: number; startDate: IsoDate }>): void;
+  stopWeightGoal(): void;
+  /** Undefined until the first weigh-in. */
+  weightSummary(): WeightSummary | undefined;
   /** Idempotent by hcRecordId. Merges watch sessions overlapping a phone session by more than half. */
   importExternalSessions(inputs: readonly ExternalSessionInput[]): HealthImportResult;
   /** Saved phone sessions from `since` on that have live HR dropouts (or none) and no Health Connect HR yet. */
