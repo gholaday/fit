@@ -58,6 +58,7 @@ Font: **Inter** (400, 500, 600, 700). Numbers use tabular figures.
 | Pace and harder efforts | `#C9A273` / `#F3EADF` / `#7A5530` | to define |
 | Sprint | `#B97A5B` / `#F5E4DC` / `#7E4630` | to define |
 | Walk, recovery | `#D0D0D5` | `#4B4E57` |
+| Steps (bars, goal dots) | `#7DB9E3` | `#8FC6EC` |
 
 Other activity types (quick log, watch imports) reuse the nearest family above, icon and tint alike, so the palette stays at five hues:
 

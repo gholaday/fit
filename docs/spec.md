@@ -807,6 +807,45 @@ hc_sync_state      key, changes_token, last_synced_at
 
 **History list** — reverse-chronological sessions (including imported Garmin sessions), filter by kind/mode/source, search by name.
 
+### Weight
+
+Track weight toward a goal, with a quick weigh-in on Today. Stored in kg, shown in the units setting (lb or kg).
+
+**Weigh-ins**
+- Manual from Today, or Health Connect `Weight` records (a smart scale, Garmin Index, another app), imported with steps. Health Connect rows dedupe by record id; deleting one in Fit hides it and it is not imported again.
+- A day can have several weigh-ins. The trend uses each day's first one, since morning weights are the most consistent.
+
+**Trend** (core `weightTrend`)
+- A smoothed line that ignores day-to-day water swings: `trend += (w - trend) * (1 - e^(-days / 7))`. `days` is the gap since the last weigh-in, so missed days are handled. It starts at the first weigh-in.
+- Rate: the slope of the trend over the last 14 days, per week. It needs weigh-ins on at least 2 days across 7 or more days; before that, no rate is shown.
+- Every Fit number for weight uses the trend. The last weigh-in shows beside it, smaller.
+
+**Goal** (one active goal, set from the Plan screen)
+- Start (the trend when the goal is set, editable), target and pace. Pace choices: 0.25, 0.5, 0.75 or 1 kg a week (0.5, 1, 1.5 or 2 lb in pounds), capped at 1% of the start weight a week. Gaining works too: the direction comes from the target.
+- Expected date: start date plus the distance over the pace. The plan line runs straight from start to target over that time.
+- Status compares the trend with the plan line today: "On track" within 0.5 kg (1 lb), otherwise "1.2 lb ahead" or "1.2 lb behind". No other judgement in the copy.
+- The goal is reached when the trend crosses the target. The card then says "Goal reached" with the date, and offers a new goal. Stopping a goal keeps its history.
+
+**Today card** (below the checklist; shown once there is a weigh-in or a goal)
+- Trend in large type ("182.4 lb"), then "Last 181.8 lb, today 7:10 AM".
+- Change since the goal start, or the first weigh-in when there is no goal ("Down 3.2 lb since Oct 1"), and the weekly rate ("1.1 lb a week").
+- With a goal: a progress bar from start to target, the status, and "Expected Jan 12".
+- A small 30 day trend line with weigh-in dots.
+- **Weigh in** button: a small sheet with one number field, prefilled with the last weigh-in, steppers of 0.1, and Save. A toast says "Weight saved". There is no time picker; it records now.
+- Tapping the card opens the Weight screen.
+
+**Plan screen:** a **Weight goal** card beside the running plan: target, pace, expected date, progress, or "Set a weight goal" when none. Tap opens the Weight screen.
+
+**Weight screen**
+- Chart: the trend line, weigh-in dots and the dashed plan line, in 1M, 3M, 6M and All ranges.
+- Goal summary with Edit goal and Stop goal.
+- The weigh-in list, newest first, with the source shown and swipe to delete. Manual rows can be edited.
+- The goal setup sheet: start (prefilled), target and pace, with the expected date updating as you change them.
+
+**Stats:** a Weight card with the trend chart once there are weigh-ins on 2 days.
+
+**Data:** `weigh_ins` (measured_at, kg, source manual or health_connect, hc_record_id unique) and `weight_goals` (start_date, start_kg, target_kg, pace_kg_week, status active, reached or stopped, reached_at). Both have the sync columns.
+
 ---
 
 ## 13. Data Model (SQLite / Drizzle)
@@ -858,21 +897,11 @@ settings           key, value_json
 **Bottom tabs:** Today, Plan, Library, Stats, (Settings via avatar/gear)
 
 **Today day widget**
-- Left: the **day ring**, two concentric rings (core `dayRing`, `ringHit`).
-  - Inner ring: one arc per lane scheduled today, in lane order (run, strength, stretch), equal shares. Three lanes take a third each, two take half, one takes the whole ring. Small gaps between arcs. Each arc shows the lane's pending tint and fills clockwise in the lane color by the share of that lane's items done. Skipped items stay unfilled. With nothing scheduled the inner ring is a plain track.
-  - Outer ring: steps toward the daily goal (default 8,000, from Health Connect), neutral ink, sage when the goal is met. A plain track until steps sync.
-  - Center: "2 of 3" done (on a day with nothing scheduled, the step count).
-- Right: a details panel that follows what is tapped on the ring.
-  - Nothing selected: the headline and one or two plain lines (states below).
-  - A lane arc: the lane name and "1 of 2 done", then that lane's items today (title, then time, or the result once done, or "Skipped"). Tapping a row scrolls the checklist to its card.
-  - The steps ring: steps and goal ("6,240 of 8,000 steps"), what is left ("1,760 to go") or "Goal met", and when steps last synced. Tapping the panel opens Activity stats.
-  - The selected part keeps full color, the rest dims. Tapping it again, the center, or outside the widget clears the selection. It also clears when the app comes back to the foreground.
-- A faint "12m ago" shows when steps last synced; pull down to refresh.
-- Changes by time of day and day type:
-  - **Morning:** "4 things today", the first item and its time, total time for the day.
-  - **During the day:** "1 of 4 done" and the next item.
-  - **Evening wrap-up** (everything done or after 8 PM): "All done" or "3 of 4 done", the day's highlight (e.g. run distance and % in zone), what's tomorrow.
-  - **Rest day:** "Rest day, 1 of 2 done" and the remaining stretch routine.
+- Left: the **day ring** (core `dayRing`, `ringHit`). A single ring with one arc per lane scheduled today, in lane order (run, strength, stretch), equal shares that meet with no gaps. Three lanes take a third each, two take half, one takes the whole ring. Each arc shows the lane's pending tint and fills clockwise in the lane color by the share of that lane's items done. Skipped items stay unfilled. With nothing scheduled it is a plain track. Center: "2 of 3" done.
+- Right: **This week**, Monday to Sunday as small day rings in lane colors, "3 of 5 done" and the run distance. A light blue dot in a day's ring means the step goal was met that day. Tapping a day opens it.
+- Tapping an arc swaps the right panel to that lane's items today: the lane name and "1 of 2 done", then each item (title, then time, or the result once done, or "Skipped"). Tapping a row scrolls the checklist to its card. Tapping the arc again, the center, or outside the widget, or the app coming back to the foreground, returns to This week.
+- **Steps card** under the widget: "6,421 steps", a progress bar toward the daily goal (default 8,000) in the steps color, green when met, and a line of steps per hour today. Hourly steps are read from Health Connect on demand (aggregated by hour) and re-read after each sync; they are not stored.
+- No heart rate card on Today.
 - Shrinks to a slim bar (done count, item strip, steps) as the checklist scrolls.
 
 | Screen | Purpose / key elements |
