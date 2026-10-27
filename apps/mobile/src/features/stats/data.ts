@@ -9,6 +9,7 @@ import {
   type IsoDate,
   type PersonalBest,
   type RunRow,
+  type RunSplit,
   type WeekAdherence,
   addDays,
   adherenceByWeek,
@@ -16,7 +17,9 @@ import {
   decouplingTrend,
   easyPaceTrend,
   periodTotals,
+  personalBests,
   runShareTrend,
+  runSplit,
   startOfWeek,
   weekStreak,
   zone2MinutesByWeek,
@@ -56,27 +59,7 @@ export function rangeFor(period: Period, today: IsoDate, offset: number): Range 
   return { start: addDays(end, -90), end };
 }
 
-export interface Split {
-  runM: number;
-  walkM: number;
-  sprintM: number;
-}
-
-/** Run, walk and sprint distance for rows, the same way periodTotals splits a period. */
-export function splitOf(rows: readonly RunRow[]): Split {
-  const s: Split = { runM: 0, walkM: 0, sprintM: 0 };
-  for (const r of rows) {
-    if (r.stats) {
-      s.runM += r.stats.runM;
-      s.walkM += r.stats.walkM;
-      s.sprintM += r.stats.sprintM;
-    } else if (r.walk) s.walkM += r.distanceM;
-    else s.runM += r.distanceM;
-  }
-  return s;
-}
-
-export interface Bucket extends Split {
+export interface Bucket extends RunSplit {
   start: IsoDate;
   distanceM: number;
   durationS: number;
@@ -146,7 +129,7 @@ export function loadStats(period: Period, offset: number, today: IsoDate): Stats
     buckets = Array.from({ length: 7 }, (_, i) => {
       const day = addDays(range.start, i);
       const dayRows = rows.filter((r) => r.date === day);
-      return { start: day, distanceM: dayRows.reduce((t, r) => t + r.distanceM, 0), durationS: dayRows.reduce((t, r) => t + r.durationS, 0), ...splitOf(dayRows) };
+      return { start: day, distanceM: dayRows.reduce((t, r) => t + r.distanceM, 0), durationS: dayRows.reduce((t, r) => t + r.durationS, 0), ...runSplit(dayRows) };
     });
   } else {
     buckets = periodTotals(rows, 'week', range.start, range.end).map(({ start, distanceM, durationS, runM, walkM, sprintM }) => ({ start, distanceM, durationS, runM, walkM, sprintM }));
@@ -224,7 +207,8 @@ export function loadStats(period: Period, offset: number, today: IsoDate): Stats
     buckets,
     bucketUnit: period === 'week' ? 'day' : 'week',
     easyTrend,
-    bests: repo.personalBests(),
+    // Treadmill and watch rows carry no bests, so every row can go in.
+    bests: personalBests(all),
     longest,
     streak,
     completion,
