@@ -18,8 +18,8 @@ import {
   volumeKg,
 } from '@fit/core';
 import { router, useLocalSearchParams } from 'expo-router';
-import { memo, useEffect, useMemo, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { type ComponentRef, memo, useEffect, useMemo, useRef, useState } from 'react';
+import { BackHandler, Pressable, ScrollView, TextInput, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
@@ -31,15 +31,28 @@ import { Icons } from '@/ui/icons';
 import { NotFound } from '@/ui/NotFound';
 import { RatingSlider, RPE_WORDS } from '@/ui/RatingSlider';
 import { Sheet } from '@/ui/Sheet';
-import { Button, IconButton, NumStepper, T } from '@/ui/primitives';
+import { Button, IconButton, T } from '@/ui/primitives';
 import { onExercisesPicked } from '@/features/library/pick';
 import { setsSummary } from '@/features/library/ExerciseDetailScreen';
+import { NumPad, PAD_HEIGHT, type PadKey, pressKey } from './NumPad';
 import { cancelRest, startRest, useRest } from './rest';
 import { StatusShade } from '@/ui/StatusShade';
 
 interface Row extends SetRow {
   done: boolean;
   completedAt?: string;
+}
+
+type Field = 'weight' | 'reps';
+
+/** The cell the number pad edits, and its text so far. */
+interface Pad {
+  b: number;
+  r: number;
+  field: Field;
+  buf: string;
+  /** Just focused or stepped: the next digit replaces the value. */
+  fresh: boolean;
 }
 
 interface Block {
@@ -77,21 +90,26 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
   const unit = useUnits().weight;
   const [startedAt] = useState(() => new Date());
   const [blocks, setBlocks] = useState<Block[]>(() => blocksFor(routine));
-  const [editing, setEditing] = useState<{ b: number; r: number }>();
+  const [pad, setPad] = useState<Pad>();
+  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
+  const scrollY = useRef(0);
+  const winH = useWindowDimensions().height;
   const [swapping, setSwapping] = useState<number>();
   const [leaving, setLeaving] = useState(false);
   const [finished, setFinished] = useState<{ endedAt: Date; sets: LoggedSet[] }>();
 
   useEffect(() => cancelRest, []);
-  // Back asks before throwing a workout away.
+  // Back hides the pad first, then asks before throwing a workout away.
+  const padOpen = pad !== undefined;
   useEffect(() => {
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (finished) return false;
-      setLeaving(true);
+      if (padOpen) setPad(undefined);
+      else setLeaving(true);
       return true;
     });
     return () => sub.remove();
-  }, [finished]);
+  }, [finished, padOpen]);
 
   const doneSets = (bs: Block[]): (LoggedSet & { completedAt: string })[] =>
     bs.flatMap((b) =>
@@ -122,8 +140,43 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
   };
   const removeSet = (b: number, r: number) => {
     haptic.commit();
-    setEditing(undefined);
+    setPad(undefined);
     update(b, (x) => ({ ...x, rows: x.rows.filter((_, j) => j !== r).map((y, j) => ({ ...y, setIdx: j })) }));
+  };
+
+  const weightStep = unit === 'lb' ? 5 : 2.5;
+  const weightText = (row: Row) => (row.weightKg ? String(Math.round(kgToUnit(row.weightKg, unit) * 10) / 10) : '');
+
+  /** Opens the pad on a cell; with the cell's screen position, scrolls it clear of the pad. */
+  const focus = (b: number, r: number, field: Field, pageY?: number) => {
+    const row = blocks[b]?.rows[r];
+    if (!row) return setPad(undefined);
+    setPad({ b, r, field, buf: field === 'weight' ? weightText(row) : String(row.reps), fresh: true });
+    const padTop = winH - PAD_HEIGHT - insets.bottom - 8;
+    if (pageY !== undefined && pageY + 56 > padTop) scroll.current?.scrollTo({ y: scrollY.current + pageY + 72 - padTop, animated: true });
+  };
+
+  /** Writes the pad's number; a weight also fills the sets after it that are not checked yet. */
+  const apply = (at: Pad, buf: string) => {
+    const n = Number.parseFloat(buf) || 0;
+    if (at.field === 'reps') return update(at.b, (x) => ({ ...x, rows: x.rows.map((y, j) => (j === at.r ? { ...y, reps: Math.round(n) } : y)) }));
+    const weightKg = n > 0 ? unitToKg(n, unit) : undefined;
+    update(at.b, (x) => ({ ...x, rows: x.rows.map((y, j) => (j === at.r || (j > at.r && !y.done) ? { ...y, weightKg } : y)) }));
+  };
+
+  const onKey = (k: PadKey) => {
+    if (!pad) return;
+    if (k.type === 'next') {
+      // Weight, then reps, then the next set's weight; past the last set the pad closes.
+      if (pad.field === 'weight') return focus(pad.b, pad.r, 'reps');
+      if (pad.r + 1 < blocks[pad.b]!.rows.length) return focus(pad.b, pad.r + 1, 'weight');
+      if (blocks[pad.b + 1]?.rows.length) return focus(pad.b + 1, 0, 'weight');
+      return setPad(undefined);
+    }
+    const buf = pressKey(pad.buf, pad.fresh, k, pad.field === 'weight', pad.field === 'weight' ? weightStep : 1);
+    if (buf === undefined) return;
+    setPad({ ...pad, buf, fresh: k.type === 'step' });
+    apply(pad, buf);
   };
 
   const pickExercises = (replace?: number) => {
@@ -159,8 +212,6 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
 
   if (finished) return <Finished routine={routine} startedAt={startedAt} endedAt={finished.endedAt} sets={finished.sets} blocks={blocks} onSave={save} />;
 
-  const edit = editing ? blocks[editing.b]?.rows[editing.r] : undefined;
-  const weightStep = unit === 'lb' ? 5 : 2.5;
   return (
     <View style={s.screen}>
       <View style={[s.top, { paddingTop: insets.top + 8 }]}>
@@ -177,7 +228,16 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
       </View>
       <RestBanner />
 
-      <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]} showsVerticalScrollIndicator={false}>
+      <ScrollView
+        ref={scroll}
+        onScroll={(e) => {
+          scrollY.current = e.nativeEvent.contentOffset.y;
+        }}
+        scrollEventThrottle={32}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={[s.content, { paddingBottom: insets.bottom + (pad ? PAD_HEIGHT + 40 : 32) }]}
+        showsVerticalScrollIndicator={false}
+      >
         {blocks.map((block, b) => (
           <Animated.View key={block.key} layout={LinearTransition.duration(200)} style={s.card}>
             <View style={s.cardHead}>
@@ -204,7 +264,18 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
               <View style={s.colCheck} />
             </View>
             {block.rows.map((row, r) => (
-              <SetLine key={r} row={row} unit={unit} onEdit={() => setEditing({ b, r })} onToggle={() => toggle(b, r)} />
+              <SetLine
+                key={r}
+                row={row}
+                unit={unit}
+                focused={pad && pad.b === b && pad.r === r ? pad.field : undefined}
+                buf={pad && pad.b === b && pad.r === r ? pad.buf : undefined}
+                onEdit={(field, pageY) => {
+                  haptic.tap();
+                  focus(b, r, field, pageY);
+                }}
+                onToggle={() => toggle(b, r)}
+              />
             ))}
             <Pressable accessibilityRole="button" onPress={() => addSet(b)} style={({ pressed }) => [s.addSet, pressed && { opacity: 0.6 }]}>
               <Icons.plus size={14} color={p.textSecondary} />
@@ -217,30 +288,16 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
         <Button label="Add exercise" kind="outline" icon={<Icons.plus size={16} color={p.text} />} onPress={() => pickExercises()} />
       </ScrollView>
 
-      <Sheet visible={!!edit} onClose={() => setEditing(undefined)} title={editing && edit ? `${blocks[editing.b]!.name}, set ${editing.r + 1}` : ''}>
-        {editing && edit && (
-          <View style={{ gap: 12 }}>
-            <View style={s.sheetRow}>
-              <T v="bodyMedium">Weight</T>
-              <NumStepper
-                label="Weight"
-                value={edit.weightKg ? Math.round(kgToUnit(edit.weightKg, unit) / weightStep) * weightStep : 0}
-                min={0}
-                max={unit === 'lb' ? 700 : 320}
-                step={weightStep}
-                format={(n) => (n === 0 ? 'None' : `${n} ${unit}`)}
-                onChange={(n) => update(editing.b, (x) => ({ ...x, rows: x.rows.map((y, j) => (j === editing.r ? { ...y, weightKg: n === 0 ? undefined : unitToKg(n, unit) } : y)) }))}
-              />
-            </View>
-            <View style={s.sheetRow}>
-              <T v="bodyMedium">Reps</T>
-              <NumStepper label="Reps" value={edit.reps} min={0} max={100} onChange={(reps) => update(editing.b, (x) => ({ ...x, rows: x.rows.map((y, j) => (j === editing.r ? { ...y, reps } : y)) }))} />
-            </View>
-            <Button label="Done" onPress={() => setEditing(undefined)} />
-            <Button label="Remove set" kind="quiet" onPress={() => removeSet(editing.b, editing.r)} />
-          </View>
-        )}
-      </Sheet>
+      {pad && (
+        <NumPad
+          title={`${blocks[pad.b]?.name ?? ''}, set ${pad.r + 1}, ${pad.field === 'weight' ? unit : 'reps'}`}
+          step={pad.field === 'weight' ? weightStep : 1}
+          decimals={pad.field === 'weight'}
+          onKey={onKey}
+          onRemove={() => removeSet(pad.b, pad.r)}
+          onHide={() => setPad(undefined)}
+        />
+      )}
 
       <Sheet visible={swapping !== undefined} onClose={() => setSwapping(undefined)} title="Swap exercise">
         <View style={{ gap: 10 }}>
@@ -298,10 +355,29 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
   );
 }
 
-const SetLine = memo(function SetLine({ row, unit, onEdit, onToggle }: { row: Row; unit: 'lb' | 'kg'; onEdit: () => void; onToggle: () => void }) {
+const SetLine = memo(function SetLine({
+  row,
+  unit,
+  focused,
+  buf,
+  onEdit,
+  onToggle,
+}: {
+  row: Row;
+  unit: 'lb' | 'kg';
+  /** The cell the number pad is editing, if it is on this row. */
+  focused: Field | undefined;
+  /** The pad's text while it edits this row, shown as typed ("12." keeps its point). */
+  buf: string | undefined;
+  onEdit: (field: Field, pageY: number) => void;
+  onToggle: () => void;
+}) {
   const s = useStyles();
   const p = usePalette();
   const prev = row.previous ? (row.previous.weightKg ? `${formatWeight(row.previous.weightKg, unit)} x ${row.previous.reps}` : `${row.previous.reps} reps`) : '-';
+  const on = { borderWidth: 1.5, borderColor: p.primary, backgroundColor: p.surface };
+  const weight = focused === 'weight' ? buf || '0' : row.weightKg ? String(Math.round(kgToUnit(row.weightKg, unit) * 10) / 10) : '-';
+  const reps = focused === 'reps' ? buf || '0' : String(row.reps);
   return (
     <View style={[s.setRow, row.done && { backgroundColor: p.success + '1F' }]}>
       <T v="labelStrong" tone="secondary" style={s.colSet} num>
@@ -310,14 +386,14 @@ const SetLine = memo(function SetLine({ row, unit, onEdit, onToggle }: { row: Ro
       <T v="label" tone="tertiary" style={s.colPrev} num>
         {prev}
       </T>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Weight, set ${row.setIdx + 1}`} onPress={onEdit} style={[s.colNum, s.cell]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Weight, set ${row.setIdx + 1}`} accessibilityState={{ selected: focused === 'weight' }} onPress={(e) => onEdit('weight', e.nativeEvent.pageY)} style={[s.colNum, s.cell, focused === 'weight' && on]}>
         <T v="bodyStrong" num>
-          {row.weightKg ? String(Math.round(kgToUnit(row.weightKg, unit) * 10) / 10) : '-'}
+          {weight}
         </T>
       </Pressable>
-      <Pressable accessibilityRole="button" accessibilityLabel={`Reps, set ${row.setIdx + 1}`} onPress={onEdit} style={[s.colNum, s.cell]}>
+      <Pressable accessibilityRole="button" accessibilityLabel={`Reps, set ${row.setIdx + 1}`} accessibilityState={{ selected: focused === 'reps' }} onPress={(e) => onEdit('reps', e.nativeEvent.pageY)} style={[s.colNum, s.cell, focused === 'reps' && on]}>
         <T v="bodyStrong" num>
-          {String(row.reps)}
+          {reps}
         </T>
       </Pressable>
       <Pressable
@@ -527,7 +603,6 @@ const useStyles = createStyles((p) => ({
   addSet: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, height: 40 },
   rest: { flexDirection: 'row', alignItems: 'center', gap: 12, marginHorizontal: 16, marginBottom: 8, paddingLeft: 16, paddingRight: 6, height: 56, borderRadius: 16, backgroundColor: p.primary },
   restBtn: { height: 36, paddingHorizontal: 12, borderRadius: 12, justifyContent: 'center', backgroundColor: 'rgba(255,255,255,0.14)' },
-  sheetRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   stats: { flexDirection: 'row', gap: 10, paddingVertical: 8 },
   doneRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   divider: { borderTopWidth: 1, borderTopColor: p.divider },
