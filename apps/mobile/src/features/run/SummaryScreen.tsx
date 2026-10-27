@@ -18,6 +18,8 @@ import { PostRunCard } from '@/features/stretch/PostRunCard';
 import { HrCard } from './HrCard';
 import { SessionProfile } from './SessionProfile';
 import { stepAmount, stepName, stepTone } from './steps';
+import { RatingSlider, RPE_WORDS } from '@/ui/RatingSlider';
+import { Sheet } from '@/ui/Sheet';
 import { Slider } from '@/ui/Slider';
 import { StatusShade } from '@/ui/StatusShade';
 
@@ -52,10 +54,20 @@ export function SummaryScreen() {
   // Stats over the merged trace, once; the zones only change in Settings.
   const [hr] = useState(() => (session && session.hr.length > 1 ? hrStats(session.hr, zones ?? [], { endMs: session.endedAt ? Date.parse(session.endedAt) - Date.parse(session.startedAt) : (session.hr[session.hr.length - 1]?.tOffsetMs ?? 0), pauses: session.pauses, log: session.log }) : undefined));
 
+  const [discarding, setDiscarding] = useState(false);
+
   const done = () => {
     haptic.commit();
     if (router.canGoBack()) router.back();
     else router.replace('/');
+  };
+  // Deleting reopens the plan workout and gives a merged watch recording back its own entry.
+  const discard = () => {
+    setDiscarding(false);
+    repo.deleteSession(id);
+    actions.reload();
+    showSnack({ message: 'Run discarded' });
+    done();
   };
 
   if (!session) {
@@ -170,26 +182,21 @@ export function SummaryScreen() {
 
         <Feel session={session} />
 
-        {hasRoute && (
-          <Button
-            label="Export GPX"
-            kind="outline"
-            size="md"
-            onPress={() => {
-              haptic.tap();
-              // Loaded on demand: the sharing modules are native and only exist in newer builds.
-              import('./gpx').then(({ shareGpx }) => shareGpx(session)).then(
-                (ok) => !ok && showSnack({ message: 'Sharing is not available on this phone' }),
-                () => showSnack({ message: 'Could not create the GPX file' }),
-              );
-            }}
-          />
-        )}
+        <Button label="Discard run" kind="quiet" onPress={() => setDiscarding(true)} />
       </ScrollView>
       <StatusShade />
       <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>
         <Button label="Done" onPress={done} />
       </View>
+      <Sheet visible={discarding} onClose={() => setDiscarding(false)} title="Discard run">
+        <View style={{ gap: 10 }}>
+          <T v="body" tone="secondary">
+            {session.planWorkoutId ? 'The route and stats are deleted, and the plan workout is due again.' : 'The route and stats are deleted.'}
+          </T>
+          <Button label="Discard run" onPress={discard} />
+          <Button label="Keep it" kind="outline" onPress={() => setDiscarding(false)} />
+        </View>
+      </Sheet>
     </View>
   );
 }
@@ -289,26 +296,19 @@ function Feel({ session }: { session: SessionDetail }) {
       <T v="headline" style={s.cardTitle}>
         How hard was it
       </T>
-      <View style={s.rpe}>
-        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((n) => (
-          <Button
-            key={n}
-            label={String(n)}
-            size="sm"
-            kind={rpe === n ? 'primary' : 'quiet'}
-            style={s.rpeBtn}
-            accessibilityLabel={`Effort ${n} of 10`}
-            onPress={() => {
-              haptic.tick();
-              setRpe(n);
-              repo.updateSessionNotes(session.id, { rpe: n });
-            }}
-          />
-        ))}
+      <View style={{ paddingBottom: 12 }}>
+        <RatingSlider
+          value={rpe}
+          words={RPE_WORDS}
+          label="Effort, 1 to 10"
+          prompt="Tap or slide to rate"
+          ends={['1 very easy', '10 all out']}
+          onChange={(n) => {
+            setRpe(n);
+            repo.updateSessionNotes(session.id, { rpe: n });
+          }}
+        />
       </View>
-      <T v="caption" tone="tertiary" style={{ marginBottom: 10 }}>
-        1 is very easy, 10 is all out
-      </T>
       <TextInput
         value={notes}
         onChangeText={setNotes}
@@ -334,8 +334,6 @@ const useStyles = createStyles((p) => ({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10 },
   divider: { borderTopWidth: 1, borderTopColor: p.divider },
   dot: { width: 10, height: 10, borderRadius: 5 },
-  rpe: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, paddingVertical: 6 },
-  rpeBtn: { width: 44, paddingHorizontal: 0 },
   notes: { minHeight: 72, borderRadius: 12, backgroundColor: p.inset, padding: 12, color: p.text, fontFamily: 'Inter', fontSize: 15, textAlignVertical: 'top', marginBottom: 10 },
   footer: { paddingHorizontal: 20, paddingTop: 8 },
   fixValue: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingTop: 14, paddingBottom: 4 },

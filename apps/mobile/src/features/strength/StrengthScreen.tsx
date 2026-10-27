@@ -19,16 +19,17 @@ import {
 } from '@fit/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { memo, useEffect, useMemo, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, TextInput, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
-import { actions, useUnits } from '@/data/store';
+import { actions, showSnack, useUnits } from '@/data/store';
 import { thousands } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { NotFound } from '@/ui/NotFound';
+import { RatingSlider, RPE_WORDS } from '@/ui/RatingSlider';
 import { Sheet } from '@/ui/Sheet';
 import { Button, IconButton, NumStepper, T } from '@/ui/primitives';
 import { onExercisesPicked } from '@/features/library/pick';
@@ -144,14 +145,19 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
       setLeaving(true);
       return;
     }
-    const endedAt = new Date();
-    repo.saveStrengthSession({ name: routine.name, routineId: routine.id, ...(scheduleKey ? { scheduleKey } : {}), startedAt: startedAt.toISOString(), endedAt: endedAt.toISOString(), sets });
-    actions.reload();
     haptic.success();
-    setFinished({ endedAt, sets });
+    setFinished({ endedAt: new Date(), sets });
   };
 
-  if (finished) return <Finished routine={routine} startedAt={startedAt} endedAt={finished.endedAt} sets={finished.sets} blocks={blocks} />;
+  // Saved from the finish screen (Done or back), so Discard there can still drop it.
+  const save = (feel: { rpe?: number; notes?: string }) => {
+    if (!finished) return;
+    const sets = doneSets(blocks);
+    repo.saveStrengthSession({ name: routine.name, routineId: routine.id, ...(scheduleKey ? { scheduleKey } : {}), startedAt: startedAt.toISOString(), endedAt: finished.endedAt.toISOString(), sets, ...feel });
+    actions.reload();
+  };
+
+  if (finished) return <Finished routine={routine} startedAt={startedAt} endedAt={finished.endedAt} sets={finished.sets} blocks={blocks} onSave={save} />;
 
   const edit = editing ? blocks[editing.b]?.rows[editing.r] : undefined;
   const weightStep = unit === 'lb' ? 5 : 2.5;
@@ -376,12 +382,38 @@ function RestBanner() {
   );
 }
 
-/** Finish summary (mockup WorkoutDone) and "Update routine with these values?". */
-function Finished({ routine, startedAt, endedAt, sets, blocks }: { routine: RoutineDetail; startedAt: Date; endedAt: Date; sets: LoggedSet[]; blocks: Block[] }) {
+/**
+ * Finish summary (mockup WorkoutDone), effort and a note, and "Update routine with these
+ * values?". Nothing is saved until Done (or back); Discard drops the workout.
+ */
+function Finished({ routine, startedAt, endedAt, sets, blocks, onSave }: { routine: RoutineDetail; startedAt: Date; endedAt: Date; sets: LoggedSet[]; blocks: Block[]; onSave: (feel: { rpe?: number; notes?: string }) => void }) {
   const s = useStyles();
+  const p = usePalette();
   const insets = useSafeAreaInsets();
   const unit = useUnits().weight;
   const [answered, setAnswered] = useState(false);
+  const [rpe, setRpe] = useState<number>();
+  const [notes, setNotes] = useState('');
+  const [discarding, setDiscarding] = useState(false);
+
+  const done = () => {
+    onSave({ ...(rpe ? { rpe } : {}), ...(notes.trim() ? { notes: notes.trim() } : {}) });
+    haptic.commit();
+    router.back();
+  };
+  const discard = () => {
+    setDiscarding(false);
+    showSnack({ message: 'Workout discarded' });
+    router.back();
+  };
+  // Back saves, the same as Done.
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      done();
+      return true;
+    });
+    return () => sub.remove();
+  });
   const suggestion = useMemo(() => (routine.items.kind === 'strength' ? routineFromLog(routine.items, sets) : undefined), [routine, sets]);
   const minutes = Math.max(1, Math.round((endedAt.getTime() - startedAt.getTime()) / 60000));
   const volume = volumeKg(sets);
@@ -441,11 +473,26 @@ function Finished({ routine, startedAt, endedAt, sets, blocks }: { routine: Rout
             </View>
           </Animated.View>
         )}
+        <View style={[s.card, { paddingVertical: 14, gap: 12 }]}>
+          <T v="headline">How hard was it</T>
+          <RatingSlider value={rpe} words={RPE_WORDS} label="Effort, 1 to 10" prompt="Tap or slide to rate" ends={['1 very easy', '10 all out']} onChange={setRpe} />
+          <TextInput value={notes} onChangeText={setNotes} placeholder="Note, optional" placeholderTextColor={p.textTertiary} accessibilityLabel="Note" multiline style={s.note} />
+        </View>
+        <Button label="Discard workout" kind="quiet" onPress={() => setDiscarding(true)} />
       </ScrollView>
       <StatusShade />
       <View style={[s.footer, { paddingBottom: insets.bottom + 16 }]}>
-        <Button label="Done" onPress={() => router.back()} />
+        <Button label="Done" onPress={done} />
       </View>
+      <Sheet visible={discarding} onClose={() => setDiscarding(false)} title="Discard workout">
+        <View style={{ gap: 10 }}>
+          <T v="body" tone="secondary">
+            The sets are not saved, and the workout stays due.
+          </T>
+          <Button label="Discard workout" onPress={discard} />
+          <Button label="Keep it" kind="outline" onPress={() => setDiscarding(false)} />
+        </View>
+      </Sheet>
     </View>
   );
 }
@@ -485,4 +532,5 @@ const useStyles = createStyles((p) => ({
   doneRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   divider: { borderTopWidth: 1, borderTopColor: p.divider },
   footer: { paddingHorizontal: 20, paddingTop: 8 },
+  note: { minHeight: 72, borderRadius: 12, backgroundColor: p.inset, padding: 12, color: p.text, fontFamily: 'Inter', fontSize: 15, textAlignVertical: 'top' },
 }));
