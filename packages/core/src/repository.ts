@@ -306,6 +306,8 @@ export interface HistoryItem {
   id: string;
   source: 'fit' | 'external';
   kind: HistoryKind;
+  /** External sessions: the exact type (hike, bike, swim) that `kind` folds into walk or other. */
+  activity?: ExternalActivity;
   /** Fit sessions only. */
   mode?: SessionMode;
   name: string;

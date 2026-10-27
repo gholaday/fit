@@ -2323,6 +2323,7 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
             id: r.id,
             source: 'external',
             kind: EXTERNAL_KIND[r.activity as ExternalActivity],
+            activity: r.activity as ExternalActivity,
             ...(r.activity === 'treadmill' ? { mode: 'treadmill' as const } : {}),
             name: r.title,
             startedAt: new Date(r.startedAt).toISOString(),
