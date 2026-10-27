@@ -2,11 +2,13 @@
  * Strength logger (spec §9, mockups Strength and WorkoutDone). Set rows prefill from last
  * time, with last time's numbers greyed beside them. Checking a set starts the rest
  * timer, which keeps time from timestamps and alerts at 0 even with the app in the
- * background. Finish shows the summary and offers to update the routine.
+ * background. Finish shows the summary and offers to update the routine. An empty workout
+ * (`/strength/new`) starts with no lifts and offers to save what was done as a routine.
  */
 import {
   formatClock,
   formatWeight,
+  localIsoDate,
   kgToUnit,
   type LoggedSet,
   prefillSets,
@@ -24,7 +26,7 @@ import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanim
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
 import { actions, showSnack, useUnits } from '@/data/store';
-import { thousands } from '@/lib/format';
+import { monthDay, thousands } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -76,20 +78,26 @@ function blocksFor(routine: RoutineDetail): Block[] {
   }));
 }
 
+/** `/strength/new` is an empty workout: no routine, lifts added as you go. */
+export const EMPTY_WORKOUT = 'new';
+const EMPTY_NAME = 'Workout';
+const DEFAULT_REST_S = 90;
+
 export function StrengthScreen() {
   const { id, key } = useLocalSearchParams<{ id: string; key?: string }>();
-  const [routine] = useState(() => repo.routine(id));
-  if (!routine || routine.items.kind !== 'strength') return <NotFound message="Workout not found" />;
+  const [routine] = useState(() => (id === EMPTY_WORKOUT ? undefined : repo.routine(id)));
+  if (id !== EMPTY_WORKOUT && (!routine || routine.items.kind !== 'strength')) return <NotFound message="Workout not found" />;
   return <Logger routine={routine} scheduleKey={key} />;
 }
 
-function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?: string }) {
+function Logger({ routine, scheduleKey }: { routine: RoutineDetail | undefined; scheduleKey?: string }) {
+  const name = routine?.name ?? EMPTY_NAME;
   const s = useStyles();
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const unit = useUnits().weight;
   const [startedAt] = useState(() => new Date());
-  const [blocks, setBlocks] = useState<Block[]>(() => blocksFor(routine));
+  const [blocks, setBlocks] = useState<Block[]>(() => (routine ? blocksFor(routine) : []));
   const [pad, setPad] = useState<Pad>();
   const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
   const scrollY = useRef(0);
@@ -183,7 +191,7 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
     onExercisesPicked((picked) => {
       const last = repo.lastSets(picked.map((e) => e.id));
       const fresh = picked.map((e, i): Block => {
-        const item: StrengthItem = { exerciseId: e.id, sets: 3, reps: 10, restS: routine.items.kind === 'strength' ? routine.items.restS : 90 };
+        const item: StrengthItem = { exerciseId: e.id, sets: 3, reps: 10, restS: routine?.items.kind === 'strength' ? routine.items.restS : DEFAULT_REST_S };
         return { key: `${e.id}-${Date.now()}-${i}`, exerciseId: e.id, name: e.name, restS: item.restS, rows: prefillSets(item, last[e.id] ?? []).map((r) => ({ ...r, done: false })) };
       });
       setBlocks((cur) => (replace === undefined ? [...cur, ...fresh] : cur.flatMap((x, i) => (i === replace ? fresh.slice(0, 1).map((f) => ({ ...f, restS: x.restS })) : [x]))));
@@ -206,11 +214,11 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
   const save = (feel: { rpe?: number; notes?: string }) => {
     if (!finished) return;
     const sets = doneSets(blocks);
-    repo.saveStrengthSession({ name: routine.name, routineId: routine.id, ...(scheduleKey ? { scheduleKey } : {}), startedAt: startedAt.toISOString(), endedAt: finished.endedAt.toISOString(), sets, ...feel });
+    repo.saveStrengthSession({ name, ...(routine ? { routineId: routine.id } : {}), ...(scheduleKey ? { scheduleKey } : {}), startedAt: startedAt.toISOString(), endedAt: finished.endedAt.toISOString(), sets, ...feel });
     actions.reload();
   };
 
-  if (finished) return <Finished routine={routine} startedAt={startedAt} endedAt={finished.endedAt} sets={finished.sets} blocks={blocks} onSave={save} />;
+  if (finished) return <Finished routine={routine} name={name} startedAt={startedAt} endedAt={finished.endedAt} sets={finished.sets} blocks={blocks} onSave={save} />;
 
   return (
     <View style={s.screen}>
@@ -220,7 +228,7 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
         </IconButton>
         <View style={{ flex: 1, alignItems: 'center' }}>
           <T v="labelStrong" numberOfLines={1}>
-            {routine.name}
+            {name}
           </T>
           <Elapsed since={startedAt} />
         </View>
@@ -462,7 +470,7 @@ function RestBanner() {
  * Finish summary (mockup WorkoutDone), effort and a note, and "Update routine with these
  * values?". Nothing is saved until Done (or back); Discard drops the workout.
  */
-function Finished({ routine, startedAt, endedAt, sets, blocks, onSave }: { routine: RoutineDetail; startedAt: Date; endedAt: Date; sets: LoggedSet[]; blocks: Block[]; onSave: (feel: { rpe?: number; notes?: string }) => void }) {
+function Finished({ routine, name, startedAt, endedAt, sets, blocks, onSave }: { routine: RoutineDetail | undefined; name: string; startedAt: Date; endedAt: Date; sets: LoggedSet[]; blocks: Block[]; onSave: (feel: { rpe?: number; notes?: string }) => void }) {
   const s = useStyles();
   const p = usePalette();
   const insets = useSafeAreaInsets();
@@ -490,14 +498,23 @@ function Finished({ routine, startedAt, endedAt, sets, blocks, onSave }: { routi
     });
     return () => sub.remove();
   });
-  const suggestion = useMemo(() => (routine.items.kind === 'strength' ? routineFromLog(routine.items, sets) : undefined), [routine, sets]);
+  // A routine's update from this log, or for an empty workout the lifts done as a new one.
+  const suggestion = useMemo(() => {
+    if (routine) return routine.items.kind === 'strength' ? routineFromLog(routine.items, sets) : undefined;
+    const fresh = routineFromLog({ schemaVersion: 2, kind: 'strength', restS: DEFAULT_REST_S, items: blocks.map((b) => ({ exerciseId: b.exerciseId, sets: 0, reps: 0, restS: b.restS })) }, sets);
+    return fresh?.kind === 'strength' ? { ...fresh, items: fresh.items.filter((i) => i.sets > 0) } : undefined;
+  }, [routine, blocks, sets]);
+  const [newName, setNewName] = useState(`${EMPTY_NAME}, ${monthDay(localIsoDate(startedAt))}`);
   const minutes = Math.max(1, Math.round((endedAt.getTime() - startedAt.getTime()) / 60000));
   const volume = volumeKg(sets);
-  const starter = routine.origin === 'starter';
+  const starter = routine?.origin === 'starter';
 
   const apply = () => {
     if (!suggestion) return;
-    if (starter) {
+    if (!routine) {
+      repo.createRoutine({ name: newName.trim() || EMPTY_NAME, items: suggestion });
+      showSnack({ message: 'Saved to your routines' });
+    } else if (routine.origin === 'starter') {
       const copy = repo.duplicateRoutine(routine.id, `${routine.name} (mine)`);
       repo.updateRoutine(copy, { name: `${routine.name} (mine)`, items: suggestion });
     } else repo.updateRoutine(routine.id, { name: routine.name, items: suggestion, ...(routine.notes ? { notes: routine.notes } : {}) });
@@ -513,7 +530,7 @@ function Finished({ routine, startedAt, endedAt, sets, blocks, onSave }: { routi
           Workout finished
         </T>
         <T v="display" accessibilityRole="header">
-          {routine.name}
+          {name}
         </T>
         <View style={s.stats}>
           <Stat value={`${minutes} min`} label="Duration" />
@@ -539,13 +556,22 @@ function Finished({ routine, startedAt, endedAt, sets, blocks, onSave }: { routi
         </View>
         {suggestion && !answered && (
           <Animated.View entering={FadeIn.duration(200)} style={[s.card, { paddingVertical: 14, gap: 10 }]}>
-            <T v="bodyStrong">{starter ? `Save these weights as your own ${routine.name}?` : `Update ${routine.name} with these values?`}</T>
-            <T v="caption" tone="secondary">
-              {starter ? 'Starter routines are read-only, so this makes a copy. Next time starts from the new numbers.' : 'Next time starts from the new numbers.'}
-            </T>
+            {routine ? (
+              <>
+                <T v="bodyStrong">{starter ? `Save these weights as your own ${routine.name}?` : `Update ${routine.name} with these values?`}</T>
+                <T v="caption" tone="secondary">
+                  {starter ? 'Starter routines are read-only, so this makes a copy. Next time starts from the new numbers.' : 'Next time starts from the new numbers.'}
+                </T>
+              </>
+            ) : (
+              <>
+                <T v="bodyStrong">Save as a routine?</T>
+                <TextInput value={newName} onChangeText={setNewName} accessibilityLabel="Routine name" placeholderTextColor={p.textTertiary} style={s.nameInput} />
+              </>
+            )}
             <View style={{ flexDirection: 'row', gap: 8 }}>
-              <Button label="Keep as is" kind="outline" size="md" style={{ flex: 1 }} onPress={() => setAnswered(true)} />
-              <Button label={starter ? 'Save a copy' : 'Update'} size="md" style={{ flex: 1 }} onPress={apply} />
+              <Button label={routine ? 'Keep as is' : 'Not now'} kind="outline" size="md" style={{ flex: 1 }} onPress={() => setAnswered(true)} />
+              <Button label={!routine ? 'Save routine' : starter ? 'Save a copy' : 'Update'} size="md" style={{ flex: 1 }} onPress={apply} />
             </View>
           </Animated.View>
         )}
@@ -607,5 +633,6 @@ const useStyles = createStyles((p) => ({
   doneRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12 },
   divider: { borderTopWidth: 1, borderTopColor: p.divider },
   footer: { paddingHorizontal: 20, paddingTop: 8 },
+  nameInput: { height: 44, borderRadius: 12, backgroundColor: p.inset, paddingHorizontal: 12, color: p.text, fontFamily: 'Inter', fontSize: 15 },
   note: { minHeight: 72, borderRadius: 12, backgroundColor: p.inset, padding: 12, color: p.text, fontFamily: 'Inter', fontSize: 15, textAlignVertical: 'top' },
 }));

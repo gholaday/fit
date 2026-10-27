@@ -22,6 +22,7 @@ import { ChecklistCard } from './ChecklistCard';
 import { DayWidget, SlimBar } from './DayWidget';
 import { type DoneActivity, DoneActivityCard } from './DoneActivityCard';
 import { summarizeDay } from './daySummary';
+import { StartWorkoutSheet } from './StartWorkoutSheet';
 import { WeekStrip } from './WeekStrip';
 
 /** Scroll distance after which the widget has collapsed into the slim bar. */
@@ -150,6 +151,7 @@ export function TodayScreen() {
 
   const heroKey = isToday ? items.find((i) => i.lane === 'run' && i.status === 'pending')?.key : undefined;
   const [quickLog, setQuickLog] = useState(false);
+  const [startWorkout, setStartWorkout] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const refresh = () => {
     setRefreshing(true);
@@ -248,7 +250,12 @@ export function TodayScreen() {
           <DoneActivityCard key={a.key} activity={a} />
         ))}
 
-        {isToday && <Button label="Free run" kind="quiet" size="md" style={{ marginTop: 4 }} icon={<Icons.run size={18} color={p.text} />} onPress={() => router.push('/run')} />}
+        {isToday && (
+          <View style={{ flexDirection: 'row', gap: 8, marginTop: 4 }}>
+            <Button label="Free run" kind="quiet" size="md" style={{ flex: 1 }} icon={<Icons.run size={18} color={p.text} />} onPress={() => router.push('/run')} />
+            <Button label="Workout" kind="quiet" size="md" style={{ flex: 1 }} icon={<Icons.barbell size={18} color={p.text} />} onPress={() => setStartWorkout(true)} />
+          </View>
+        )}
       </Animated.ScrollView>
 
       {isToday && (
@@ -262,6 +269,7 @@ export function TodayScreen() {
       <View pointerEvents="none" style={[s.statusBar, { height: insets.top }]} />
 
       <QuickLogSheet visible={quickLog} onClose={() => setQuickLog(false)} />
+      <StartWorkoutSheet visible={startWorkout} onClose={() => setStartWorkout(false)} />
       <Sheet visible={!!deleting} onClose={() => setDeleting(undefined)} title={deleting ? `Delete ${deleting.title}` : ''}>
         <View style={{ gap: 10 }}>
           <T v="body" tone="secondary">
