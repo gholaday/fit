@@ -92,6 +92,7 @@ import {
   type HistoryKind,
   computeRecords,
   currentRecords,
+  type StrengthSessionDetail,
   runDayChanges,
   type LiftBests,
   type LiftRecordInput,
@@ -1840,6 +1841,37 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       });
       if (input.scheduleKey) upsertCompletion(input.scheduleKey, 'done', { completedAt: endedAt, sessionId: id });
       return id;
+    },
+
+    strengthSession(id) {
+      const row = db
+        .select()
+        .from(t.sessions)
+        .where(and(eq(t.sessions.id, id), eq(t.sessions.kind, 'strength'), eq(t.sessions.status, 'saved'), notDeleted(t.sessions)))
+        .get();
+      if (!row) return undefined;
+      const detail: StrengthSessionDetail = {
+        id: row.id,
+        name: row.name,
+        startedAt: new Date(row.startedAt).toISOString(),
+        endedAt: new Date(row.endedAt ?? row.startedAt + row.elapsedMs).toISOString(),
+        sets: db
+          .select()
+          .from(t.strengthSets)
+          .where(and(eq(t.strengthSets.sessionId, id), notDeleted(t.strengthSets)))
+          .orderBy(asc(t.strengthSets.completedAt), asc(t.strengthSets.setIdx))
+          .all()
+          .map((s) => {
+            const set: LoggedSet & { completedAt: string } = { exerciseId: s.exerciseId, setIdx: s.setIdx, reps: s.reps, completedAt: new Date(s.completedAt).toISOString() };
+            if (s.weightKg !== null) set.weightKg = s.weightKg;
+            if (s.durationS !== null) set.durationS = s.durationS;
+            return set;
+          }),
+      };
+      if (row.routineId) detail.routineId = row.routineId;
+      if (row.rpe !== null) detail.rpe = row.rpe;
+      if (row.notes !== null) detail.notes = row.notes;
+      return detail;
     },
 
     exerciseHistory(exerciseId, limit) {

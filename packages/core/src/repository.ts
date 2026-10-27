@@ -207,6 +207,17 @@ export interface StrengthSessionInput {
   notes?: string;
 }
 
+export interface StrengthSessionDetail {
+  id: string;
+  name: string;
+  routineId?: string;
+  startedAt: string;
+  endedAt: string;
+  rpe?: number;
+  notes?: string;
+  sets: (LoggedSet & { completedAt: string })[];
+}
+
 export interface ExerciseHistoryEntry {
   sessionId: string;
   date: IsoDate;
@@ -601,6 +612,8 @@ export interface FitRepository {
   lastSets(exerciseIds: readonly string[]): Record<string, LoggedSet[]>;
   /** Saves the session and its sets, and marks the scheduled occurrence done (Done + data). */
   saveStrengthSession(input: StrengthSessionInput): string;
+  /** A saved strength session with its sets in logged order, for the lift detail screen. */
+  strengthSession(id: string): StrengthSessionDetail | undefined;
   exerciseHistory(exerciseId: string, limit: number): ExerciseHistoryEntry[];
 
   // Health Connect (M2). Sync runs on app open, pull-to-refresh and after a save.
