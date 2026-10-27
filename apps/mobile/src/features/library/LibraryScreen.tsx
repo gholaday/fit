@@ -10,6 +10,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { newId, repo } from '@/data';
 import { startTrial, type TimeTrial } from '@/features/pace/paces';
 import { useDataVersion, useFit, useRoutines, useUnits, useWorkouts } from '@/data/store';
+import { readAt } from '@/lib/focusedVersion';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -31,8 +32,8 @@ export function LibraryScreen() {
 
   // The store's version changes on every reload (after seeding or edits), so counts follow.
   const version = useDataVersion();
-  const counts = useMemo(() => repo.exerciseCounts(), [version]);
-  const matches = useMemo<ExerciseSummary[]>(() => (q ? repo.exercises({ query: q }).slice(0, 30) : []), [q, version]);
+  const counts = useMemo(() => readAt(version, () => repo.exerciseCounts()), [version]);
+  const matches = useMemo<ExerciseSummary[]>(() => readAt(version, () => (q ? repo.exercises({ query: q }).slice(0, 30) : [])), [q, version]);
 
   const lower = q.toLowerCase();
   const shown = (r: Routine) => !lower || r.name.toLowerCase().includes(lower);

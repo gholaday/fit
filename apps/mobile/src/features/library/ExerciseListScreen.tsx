@@ -10,7 +10,7 @@ import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
-import { useFocusedDataVersion } from '@/lib/focusedVersion';
+import { readAt, useFocusedDataVersion } from '@/lib/focusedVersion';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, Chip, IconButton, T } from '@/ui/primitives';
@@ -34,7 +34,7 @@ export function ExerciseListScreen() {
   const [picked, setPicked] = useState<ExerciseSummary[]>([]);
   const q = useDeferredValue(query.trim());
 
-  const list = useMemo(() => repo.exercises({ kind, muscle, equipment, query: q || undefined }), [kind, muscle, equipment, q, version]);
+  const list = useMemo(() => readAt(version, () => repo.exercises({ kind, muscle, equipment, query: q || undefined })), [kind, muscle, equipment, q, version]);
 
   const toggle = useCallback((e: ExerciseSummary) => setPicked((cur) => (cur.some((x) => x.id === e.id) ? cur.filter((x) => x.id !== e.id) : [...cur, e])), []);
   const open = useCallback((e: ExerciseSummary) => router.push({ pathname: '/exercise/[id]', params: { id: e.id } }), []);

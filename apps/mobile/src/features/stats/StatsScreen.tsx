@@ -10,7 +10,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useSettings, useToday } from '@/data/store';
-import { useFocusedDataVersion } from '@/lib/focusedVersion';
+import { readAt, useFocusedDataVersion } from '@/lib/focusedVersion';
 import { dateRangeLabel, dayOfMonth, monthDay, thousands, weekdayLetter } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
@@ -36,7 +36,7 @@ export function StatsScreen() {
   const version = useFocusedDataVersion();
   const [period, setPeriod] = useState<Period>('week');
   const [offset, setOffset] = useState(0);
-  const data = useMemo(() => loadStats(period, offset, today), [period, offset, today, version]);
+  const data = useMemo(() => readAt(version, () => loadStats(period, offset, today)), [period, offset, today, version]);
 
   const go = (n: number) => {
     haptic.tick();

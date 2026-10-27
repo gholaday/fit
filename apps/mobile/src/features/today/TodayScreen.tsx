@@ -42,9 +42,10 @@ interface Deleting {
 function loggedOn(day: IsoDate, _version: number) {
   const before = new Date(`${addDays(day, 1)}T00:00:00`).toISOString();
   return {
-    runs: repo
+    // Every recorded session: runs, walks and lifting.
+    sessions: repo
       .history({ source: 'fit', before, limit: 30 })
-      .filter((r) => (r.kind === 'run' || r.kind === 'walk') && localIsoDate(new Date(r.startedAt)) === day)
+      .filter((r) => localIsoDate(new Date(r.startedAt)) === day)
       .reverse(),
     watch: repo.externalSessions(day, day).filter((x) => !x.linkedPlanKey),
     logs: repo.quickLogs(day, day),
@@ -81,15 +82,25 @@ export function TodayScreen() {
     setPicked(d === today ? undefined : d);
   };
 
-  // Everything else logged on the day, under the checklist: runs and watch activities no
-  // plan item claims, and quick logs. Long press deletes them.
+  // Everything else logged on the day, under the checklist: recorded sessions (runs and
+  // lifting) and watch activities no plan item claims, and quick logs. Long press deletes them.
   const logged = useMemo(() => loggedOn(day, version), [day, version]);
   const done = useMemo<DoneActivity[]>(() => {
     const claimed = new Set(items.flatMap((i) => [i.sessionId, i.externalSessionId]).filter(Boolean));
     const ask = (d: Deleting) => () => setDeleting(d);
-    const runs = logged.runs
+    const sessions = logged.sessions
       .filter((r) => !claimed.has(r.id))
       .map((r): DoneActivity => {
+        if (r.kind === 'strength') {
+          return {
+            key: r.id,
+            title: r.name,
+            detail: formatMinutes(r.durationS),
+            lane: 'workout',
+            icon: Icons.barbell,
+            onDelete: ask({ title: r.name, note: 'The sets are deleted.', run: () => repo.deleteSession(r.id) }),
+          };
+        }
         const time = formatClock(r.durationS);
         return {
           key: r.id,
@@ -134,7 +145,7 @@ export function TodayScreen() {
         onDelete: ask({ title, note: 'The quick log is removed.', run: () => repo.deleteQuickLog(l.id) }),
       };
     });
-    return [...runs, ...watch, ...logs];
+    return [...sessions, ...watch, ...logs];
   }, [logged, items, unit]);
 
   const heroKey = isToday ? items.find((i) => i.lane === 'run' && i.status === 'pending')?.key : undefined;
