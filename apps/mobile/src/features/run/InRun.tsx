@@ -177,6 +177,18 @@ const TimerGauge = memo(function TimerGauge({ step }: { step: Step }) {
   const size = useRingSize();
   const unit = useUnits().distance;
   const progress = useLive((l) => (l.stepProgress === undefined ? undefined : Math.round(l.stepProgress * 200) / 200));
+  const free = useRun((r) => r.steps.length === 1) && step.duration.type === 'open';
+  // A free run has nothing to fill a ring with: just the clock.
+  if (free) {
+    return (
+      <View style={[s.gauge, { width: size, height: size * 0.6, alignItems: 'center', justifyContent: 'center' }]} accessibilityLabel="Elapsed time">
+        <LiveText pick={(l) => leftInStep(l, unit)} size={size * 0.3} />
+        <T v="label" tone="secondary">
+          elapsed
+        </T>
+      </View>
+    );
+  }
   return (
     <View style={[s.gauge, { width: size, height: size * 0.94 }]}>
       <Ring size={size} arcs={[{ from: 0, to: 1, color: p.ringTrack, width: 10 }]} progress={progress} progressColor={toneColor(p, stepTone(step))} markerColor={p.text} bg={p.bg} />
@@ -473,7 +485,9 @@ function GaugeView({ step, onEnd }: { step: Step; onEnd: () => void }) {
   // On a treadmill, pace and timer steps show the belt speed instead.
   const beltGauge = onBelt && gauge !== 'hr';
   const moving = outdoor || onBelt;
-  const sub = repLabel(steps, idx) ?? (steps.length > 1 ? `Step ${idx + 1} of ${steps.length}` : stepName(step));
+  // A free run's gauge is already the elapsed clock.
+  const freeClock = !beltGauge && gauge === 'timer' && steps.length === 1 && step.duration.type === 'open';
+  const sub =repLabel(steps, idx) ?? (steps.length > 1 ? `Step ${idx + 1} of ${steps.length}` : stepName(step));
 
   return (
     <View style={[s.screen, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 20 }]}>
@@ -503,12 +517,14 @@ function GaugeView({ step, onEnd }: { step: Step; onEnd: () => void }) {
       )}
 
       <View style={s.row3}>
-        <View style={{ flex: 1 }}>
-          <LiveText v="statSm" pick={(l) => formatClock(Math.floor(l.activeMs / 1000))} />
-          <T v="caption" tone="secondary">
-            Elapsed
-          </T>
-        </View>
+        {!freeClock && (
+          <View style={{ flex: 1 }}>
+            <LiveText v="statSm" pick={(l) => formatClock(Math.floor(l.activeMs / 1000))} />
+            <T v="caption" tone="secondary">
+              Elapsed
+            </T>
+          </View>
+        )}
         {moving && (
           <View style={{ flex: 1 }}>
             <LiveText v="statSm" pick={(l) => formatDistance(l.distanceM, unit, 2)} />

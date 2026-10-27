@@ -375,7 +375,6 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail | undefined; 
               finish();
             }}
           />
-          <Button label="Keep going" kind="outline" onPress={() => setEnding(false)} />
         </View>
       </Sheet>
 
@@ -393,7 +392,6 @@ function Logger({ routine, scheduleKey }: { routine: RoutineDetail | undefined; 
               }}
             />
           )}
-          <Button label="Keep going" kind="outline" onPress={() => setLeaving(false)} />
           <Button
             label="Leave without saving"
             kind="quiet"

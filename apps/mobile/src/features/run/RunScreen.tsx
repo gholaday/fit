@@ -115,7 +115,6 @@ function EndSheet({ visible, onClose, linked }: { visible: boolean; onClose: () 
             if (!id) router.back();
           }}
         />
-        <Button label="Keep going" kind="outline" onPress={close} />
         <Button
           label={confirmDiscard ? 'Tap again to discard' : 'Discard run'}
           kind="quiet"

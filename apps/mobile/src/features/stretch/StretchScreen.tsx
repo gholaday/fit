@@ -131,7 +131,7 @@ function Player({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
     setFinishedAt(new Date(t));
   };
 
-  /** The leave sheet holds the clock; Keep going picks up where it was. */
+  /** The leave sheet holds the clock; closing it picks up where it was. */
   const pausedForLeave = useRef(false);
   const askLeave = () => {
     pausedForLeave.current = player.current.status === 'active';
@@ -347,10 +347,8 @@ function Player({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
 
       <Sheet visible={leaving} onClose={keepGoing} title="Leave stretch">
         <View style={{ gap: 10 }}>
-          <Button label="Keep going" onPress={keepGoing} />
           <Button
             label="Finish here"
-            kind="outline"
             onPress={() => {
               setLeaving(false);
               done(Date.now());
