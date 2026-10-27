@@ -13,6 +13,7 @@ import { useUnits } from '@/data/store';
 import { useFocusedDataVersion } from '@/lib/focusedVersion';
 import { haptic } from '@/lib/haptics';
 import { activityColor, createStyles, usePalette } from '@/theme';
+import { ACTIVITY_ICON } from '@/features/health/ActivityModal';
 import { Icons } from '@/ui/icons';
 import { Chip, IconButton, LaneTile, T } from '@/ui/primitives';
 
@@ -153,7 +154,9 @@ const HistoryRow = memo(function HistoryRow({ item }: { item: HistoryItem }) {
   const s = useStyles();
   const p = usePalette();
   const unit = useUnits().distance;
-  const lane = LANE[item.kind];
+  // Watch activities keep their own type (a hike, a swim) for the icon and color.
+  const lane = item.activity ? undefined : LANE[item.kind];
+  const tone = activityColor(p, item.activity ?? item.kind);
   const open =
     item.source === 'external'
       ? () => router.push({ pathname: '/activity/[id]', params: { id: item.id } })
@@ -163,14 +166,14 @@ const HistoryRow = memo(function HistoryRow({ item }: { item: HistoryItem }) {
           ? () => router.push({ pathname: '/lift/[id]', params: { id: item.id } })
           : undefined;
   const meta = [startedLabel(item.startedAt), item.distanceM ? formatDistance(item.distanceM, unit, 2) : undefined, item.durationS > 0 ? formatMinutes(item.durationS) : undefined].filter(Boolean).join(', ');
-  const Icon = item.kind === 'walk' ? Icons.walk : Icons.dots;
+  const Icon = item.activity ? ACTIVITY_ICON[item.activity] : item.kind === 'walk' ? Icons.walk : Icons.dots;
   return (
     <Pressable accessibilityRole={open ? 'button' : undefined} disabled={!open} onPress={open} style={s.row}>
       {lane ? (
         <LaneTile lane={lane} size={36} />
       ) : (
-        <View style={[s.tile, { backgroundColor: activityColor(p, item.kind).tint }]}>
-          <Icon size={20} color={activityColor(p, item.kind).color} />
+        <View style={[s.tile, { backgroundColor: tone.tint }]}>
+          <Icon size={20} color={tone.color} />
         </View>
       )}
       <View style={{ flex: 1, gap: 2 }}>
