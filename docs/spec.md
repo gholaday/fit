@@ -858,15 +858,22 @@ settings           key, value_json
 **Bottom tabs:** Today, Plan, Library, Stats, (Settings via avatar/gear)
 
 **Today day widget**
-- Left: **steps ring** toward the daily goal (default 8,000, from Health Connect), steps in the center.
-- Right: a headline, a **strip with one segment per item today** (colored by type, filled when done), and one or two plain lines.
-- A faint "12m ago" shows when steps last synced; pull down to refresh. Tap opens Activity stats.
+- Left: the **day ring**, two concentric rings (core `dayRing`, `ringHit`).
+  - Inner ring: one arc per lane scheduled today, in lane order (run, strength, stretch), equal shares. Three lanes take a third each, two take half, one takes the whole ring. Small gaps between arcs. Each arc shows the lane's pending tint and fills clockwise in the lane color by the share of that lane's items done. Skipped items stay unfilled. With nothing scheduled the inner ring is a plain track.
+  - Outer ring: steps toward the daily goal (default 8,000, from Health Connect), neutral ink, sage when the goal is met. A plain track until steps sync.
+  - Center: "2 of 3" done (on a day with nothing scheduled, the step count).
+- Right: a details panel that follows what is tapped on the ring.
+  - Nothing selected: the headline and one or two plain lines (states below).
+  - A lane arc: the lane name and "1 of 2 done", then that lane's items today (title, then time, or the result once done, or "Skipped"). Tapping a row scrolls the checklist to its card.
+  - The steps ring: steps and goal ("6,240 of 8,000 steps"), what is left ("1,760 to go") or "Goal met", and when steps last synced. Tapping the panel opens Activity stats.
+  - The selected part keeps full color, the rest dims. Tapping it again, the center, or outside the widget clears the selection. It also clears when the app comes back to the foreground.
+- A faint "12m ago" shows when steps last synced; pull down to refresh.
 - Changes by time of day and day type:
   - **Morning:** "4 things today", the first item and its time, total time for the day.
   - **During the day:** "1 of 4 done" and the next item.
-  - **Evening wrap-up** (everything done or after 8 PM): "All done" or "3 of 4 done", the day's highlight (e.g. run distance and % in zone), what's tomorrow. Ring turns sage when the step goal is met.
+  - **Evening wrap-up** (everything done or after 8 PM): "All done" or "3 of 4 done", the day's highlight (e.g. run distance and % in zone), what's tomorrow.
   - **Rest day:** "Rest day, 1 of 2 done" and the remaining stretch routine.
-- Shrinks to a slim bar (steps + done count) as the checklist scrolls.
+- Shrinks to a slim bar (done count, item strip, steps) as the checklist scrolls.
 
 | Screen | Purpose / key elements |
 |---|---|
