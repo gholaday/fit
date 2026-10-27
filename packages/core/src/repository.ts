@@ -4,7 +4,7 @@ import type { HrProfileInput, HrZoneBand } from './hr';
 import type { ExternalActivity, PlanMatch } from './external';
 import type { TrialResult } from './pace';
 import type { PersonalBest, RunRow, SessionStats } from './stats';
-import type { LiftBests, LiftRecordKind, RecordEvent } from './records';
+import type { LiftBests, RecordEvent } from './records';
 import type { CuePrefs } from './session/cues';
 import type { HrSample } from './session/heart';
 import type { TreadmillPrefs } from './session/treadmill';
