@@ -60,11 +60,12 @@ export function formatDistance(meters: number, unit: DistanceUnit, digits = 1): 
   return `${metersToUnit(meters, unit).toFixed(digits)} ${unit}`;
 }
 
-/** "40 min", "1 h 05 min" */
+/** "40 min", "1 h 05 min", "1 h" for whole hours. */
 export function formatMinutes(totalSeconds: number): string {
   const min = Math.round(totalSeconds / 60);
   if (min < 60) return `${min} min`;
-  return `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`;
+  const rest = min % 60;
+  return rest === 0 ? `${min / 60} h` : `${Math.floor(min / 60)} h ${String(rest).padStart(2, '0')} min`;
 }
 
 /** "135 lb" */

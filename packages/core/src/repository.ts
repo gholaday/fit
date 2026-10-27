@@ -482,6 +482,7 @@ export interface FitRepository {
   // Quick log
   addQuickLog(log: Omit<QuickLog, 'id'>): QuickLog;
   quickLogs(start: IsoDate, end: IsoDate): QuickLog[];
+  deleteQuickLog(id: string): void;
 
   // Heart rate
   currentHrProfile(): HrProfile | undefined;
@@ -546,6 +547,11 @@ export interface FitRepository {
   saveProgress(id: string, progress: SessionProgress): void;
   finishSession(id: string, finish: SessionFinish): void;
   discardSession(id: string): void;
+  /**
+   * Deletes a saved session (Discard on a summary, or delete from Today). A plan workout
+   * it completed goes back to scheduled, and watch HR merged into it is offered again.
+   */
+  deleteSession(id: string): void;
   activeSession(): ActiveSession | undefined;
   session(id: string): SessionDetail | undefined;
   recentSessions(limit: number): SessionListItem[];
@@ -607,6 +613,8 @@ export interface FitRepository {
   planMatch(externalId: string): PlanMatch;
   saveExternal(id: string, save: ExternalSave): void;
   ignoreExternal(id: string): void;
+  /** Delete from Today: hides a saved watch activity (as Ignore does) and reopens the plan workout it completed. */
+  deleteExternal(id: string): void;
   /** Undo of a merge: drops the Health Connect HR it added and shows it in the modal instead. */
   undoMerge(externalId: string): void;
 

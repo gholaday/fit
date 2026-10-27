@@ -739,6 +739,10 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         });
     },
 
+    deleteQuickLog(id) {
+      db.update(t.quickLogs).set({ deletedAt: now(), ...stamp() }).where(eq(t.quickLogs.id, id)).run();
+    },
+
     currentHrProfile(): HrProfile | undefined {
       const row = db.select().from(t.hrProfiles).where(and(eq(t.hrProfiles.isCurrent, true), notDeleted(t.hrProfiles))).get();
       if (!row) return undefined;
@@ -1266,6 +1270,23 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
             .where(eq(t.planWorkouts.id, row.planWorkoutId))
             .run();
         }
+      });
+    },
+
+    deleteSession(id) {
+      db.transaction((tx) => {
+        tx.update(t.sessions).set({ status: 'discarded', deletedAt: now(), ...stamp() }).where(eq(t.sessions.id, id)).run();
+        tx.delete(t.trackPoints).where(eq(t.trackPoints.sessionId, id)).run();
+        tx.delete(t.hrSamples).where(eq(t.hrSamples.sessionId, id)).run();
+        tx.update(t.planWorkouts)
+          .set({ status: 'scheduled', completedAt: null, sessionId: null, ...stamp() })
+          .where(and(eq(t.planWorkouts.sessionId, id), eq(t.planWorkouts.status, 'done')))
+          .run();
+        // A watch recording merged into this run becomes its own activity again.
+        tx.update(t.externalSessions)
+          .set({ status: 'new', linkedSessionId: null, ...stamp() })
+          .where(and(eq(t.externalSessions.linkedSessionId, id), eq(t.externalSessions.status, 'merged')))
+          .run();
       });
     },
 
@@ -1925,6 +1946,23 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         .set({ status: 'ignored', ...stamp() })
         .where(eq(t.externalSessions.id, id))
         .run();
+    },
+
+    deleteExternal(id) {
+      // Ignored rather than removed, so the next Health Connect sync does not import it again.
+      const ext = db.select({ linkedPlanKey: t.externalSessions.linkedPlanKey }).from(t.externalSessions).where(eq(t.externalSessions.id, id)).get();
+      db.transaction((tx) => {
+        tx.update(t.externalSessions)
+          .set({ status: 'ignored', linkedPlanKey: null, ...stamp() })
+          .where(eq(t.externalSessions.id, id))
+          .run();
+        tx.update(t.planWorkouts)
+          .set({ externalSessionId: null, ...stamp() })
+          .where(eq(t.planWorkouts.externalSessionId, id))
+          .run();
+      });
+      // The plan workout or routine it completed is due again.
+      if (ext?.linkedPlanKey) repo.reopen(ext.linkedPlanKey);
     },
 
     undoMerge(externalId) {
