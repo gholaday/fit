@@ -15,7 +15,6 @@ import {
   adherenceByWeek,
   daysInWeek,
   decouplingTrend,
-  easyPaceTrend,
   periodTotals,
   personalBests,
   runShareTrend,
@@ -78,7 +77,6 @@ export interface StatsData {
   buckets: Bucket[];
   /** Day buckets for a week, week buckets otherwise. */
   bucketUnit: 'day' | 'week';
-  easyTrend: { start: IsoDate; secPerKm: number }[];
   bests: PersonalBest[];
   longest?: RunRow;
   streak: number;
@@ -92,7 +90,7 @@ export interface StatsData {
   heart: HeartProgress;
 }
 
-/** Heart rate progress (spec §7 Progress), over the same 12 weeks as easy pace. */
+/** Heart rate progress (spec §7 Progress), over the last 12 weeks. */
 export interface HeartProgress {
   z2Pace: { start: IsoDate; secPerKm: number }[];
   /** Eight weeks, zero-filled. */
@@ -136,7 +134,6 @@ export function loadStats(period: Period, offset: number, today: IsoDate): Stats
   }
 
   const trendStart = addDays(startOfWeek(range.end), -7 * 11);
-  const easyTrend = easyPaceTrend(all, trendStart, range.end);
   const longest = all.reduce<RunRow | undefined>((best, r) => (!r.walk && (!best || r.distanceM > best.distanceM) ? r : best), undefined);
   const streak = weekStreak(
     all.filter((r) => !r.walk).map((r) => r.date),
@@ -206,7 +203,6 @@ export function loadStats(period: Period, offset: number, today: IsoDate): Stats
     rows,
     buckets,
     bucketUnit: period === 'week' ? 'day' : 'week',
-    easyTrend,
     // Treadmill and watch rows carry no bests, so every row can go in.
     bests: personalBests(all),
     longest,

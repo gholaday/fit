@@ -1,7 +1,8 @@
 /**
  * Stats tab (spec §12, §14): plan completion for the period, running distance and time
- * with the run, walk and sprint split, the easy pace trend, personal bests, streaks,
+ * with the run, walk and sprint split, heart rate progress, personal bests, streaks,
  * strength and stretching, then Activity (steps against the goal, resting heart rate).
+ * A section with no data is hidden, not explained.
  */
 import { type IsoDate, type Weekday, PB_DISTANCES, addDays, formatClock, formatDistance, formatMinutes, formatPace, paceToUnit } from '@fit/core';
 import { router } from 'expo-router';
@@ -71,18 +72,19 @@ export function StatsScreen() {
           </IconButton>
         </View>
 
-        <CompletionCard data={data} />
+        <CompletionCard data={data} period={period} />
         <RunningCard data={data} />
-        <EasyPaceCard data={data} />
         <HeartCard data={data} />
         <BestsCard data={data} />
         <PlanWeeksCard data={data} />
         <StrengthCard data={data} />
         <StretchCard data={data} />
 
-        <T v="title" style={{ marginTop: 10 }} accessibilityRole="header">
-          Activity
-        </T>
+        {(data.metrics.some((m) => m.steps !== undefined) || data.restingHr.length > 0) && (
+          <T v="title" style={{ marginTop: 10 }} accessibilityRole="header">
+            Activity
+          </T>
+        )}
         <StepsCard data={data} />
         <RestingHrCard data={data} />
       </ScrollView>
@@ -91,12 +93,18 @@ export function StatsScreen() {
   );
 }
 
-function CompletionCard({ data }: { data: StatsData }) {
+const NOTHING_DUE: Record<Period, string> = {
+  week: 'No planned workouts this week.',
+  month: 'No planned workouts this month.',
+  '3m': 'No planned workouts in these 3 months.',
+};
+
+function CompletionCard({ data, period }: { data: StatsData; period: Period }) {
   if (data.completion.length === 0) {
     return (
       <Card title="Completion">
         <T v="caption" tone="secondary">
-          Nothing was due in this period.
+          {NOTHING_DUE[period]}
         </T>
       </Card>
     );
@@ -144,55 +152,6 @@ function RunningCard({ data }: { data: StatsData }) {
   );
 }
 
-function EasyPaceCard({ data }: { data: StatsData }) {
-  const p = usePalette();
-  const unit = useSettings().units.distance;
-  const t = data.easyTrend;
-  if (t.length === 0) {
-    return (
-      <Card title="Easy pace" right="Last 12 weeks">
-        <T v="caption" tone="secondary">
-          Shows once a week has 1 km or more of easy running.
-        </T>
-      </Card>
-    );
-  }
-  const first = t[0]!;
-  const last = t[t.length - 1]!;
-  const d = Math.round(paceToUnit(last.secPerKm, unit) - paceToUnit(first.secPerKm, unit));
-  return (
-    <Card title="Easy pace" right="Last 12 weeks">
-      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
-        <T v="display" num>
-          {formatPace(last.secPerKm, unit)}
-        </T>
-        {t.length > 1 && d !== 0 && (
-          <T v="labelStrong" color={d < 0 ? p.stretch.onTint : p.textSecondary}>
-            {`${Math.abs(d)} s ${d < 0 ? 'faster' : 'slower'}`}
-          </T>
-        )}
-      </View>
-      {t.length > 1 ? (
-        <>
-          <TrendLine values={t.map((x) => x.secPerKm)} color={p.run.color} invert accessibilityLabel={`Easy pace by week, now ${formatPace(last.secPerKm, unit)}`} />
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <T v="tiny" tone="tertiary">
-              {monthDay(first.start)}
-            </T>
-            <T v="tiny" tone="tertiary">
-              {monthDay(last.start)}
-            </T>
-          </View>
-        </>
-      ) : (
-        <T v="caption" tone="secondary">
-          {`Week of ${monthDay(last.start)}. The trend shows from the second week.`}
-        </T>
-      )}
-    </Card>
-  );
-}
-
 /** Heart rate progress (spec §7): Zone 2 pace, Zone 2 minutes, run share, decoupling and retests. */
 function HeartCard({ data }: { data: StatsData }) {
   const s = useStyles();
@@ -211,7 +170,7 @@ function HeartCard({ data }: { data: StatsData }) {
   const resting = data.restingHr[data.restingHr.length - 1];
   return (
     <Card title="Heart rate progress" right="Last 12 weeks">
-      {last ? (
+      {last && (
         <View style={{ gap: 2 }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
             <T v="display" num>
@@ -224,14 +183,10 @@ function HeartCard({ data }: { data: StatsData }) {
             )}
           </View>
           <T v="caption" tone="secondary">
-            Pace in Zone 2. Faster at the same heart rate means a bigger aerobic base.
+            Zone 2 pace
           </T>
           {pace.length > 1 && <TrendLine values={pace.map((x) => x.secPerKm)} color={p.run.color} height={56} invert accessibilityLabel={`Zone 2 pace by week, now ${formatPace(last.secPerKm, unit)}`} />}
         </View>
-      ) : (
-        <T v="caption" tone="secondary">
-          Zone 2 pace shows once a week has 10 min or more in Zone 2.
-        </T>
       )}
 
       {z2Total > 0 && (
@@ -266,9 +221,6 @@ function HeartCard({ data }: { data: StatsData }) {
               <T v="labelStrong" num color={x.pct < 5 ? p.stretch.onTint : p.text}>{`${x.pct.toFixed(1)}%`}</T>
             </Pressable>
           ))}
-          <T v="micro" tone="tertiary">
-            Under 5% is good.
-          </T>
         </View>
       )}
 
@@ -303,13 +255,9 @@ function BestsCard({ data }: { data: StatsData }) {
   const p = usePalette();
   const unit = useSettings().units.distance;
   const longest = data.longest;
+  if (data.bests.length === 0 && !longest) return null;
   return (
     <Card title="Personal bests" right={data.streak > 0 ? `${data.streak} week streak` : undefined}>
-      {data.bests.length === 0 && (
-        <T v="caption" tone="secondary">
-          Outdoor runs set your fastest 1 km, 1 mi, 5 km, 10 km and half marathon.
-        </T>
-      )}
       {data.bests.map((b, i) => {
         const label = PB_DISTANCES.find((x) => Math.abs(x.meters - b.meters) < 1)?.label ?? formatDistance(b.meters, unit);
         return (
@@ -340,11 +288,6 @@ function BestsCard({ data }: { data: StatsData }) {
           </T>
           <Icons.chevronRight size={14} color={p.textTertiary} />
         </Pressable>
-      )}
-      {data.streak === 0 && (
-        <T v="caption" tone="tertiary">
-          Run 3 times in a week to start a streak.
-        </T>
       )}
     </Card>
   );
@@ -409,15 +352,7 @@ function StepsCard({ data }: { data: StatsData }) {
   const p = usePalette();
   const goal = useSettings().stepGoal;
   const days = data.metrics.filter((m) => m.steps !== undefined);
-  if (days.length === 0) {
-    return (
-      <Card title="Steps">
-        <T v="caption" tone="secondary">
-          Steps come from Health Connect after your watch syncs.
-        </T>
-      </Card>
-    );
-  }
+  if (days.length === 0) return null;
   const avg = Math.round(days.reduce((t, m) => t + (m.steps ?? 0), 0) / days.length);
   const stepsOn = new Map(days.map((m) => [m.date, m.steps ?? 0]));
   let bars: Bar[];
@@ -445,15 +380,7 @@ function StepsCard({ data }: { data: StatsData }) {
 function RestingHrCard({ data }: { data: StatsData }) {
   const p = usePalette();
   const hr = data.restingHr;
-  if (hr.length === 0) {
-    return (
-      <Card title="Resting heart rate" right="Last 90 days">
-        <T v="caption" tone="secondary">
-          Resting heart rate comes from Health Connect after your watch syncs.
-        </T>
-      </Card>
-    );
-  }
+  if (hr.length === 0) return null;
   const first = hr[0]!;
   const last = hr[hr.length - 1]!;
   const d = last.bpm - first.bpm;
@@ -480,8 +407,8 @@ function RestingHrCard({ data }: { data: StatsData }) {
           </View>
         </>
       ) : (
-        <T v="caption" tone="secondary">
-          {`On ${monthDay(last.date)}. The trend shows from the second day.`}
+        <T v="tiny" tone="tertiary">
+          {monthDay(last.date)}
         </T>
       )}
     </Card>
