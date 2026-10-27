@@ -813,7 +813,7 @@ hc_sync_state      key, changes_token, last_synced_at
 Track weight toward a goal, with a quick weigh-in on Today. Stored in kg, shown in the units setting (lb or kg).
 
 **Weigh-ins**
-- Manual from Today, or Health Connect `Weight` records (a smart scale, Garmin Index, another app), imported with steps. Health Connect rows dedupe by record id; deleting one in Fit hides it and it is not imported again.
+- Manual from Today, or Health Connect `Weight` records (a smart scale, Garmin Index, another app), imported with steps by time window (30 days on a full sync, otherwise from 2 days before the newest imported weigh-in), not the changes token. Health Connect rows dedupe by record id; deleting one in Fit hides it and it is not imported again.
 - A day can have several weigh-ins. The trend uses each day's first one, since morning weights are the most consistent.
 
 **Trend** (core `weightTrend`)
@@ -827,9 +827,9 @@ Track weight toward a goal, with a quick weigh-in on Today. Stored in kg, shown 
 - Status compares the trend with the plan line today: "On track" within 0.5 kg (1 lb), otherwise "1.2 lb ahead" or "1.2 lb behind". No other judgement in the copy.
 - The goal is reached when the trend crosses the target. The card then says "Goal reached" with the date, and offers a new goal. Stopping a goal keeps its history.
 
-**Today card** (below the checklist; shown once there is a weigh-in or a goal)
+**Today card** (right under the steps card; shown only while a goal is active or just reached. Without a goal, weight lives on the Weight screen and in Stats)
 - Trend in large type ("182.4 lb"), then "Last 181.8 lb, today 7:10 AM".
-- Change since the goal start, or the first weigh-in when there is no goal ("Down 3.2 lb since Oct 1"), and the weekly rate ("1.1 lb a week").
+- Change since the goal start, or the first weigh-in when there is no goal ("Down 3.2 lb since Oct 1"), and the weekly rate with its direction ("Down 1.1 lb a week"), so it does not read as the goal pace.
 - With a goal: a progress bar from start to target, the status, and "Expected Jan 12".
 - A small 30 day trend line with weigh-in dots.
 - **Weigh in** button: a small sheet with one number field, prefilled with the last weigh-in, steppers of 0.1, and Save. A toast says "Weight saved". There is no time picker; it records now.
