@@ -20,10 +20,11 @@ import type { DaySummary } from './daySummary';
 const SIZE = 176;
 const CX = SIZE / 2;
 const STEPS_R = 78;
-const DAY_R = 44;
+/** 6 px of clear space between the two strokes. */
+const DAY_R = 58;
 const WIDTH = 14;
-/** Touch margin either side of a ring: each ring's touch band is 44 px deep. */
-const SLOP = 19;
+/** Touch margin either side of a ring: with the rings this close, it keeps each band 44 px deep. */
+const SLOP = 27;
 const LAYOUT: RingLayout = { stepsR: STEPS_R, dayR: DAY_R, width: WIDTH, slop: SLOP };
 /** The outer band reaches past the drawing. */
 const HIT_SLOP = STEPS_R + WIDTH / 2 + SLOP - CX;
@@ -39,10 +40,16 @@ type Selection = { ring: 'steps' } | { ring: 'day'; lane: Lane };
 
 const same = (a: Selection | undefined, b: Selection) => a?.ring === b.ring && (a.ring === 'steps' || (b.ring === 'day' && a.lane === b.lane));
 
-/** One arc: a track in `track`, filled clockwise in `color` by `fill`, dimmed when another part is selected. */
+/**
+ * One arc: a track in `track`, filled clockwise in `color` by `fill`, dimmed when another
+ * part is selected. Ends are round; a segment is trimmed by half the stroke at each end so
+ * the caps stay inside its share and the gaps between lanes stay clear.
+ */
 function ArcStroke({ r, start, end, fill, color, track, dim }: { r: number; start: number; end: number; fill: number; color: string; track: string; dim: boolean }) {
   const c = 2 * Math.PI * r;
-  const len = (end - start) * c;
+  const full = end - start >= 1;
+  const trim = full ? 0 : WIDTH / 2;
+  const len = (end - start) * c - 2 * trim;
   const f = useSharedValue(fill);
   const o = useSharedValue(dim ? DIM : 1);
   useEffect(() => {
@@ -51,12 +58,13 @@ function ArcStroke({ r, start, end, fill, color, track, dim }: { r: number; star
   useEffect(() => {
     o.value = withTiming(dim ? DIM : 1, { duration: MOTION_MS });
   }, [dim, o]);
-  const fillProps = useAnimatedProps(() => ({ strokeDasharray: [f.value * len, c] }));
+  // A zero-length dash with round caps would still draw a dot, so an empty fill hides.
+  const fillProps = useAnimatedProps(() => ({ strokeDasharray: [f.value * len, c], strokeOpacity: f.value > 0.001 ? 1 : 0 }));
   const groupProps = useAnimatedProps(() => ({ opacity: o.value }));
-  const common = { cx: CX, cy: CX, r, fill: 'none', strokeWidth: WIDTH, strokeDashoffset: -start * c, transform: `rotate(-90 ${CX} ${CX})` } as const;
+  const common = { cx: CX, cy: CX, r, fill: 'none', strokeWidth: WIDTH, strokeLinecap: 'round', strokeDashoffset: -(start * c + trim), transform: `rotate(-90 ${CX} ${CX})` } as const;
   return (
     <AnimatedG animatedProps={groupProps}>
-      <Circle {...common} stroke={track} strokeDasharray={`${len} ${c}`} />
+      {full ? <Circle cx={CX} cy={CX} r={r} fill="none" strokeWidth={WIDTH} stroke={track} /> : <Circle {...common} stroke={track} strokeDasharray={`${len} ${c}`} />}
       <AnimatedCircle {...common} stroke={color} animatedProps={fillProps} />
     </AnimatedG>
   );
