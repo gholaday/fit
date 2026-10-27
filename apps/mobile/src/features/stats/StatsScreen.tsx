@@ -8,7 +8,8 @@ import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useDataVersion, useSettings, useToday } from '@/data/store';
+import { useSettings, useToday } from '@/data/store';
+import { useFocusedDataVersion } from '@/lib/focusedVersion';
 import { dateRangeLabel, dayOfMonth, monthDay, thousands, weekdayLetter } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
@@ -29,10 +30,11 @@ export function StatsScreen() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const today = useToday();
-  const version = useDataVersion();
+  // The tab stays mounted, and a full load is about 100 ms with a year of runs: writes made
+  // on other tabs are picked up when Stats is shown again, not on every write.
+  const version = useFocusedDataVersion();
   const [period, setPeriod] = useState<Period>('week');
   const [offset, setOffset] = useState(0);
-  // Reads are synchronous and cheap; the data version changes after every write.
   const data = useMemo(() => loadStats(period, offset, today), [period, offset, today, version]);
 
   const go = (n: number) => {

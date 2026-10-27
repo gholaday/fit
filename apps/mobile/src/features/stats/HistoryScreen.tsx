@@ -5,11 +5,12 @@
  */
 import { GARMIN_CONNECT_PACKAGE, type HistoryFilter, type HistoryItem, type HistoryKind, type Lane, type SessionMode, formatDistance, formatMinutes } from '@fit/core';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useRef, useState } from 'react';
 import { FlatList, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
-import { useDataVersion, useUnits } from '@/data/store';
+import { useUnits } from '@/data/store';
+import { useFocusedDataVersion } from '@/lib/focusedVersion';
 import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
@@ -51,7 +52,8 @@ export function HistoryScreen() {
   const s = useStyles();
   const p = usePalette();
   const insets = useSafeAreaInsets();
-  const version = useDataVersion();
+  // Under a summary or replay, writes wait until History is shown again.
+  const version = useFocusedDataVersion();
   const [kind, setKind] = useState<HistoryKind>();
   const [mode, setMode] = useState<SessionMode>();
   const [source, setSource] = useState<'fit' | 'external'>();
@@ -59,8 +61,8 @@ export function HistoryScreen() {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [more, setMore] = useState(true);
 
-  const filter = (before?: string): HistoryFilter => {
-    const f: HistoryFilter = { limit: PAGE };
+  const filter = (limit: number, before?: string): HistoryFilter => {
+    const f: HistoryFilter = { limit };
     if (kind) f.kind = kind;
     if (mode) f.mode = mode;
     if (source) f.source = source;
@@ -69,16 +71,22 @@ export function HistoryScreen() {
     return f;
   };
 
-  // First page again whenever a filter, the search or the data changes.
+  // A filter or the search starts over at the first page. A data change re-reads the rows
+  // already loaded, keeping unchanged ones so they do not re-render and the list keeps its length.
+  const filterKey = `${kind}|${mode}|${source}|${search}`;
+  const shownKey = useRef(filterKey);
   useEffect(() => {
-    const page = repo.history(filter());
-    setItems(page);
-    setMore(page.length === PAGE);
-  }, [kind, mode, source, search, version]);
+    const same = shownKey.current === filterKey;
+    shownKey.current = filterKey;
+    const limit = same ? Math.max(PAGE, items.length) : PAGE;
+    const page = repo.history(filter(limit));
+    setItems(same ? keepRows(items, page) : page);
+    setMore(page.length === limit);
+  }, [filterKey, version]);
 
   const loadMore = () => {
     if (!more || items.length === 0) return;
-    const page = repo.history(filter(items[items.length - 1]!.startedAt));
+    const page = repo.history(filter(PAGE, items[items.length - 1]!.startedAt));
     setItems([...items, ...page]);
     setMore(page.length === PAGE);
   };
@@ -114,7 +122,7 @@ export function HistoryScreen() {
       </ScrollView>
       <FlatList
         data={items}
-        keyExtractor={(i) => `${i.source}:${i.id}`}
+        keyExtractor={rowKey}
         renderItem={({ item }) => <HistoryRow item={item} />}
         onEndReached={loadMore}
         onEndReachedThreshold={0.5}
@@ -130,7 +138,18 @@ export function HistoryScreen() {
   );
 }
 
-function HistoryRow({ item }: { item: HistoryItem }) {
+const rowKey = (i: HistoryItem) => `${i.source}:${i.id}`;
+
+/** `next`, reusing the row objects from `prev` that did not change. */
+function keepRows(prev: readonly HistoryItem[], next: HistoryItem[]): HistoryItem[] {
+  const old = new Map(prev.map((i) => [rowKey(i), i]));
+  return next.map((i) => {
+    const o = old.get(rowKey(i));
+    return o && JSON.stringify(o) === JSON.stringify(i) ? o : i;
+  });
+}
+
+const HistoryRow = memo(function HistoryRow({ item }: { item: HistoryItem }) {
   const s = useStyles();
   const p = usePalette();
   const unit = useUnits().distance;
@@ -175,7 +194,7 @@ function HistoryRow({ item }: { item: HistoryItem }) {
       {open && <Icons.chevronRight size={16} color={p.textTertiary} />}
     </Pressable>
   );
-}
+});
 
 const useStyles = createStyles((p) => ({
   screen: { flex: 1, backgroundColor: p.bg, gap: 12 },

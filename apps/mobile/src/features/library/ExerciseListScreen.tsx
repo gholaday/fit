@@ -10,7 +10,7 @@ import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
-import { useDataVersion } from '@/data/store';
+import { useFocusedDataVersion } from '@/lib/focusedVersion';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, Chip, IconButton, T } from '@/ui/primitives';
@@ -25,7 +25,8 @@ export function ExerciseListScreen() {
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const { pick } = useLocalSearchParams<{ pick?: 'strength' | 'stretch' }>();
-  const version = useDataVersion();
+  // Under an exercise's detail, edits are picked up when the list is shown again.
+  const version = useFocusedDataVersion();
   const [query, setQuery] = useState('');
   const [kind, setKind] = useState<ExerciseKind | undefined>(pick);
   const [muscle, setMuscle] = useState<Muscle>();
