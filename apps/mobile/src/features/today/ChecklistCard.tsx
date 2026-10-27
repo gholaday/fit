@@ -33,7 +33,8 @@ function HeroRunCard({ item }: { item: AgendaItem }) {
   const p = usePalette();
   const units = useUnits();
   const plan = usePlan();
-  const week = item.source.type === 'plan_workout' ? item.source.weekIndex + 1 : undefined;
+  // weekIndex is 1-based.
+  const week = item.source.type === 'plan_workout' ? item.source.weekIndex : undefined;
   const eyebrow = plan && week ? `${plan.name}, week ${week}` : 'Run';
   return (
     <Pressable accessibilityRole="button" accessibilityHint="Opens actions" onPress={() => {

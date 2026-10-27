@@ -1,7 +1,7 @@
 import { type IsoDate, type PlanSummary, addDays, formatDistance, presetInfo, startOfWeek } from '@fit/core';
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
@@ -128,7 +128,15 @@ function PlanCard() {
   // Re-read with the plan: every adaptation reloads the store, which replaces `plan`.
   const events = repo.planEvents(3);
   return (
-    <View style={[s.card, { flexDirection: 'column', alignItems: 'stretch' }]}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityHint="Opens the plan in detail"
+      onPress={() => {
+        haptic.tap();
+        router.push('/run-plan');
+      }}
+      style={[s.card, { flexDirection: 'column', alignItems: 'stretch' }]}
+    >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <LaneTile lane="run" />
         <View style={{ flex: 1, gap: 6 }}>
@@ -166,7 +174,7 @@ function PlanCard() {
         </View>
       )}
       <PlanMenu plan={plan} open={menu} onClose={() => setMenu(false)} />
-    </View>
+    </Pressable>
   );
 }
 
