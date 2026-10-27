@@ -1,33 +1,35 @@
 /**
- * The Today day widget (spec §14): a two-ring day ring on the left (lanes inside, steps
- * outside) and a details panel on the right that follows what is tapped on the ring.
- * Fill and dim animate on the UI thread.
+ * The Today day widget (spec §14): the day ring on the left, one arc per lane, and this
+ * week as small day rings on the right. Tapping an arc shows that lane's items in place of
+ * the week. Fill and dim animate on the UI thread. Steps have their own card below.
  */
-import { type AgendaItem, type Lane, type RingArc, type RingHit, type RingLayout, type UnitPrefs, dayRing, formatDistance, formatMinutes, ringHit } from '@fit/core';
-import { router } from 'expo-router';
-import { type ComponentRef, type Ref, memo, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { type AgendaItem, type IsoDate, type Lane, type RingArc, type RingHit, type RingLayout, type UnitPrefs, addDays, dayRing, formatDistance, formatMinutes, ringHit, startOfWeek, weekdayOf } from '@fit/core';
+import { type ComponentRef, type Ref, memo, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 import { AppState, Pressable, View } from 'react-native';
 import Animated, { useAnimatedProps, useSharedValue, withTiming } from 'react-native-reanimated';
 import Svg, { Circle, G } from 'react-native-svg';
-import { syncedLabel } from '@/features/health/state';
-import { clockTime, thousands } from '@/lib/format';
+import { useShallow } from 'zustand/react/shallow';
+import { repo } from '@/data';
+import { actions, useFit, useSettings } from '@/data/store';
+import { useHealth } from '@/features/health/state';
+import { clockTime, thousands, weekdayLetter, weekdayLong } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
 import { createStyles, laneColor, usePalette } from '@/theme';
-import { Icons, LANE_ICON } from '@/ui/icons';
 import { T } from '@/ui/primitives';
 import type { DaySummary } from './daySummary';
 
-const SIZE = 176;
+const SIZE = 140;
 const CX = SIZE / 2;
-const STEPS_R = 78;
-/** 6 px of clear space between the two strokes. */
 const DAY_R = 58;
-const WIDTH = 14;
-/** Touch margin either side of a ring: with the rings this close, it keeps each band 44 px deep. */
-const SLOP = 27;
-const LAYOUT: RingLayout = { stepsR: STEPS_R, dayR: DAY_R, width: WIDTH, slop: SLOP };
-/** The outer band reaches past the drawing. */
-const HIT_SLOP = STEPS_R + WIDTH / 2 + SLOP - CX;
+const WIDTH = 16;
+/** Touch margin either side of the ring: a band 44 px deep. */
+const SLOP = 14;
+/** The day ring is the only ring: an infinite steps radius keeps every ringHit on it. */
+const LAYOUT: RingLayout = { stepsR: Number.POSITIVE_INFINITY, dayR: DAY_R, width: WIDTH, slop: SLOP };
+/** The touch band reaches past the drawing. */
+const HIT_SLOP = DAY_R + WIDTH / 2 + SLOP - CX;
+/** Space between lane arcs, as a fraction of the circle: about 2 px on the day ring. */
+const LANE_GAP = 0;
 const MOTION_MS = 200;
 const DIM = 0.25;
 
@@ -36,19 +38,15 @@ const AnimatedG = Animated.createAnimatedComponent(G);
 
 export const LANE_NAME: Record<Lane, string> = { run: 'Run', workout: 'Workout', stretch: 'Stretch' };
 
-type Selection = { ring: 'steps' } | { ring: 'day'; lane: Lane };
-
-const same = (a: Selection | undefined, b: Selection) => a?.ring === b.ring && (a.ring === 'steps' || (b.ring === 'day' && a.lane === b.lane));
-
 /**
  * One arc: a track in `track`, filled clockwise in `color` by `fill`, dimmed when another
- * part is selected. Ends are round; a segment is trimmed by half the stroke at each end so
+ * lane is selected. Ends are round; a segment is trimmed by half the stroke at each end so
  * the caps stay inside its share and the gaps between lanes stay clear.
  */
 function ArcStroke({ r, start, end, fill, color, track, dim }: { r: number; start: number; end: number; fill: number; color: string; track: string; dim: boolean }) {
   const c = 2 * Math.PI * r;
   const full = end - start >= 1;
-  const trim = full ? 0 : WIDTH / 2;
+  const trim = 0;
   const len = (end - start) * c - 2 * trim;
   const f = useSharedValue(fill);
   const o = useSharedValue(dim ? DIM : 1);
@@ -61,7 +59,7 @@ function ArcStroke({ r, start, end, fill, color, track, dim }: { r: number; star
   // A zero-length dash with round caps would still draw a dot, so an empty fill hides.
   const fillProps = useAnimatedProps(() => ({ strokeDasharray: [f.value * len, c], strokeOpacity: f.value > 0.001 ? 1 : 0 }));
   const groupProps = useAnimatedProps(() => ({ opacity: o.value }));
-  const common = { cx: CX, cy: CX, r, fill: 'none', strokeWidth: WIDTH, strokeLinecap: 'round', strokeDashoffset: -(start * c + trim), transform: `rotate(-90 ${CX} ${CX})` } as const;
+  const common = { cx: CX, cy: CX, r, fill: 'none', strokeWidth: WIDTH, strokeLinecap: 'butt', strokeDashoffset: -(start * c + trim), transform: `rotate(-90 ${CX} ${CX})` } as const;
   return (
     <AnimatedG animatedProps={groupProps}>
       {full ? <Circle cx={CX} cy={CX} r={r} fill="none" strokeWidth={WIDTH} stroke={track} /> : <Circle {...common} stroke={track} strokeDasharray={`${len} ${c}`} />}
@@ -83,22 +81,22 @@ export interface DayWidgetHandle {
 
 interface DayWidgetProps {
   ref?: Ref<DayWidgetHandle>;
+  today: IsoDate;
   summary: DaySummary;
   items: readonly AgendaItem[];
-  stepGoal: number;
-  steps?: number;
-  lastSyncedAt?: string;
   units: UnitPrefs;
   /** Scrolls the checklist to an item's card. */
   onJump: (key: string) => void;
+  /** Opens a day of the week. */
+  onDay: (date: IsoDate) => void;
 }
 
-export const DayWidget = memo(function DayWidget({ ref, summary, items, stepGoal, steps, lastSyncedAt, units, onJump }: DayWidgetProps) {
+export const DayWidget = memo(function DayWidget({ ref, today, summary, items, units, onJump, onDay }: DayWidgetProps) {
   const s = useStyles();
   const p = usePalette();
-  const [sel, setSel] = useState<Selection>();
+  const [sel, setSel] = useState<Lane>();
   const box = useRef<ComponentRef<typeof View>>(null);
-  const arcs = dayRing(items);
+  const arcs = dayRing(items, LANE_GAP);
 
   useImperativeHandle(ref, () => ({
     touch: (x, y) => {
@@ -115,15 +113,11 @@ export const DayWidget = memo(function DayWidget({ ref, summary, items, stepGoal
     return () => sub.remove();
   }, []);
 
-  const pick = (next: Selection | undefined) => {
+  const pick = (lane: Lane | undefined) => {
     haptic.tick();
-    setSel((cur) => (!next || same(cur, next) ? undefined : next));
+    setSel((cur) => (!lane || cur === lane ? undefined : lane));
   };
-  const onRing = (hit: RingHit | undefined) => pick(!hit || hit.ring === 'center' ? undefined : hit.ring === 'steps' ? { ring: 'steps' } : { ring: 'day', lane: hit.lane });
-
-  const synced = steps !== undefined;
-  const met = synced && steps >= stepGoal;
-  const stepsLabel = synced ? `Steps, ${thousands(steps)} of ${thousands(stepGoal)}` : 'Steps, not synced';
+  const onRing = (hit: RingHit | undefined) => pick(hit?.ring === 'day' ? hit.lane : undefined);
 
   return (
     <View ref={box} style={s.card}>
@@ -134,55 +128,35 @@ export const DayWidget = memo(function DayWidget({ ref, summary, items, stepGoal
         style={{ width: SIZE, height: SIZE }}
       >
         <Svg width={SIZE} height={SIZE} style={StyleFill}>
-          <ArcStroke r={STEPS_R} start={0} end={1} fill={synced ? Math.min(1, steps / stepGoal) : 0} color={met ? p.success : p.primary} track={p.ringTrack} dim={sel !== undefined && sel.ring !== 'steps'} />
           {arcs.length === 0 ? (
-            <ArcStroke r={DAY_R} start={0} end={1} fill={0} color={p.ringTrack} track={p.ringTrack} dim={sel !== undefined} />
+            <ArcStroke r={DAY_R} start={0} end={1} fill={0} color={p.ringTrack} track={p.ringTrack} dim={false} />
           ) : (
-            arcs.map((a) => <ArcStroke key={a.lane} r={DAY_R} start={a.start} end={a.end} fill={a.fill} color={laneColor(p, a.lane).color} track={laneColor(p, a.lane).pending} dim={sel !== undefined && !(sel.ring === 'day' && sel.lane === a.lane)} />)
+            arcs.map((a) => <ArcStroke key={a.lane} r={DAY_R} start={a.start} end={a.end} fill={a.fill} color={laneColor(p, a.lane).color} track={laneColor(p, a.lane).pending} dim={sel !== undefined && sel !== a.lane} />)
           )}
         </Svg>
         <View style={[StyleFill, s.center]} pointerEvents="none">
           <T v="statSm" num>
-            {summary.total > 0 ? `${summary.done} of ${summary.total}` : synced ? thousands(steps) : '-'}
+            {summary.total > 0 ? `${summary.done} of ${summary.total}` : 'Rest'}
           </T>
           <T v="tiny" tone="secondary">
-            {summary.total > 0 ? 'done' : 'steps'}
+            {summary.total > 0 ? 'done' : 'day'}
           </T>
         </View>
-        {/* One button per part for screen readers; a touch on one selects the same part. */}
-        <Pressable accessibilityRole="button" accessibilityLabel={stepsLabel} accessibilityState={{ selected: sel?.ring === 'steps' }} onPress={() => pick({ ring: 'steps' })} style={[s.a11y, midpoint(STEPS_R, 0, 0)]} />
+        {/* One button per arc for screen readers; a touch on one selects the same arc. */}
         {arcs.map((a: RingArc) => (
           <Pressable
             key={a.lane}
             accessibilityRole="button"
             accessibilityLabel={`${LANE_NAME[a.lane]}, ${a.done} of ${a.total} done`}
-            accessibilityState={{ selected: sel?.ring === 'day' && sel.lane === a.lane }}
-            onPress={() => pick({ ring: 'day', lane: a.lane })}
+            accessibilityState={{ selected: sel === a.lane }}
+            onPress={() => pick(a.lane)}
             style={[s.a11y, midpoint(DAY_R, a.start, a.end)]}
           />
         ))}
       </Pressable>
 
       <View style={s.panel}>
-        {!sel ? (
-          <Overview summary={summary} />
-        ) : sel.ring === 'steps' ? (
-          <Pressable accessibilityRole="button" accessibilityHint="Opens activity stats" onPress={() => router.navigate('/stats')} style={{ gap: 6 }}>
-            <T v="headline" num>
-              {synced ? `${thousands(steps)} steps` : 'Steps'}
-            </T>
-            <T v="label" tone="secondary" num>
-              {synced ? `of ${thousands(stepGoal)}, ${met ? 'goal met' : `${thousands(stepGoal - steps)} to go`}` : 'Not synced yet'}
-            </T>
-            {lastSyncedAt && (
-              <T v="caption" tone="tertiary" num>
-                {`Synced ${syncedLabel(lastSyncedAt)}`}
-              </T>
-            )}
-          </Pressable>
-        ) : (
-          <LanePanel lane={sel.lane} items={items.filter((i) => i.lane === sel.lane)} units={units} onJump={onJump} />
-        )}
+        {sel ? <LanePanel lane={sel} items={items.filter((i) => i.lane === sel)} units={units} onJump={onJump} /> : <WeekPanel today={today} units={units} onDay={onDay} />}
       </View>
     </View>
   );
@@ -190,32 +164,86 @@ export const DayWidget = memo(function DayWidget({ ref, summary, items, stepGoal
 
 const StyleFill = { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 } as const;
 
-function Overview({ summary }: { summary: DaySummary }) {
-  const s = useStyles();
+const MINI = 26;
+const MINI_R = 10;
+const MINI_W = 4;
+
+/** A day as a small day ring: one segment per lane, no gaps, filled as its items are done. A dot in the middle marks the step goal met. */
+function MiniRing({ items, stepGoal }: { items: readonly AgendaItem[]; stepGoal: boolean }) {
   const p = usePalette();
-  const LineIcon = summary.line ? LANE_ICON[summary.line.lane] : undefined;
-  const SubIcon = summary.sub?.icon === 'clock' ? Icons.clock : Icons.calendar;
+  const c = 2 * Math.PI * MINI_R;
+  const m = MINI / 2;
+  const common = { cx: m, cy: m, r: MINI_R, fill: 'none', strokeWidth: MINI_W, transform: `rotate(-90 ${m} ${m})` } as const;
+  return (
+    <Svg width={MINI} height={MINI}>
+      <Circle {...common} stroke={p.ringTrack} />
+      {stepGoal && <Circle cx={m} cy={m} r={3.5} fill={p.steps} />}
+      {dayRing(items, 0).map((a) => {
+        const len = (a.end - a.start) * c;
+        const lc = laneColor(p, a.lane);
+        return (
+          <G key={a.lane}>
+            <Circle {...common} stroke={lc.pending} strokeDasharray={`${len} ${c}`} strokeDashoffset={-a.start * c} />
+            {a.fill > 0 && <Circle {...common} stroke={lc.color} strokeDasharray={`${a.fill * len} ${c}`} strokeDashoffset={-a.start * c} />}
+          </G>
+        );
+      })}
+    </Svg>
+  );
+}
+
+/** Steps per day for the week from `start`. Takes the sync time so the memo re-reads after a sync. */
+function stepsOn(start: IsoDate, _syncedAt: string | undefined): Map<IsoDate, number> {
+  return new Map(repo.dailyMetricsRange(start, addDays(start, 6)).map((m) => [m.date, m.steps ?? 0]));
+}
+
+/** Monday to Sunday of this week as small day rings, with what is done so far. Tapping a day opens it. */
+function WeekPanel({ today, units, onDay }: { today: IsoDate; units: UnitPrefs; onDay: (d: IsoDate) => void }) {
+  const s = useStyles();
+  const start = startOfWeek(today);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  useEffect(() => actions.ensureRange(start, addDays(start, 6)), [start]);
+  const week = useFit(useShallow((st) => days.flatMap((d) => (st.byDate[d] ?? []).map((k) => st.items[k]!))));
+  const goal = useSettings().stepGoal;
+  const syncedAt = useHealth((h) => h.lastSyncedAt);
+  const steps = useMemo(() => stepsOn(start, syncedAt), [start, syncedAt]);
+  const done = week.filter((i) => i.status === 'done');
+  const meters = done.reduce((t, i) => t + (i.lane === 'run' ? (i.details?.distanceM ?? 0) : 0), 0);
   return (
     <>
-      <T v="headline" numberOfLines={2}>
-        {summary.headline}
-      </T>
-      {summary.line && LineIcon && (
-        <View style={s.line}>
-          <LineIcon size={14} color={laneColor(p, summary.line.lane).color} />
-          <T v="label" style={{ flex: 1 }} numberOfLines={3}>
-            {summary.line.text}
-          </T>
-        </View>
-      )}
-      {summary.sub && (
-        <View style={s.line}>
-          <SubIcon size={14} color={p.textTertiary} />
-          <T v="caption" tone="secondary" style={{ flex: 1 }} numberOfLines={2}>
-            {summary.sub.text}
-          </T>
-        </View>
-      )}
+      <View>
+        <T v="label" tone="secondary">
+          This week
+        </T>
+        <T v="labelStrong" num numberOfLines={1}>
+          {week.length === 0 ? 'Nothing planned' : `${done.length} of ${week.length} done${meters > 0 ? `, ${formatDistance(meters, units.distance, 1)}` : ''}`}
+        </T>
+      </View>
+      <View style={s.week}>
+        {days.map((d) => {
+          const items = week.filter((i) => i.date === d);
+          const isToday = d === today;
+          const met = (steps.get(d) ?? 0) >= goal;
+          return (
+            <Pressable
+              key={d}
+              accessibilityRole="button"
+              accessibilityLabel={`${weekdayLong(weekdayOf(d))}, ${items.length === 0 ? 'rest day' : `${items.filter((i) => i.status === 'done').length} of ${items.length} done`}${met ? ', step goal met' : ''}`}
+              hitSlop={4}
+              onPress={() => {
+                haptic.tick();
+                onDay(d);
+              }}
+              style={({ pressed }) => [s.weekDay, pressed && { opacity: 0.6 }]}
+            >
+              <T v="micro" tone={isToday ? undefined : 'tertiary'}>
+                {weekdayLetter(weekdayOf(d))}
+              </T>
+              <MiniRing items={items} stepGoal={met} />
+            </Pressable>
+          );
+        })}
+      </View>
     </>
   );
 }
@@ -287,10 +315,11 @@ export const SlimBar = memo(function SlimBar({ summary, steps }: { summary: DayS
 });
 
 const useStyles = createStyles((p) => ({
-  card: { backgroundColor: p.surface, borderRadius: 20, padding: 14, flexDirection: 'row', gap: 14, alignItems: 'center' },
+  card: { backgroundColor: p.surface, borderRadius: 20, padding: 14, flexDirection: 'row', gap: 16, alignItems: 'center' },
   center: { alignItems: 'center', justifyContent: 'center' },
   a11y: { position: 'absolute', width: 44, height: 44 },
   panel: { flex: 1, minWidth: 0, gap: 8 },
-  line: { flexDirection: 'row', alignItems: 'flex-start', gap: 6 },
+  week: { flexDirection: 'row', justifyContent: 'space-between' },
+  weekDay: { alignItems: 'center', gap: 4, minHeight: 44, justifyContent: 'center' },
   slim: { flexDirection: 'row', alignItems: 'center', gap: 12, height: 44, paddingHorizontal: 14, borderRadius: 14, backgroundColor: p.surface },
 }));

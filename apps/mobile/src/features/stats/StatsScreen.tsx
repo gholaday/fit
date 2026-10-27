@@ -77,6 +77,7 @@ export function StatsScreen() {
         </View>
 
         <CompletionCard data={data} period={period} />
+        <StepsCard data={data} />
         <RunningCard data={data} />
         <HeartCard data={data} />
         <RecordsCard records={records.all} recent={records.recent} streak={data.streak} />
@@ -84,12 +85,11 @@ export function StatsScreen() {
         <StrengthCard data={data} />
         <StretchCard data={data} />
 
-        {(data.metrics.some((m) => m.steps !== undefined) || data.restingHr.length > 0) && (
+        {data.restingHr.length > 0 && (
           <T v="title" style={{ marginTop: 10 }} accessibilityRole="header">
             Activity
           </T>
         )}
-        <StepsCard data={data} />
         <RestingHrCard data={data} />
       </ScrollView>
       <StatusShade />
@@ -320,14 +320,14 @@ function StepsCard({ data }: { data: StatsData }) {
   if (data.bucketUnit === 'day') {
     bars = data.buckets.map((b, i) => {
       const v = stepsOn.get(b.start) ?? 0;
-      return { label: weekdayLetter((i + 1) as Weekday), parts: [{ value: v, color: v >= goal ? p.text : p.dashed }] };
+      return { label: weekdayLetter((i + 1) as Weekday), parts: [{ value: v, color: v >= goal ? p.success : p.steps }] };
     });
   } else {
     // A week's daily average, against the daily goal.
     bars = data.buckets.map((b, i) => {
       const inWeek = days.filter((m) => m.date >= b.start && m.date < addDays(b.start, 7));
       const v = inWeek.length ? Math.round(inWeek.reduce((t, m) => t + (m.steps ?? 0), 0) / inWeek.length) : 0;
-      return { label: weekLabel(b.start, i, data.buckets.length), parts: [{ value: v, color: v >= goal ? p.text : p.dashed }] };
+      return { label: weekLabel(b.start, i, data.buckets.length), parts: [{ value: v, color: v >= goal ? p.success : p.steps }] };
     });
   }
   return (

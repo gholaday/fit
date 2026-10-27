@@ -9,7 +9,7 @@ import { repo } from '@/data';
 import { actions, showSnack, useDataVersion, useDayKeys, useFit, usePaceBump, useSettings, useToday } from '@/data/store';
 import { PaceBumpCard } from '@/features/pace/paces';
 import { ACTIVITY_ICON, ACTIVITY_LABEL } from '@/features/health/ActivityModal';
-import { openActivities, reloadHealth, syncedLabel, useHealth } from '@/features/health/state';
+import { openActivities, reloadHealth, useHealth } from '@/features/health/state';
 import { syncHealth } from '@/features/health/sync';
 import { QuickLogSheet, quickLogLabel } from '@/features/quicklog/QuickLogSheet';
 import { haptic } from '@/lib/haptics';
@@ -22,6 +22,7 @@ import { ChecklistCard } from './ChecklistCard';
 import { DayWidget, type DayWidgetHandle, SlimBar } from './DayWidget';
 import { type DoneActivity, DoneActivityCard } from './DoneActivityCard';
 import { summarizeDay } from './daySummary';
+import { StepsCard } from './StepsCard';
 import { StartWorkoutSheet } from './StartWorkoutSheet';
 import { WeekStrip } from './WeekStrip';
 
@@ -215,20 +216,8 @@ export function TodayScreen() {
         </View>
 
         <WeekStrip today={today} selected={day} onSelect={select} />
-        {isToday && <DayWidget ref={widget} summary={summary} items={items} stepGoal={settings.stepGoal} steps={metrics?.steps} lastSyncedAt={lastSyncedAt} units={settings.units} onJump={jump} />}
-        {isToday && metrics?.restingHr !== undefined && (
-          <View style={s.health}>
-            <Icons.heart size={20} color={p.run.color} />
-            <View style={{ flex: 1 }}>
-              <T v="bodyMedium" num>{`Resting heart rate ${Math.round(metrics.restingHr)} bpm`}</T>
-              {lastSyncedAt && (
-                <T v="caption" tone="secondary" num>
-                  {`Last synced ${syncedLabel(lastSyncedAt)}`}
-                </T>
-              )}
-            </View>
-          </View>
-        )}
+        {isToday && <DayWidget ref={widget} today={today} summary={summary} items={items} units={settings.units} onJump={jump} onDay={select} />}
+        {isToday && <StepsCard today={today} steps={metrics?.steps} goal={settings.stepGoal} lastSyncedAt={lastSyncedAt} />}
         {isToday && bump && <PaceBumpCard bump={bump} />}
         {pendingCount > 0 && (
           <Button
@@ -312,5 +301,4 @@ const useStyles = createStyles((p) => ({
   slimWrap: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 20, paddingBottom: 8, backgroundColor: p.bg },
   slim: { shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3, borderRadius: 14 },
   empty: { alignItems: 'center', gap: 4, paddingVertical: 32 },
-  health: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: p.surface, borderRadius: 16, paddingHorizontal: 16, paddingVertical: 12 },
 }));

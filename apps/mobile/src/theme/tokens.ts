@@ -46,6 +46,8 @@ export interface Palette {
   sprint: ActivityColor;
   walk: string;
   success: string;
+  /** Light blue for the steps bar and chart, lighter than the run blue. */
+  steps: string;
   /** Gold for record trophies, the one saturated accent. */
   trophy: string;
 }
@@ -79,6 +81,7 @@ export const light: Palette = {
   sprint: { color: '#B97A5B', tint: '#F5E4DC', onTint: '#7E4630', pending: '#EED8CD' },
   walk: '#C9CACF',
   success: '#5F9370',
+  steps: '#7DB9E3',
   trophy: '#E0A800',
 };
 
@@ -112,6 +115,7 @@ export const dark: Palette = {
   sprint: { color: '#CC9479', tint: '#2E221D', onTint: '#E7BCA7', pending: '#382821' },
   walk: '#4B4E57',
   success: '#8DB596',
+  steps: '#8FC6EC',
   trophy: '#F2C230',
 };
 

@@ -181,6 +181,19 @@ async function dailyMetrics(from: IsoDate, to: IsoDate, types: Set<string>): Pro
   return [...rows.values()];
 }
 
+/**
+ * Steps in each hour of a day, read straight from Health Connect (nothing is stored), for
+ * the line on Today's steps card. Undefined without Health Connect or the steps permission.
+ */
+export async function hourlySteps(date: IsoDate): Promise<number[] | undefined> {
+  if ((await init()) !== 'available' || !(await grantedTypes()).has('Steps')) return undefined;
+  const { aggregateGroupByDuration } = await hc();
+  const groups = await aggregateGroupByDuration({ recordType: 'Steps', timeRangeFilter: between(dayStart(date), dayStart(addDays(date, 1))), timeRangeSlicer: { duration: 'HOURS', length: 1 } });
+  const out = Array.from({ length: 24 }, () => 0);
+  for (const g of groups) out[new Date(g.startTime).getHours()]! += g.result.COUNT_TOTAL;
+  return out;
+}
+
 // ---------- sync ----------
 
 interface Changes {
