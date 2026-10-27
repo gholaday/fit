@@ -15,6 +15,8 @@ import {
   type GpsFilterState,
   type GpsFix,
   type HrSample,
+  type HrZone,
+  type RunWalkPhase,
   type SpeedSegment,
   type PlayerState,
   type SessionMode,
@@ -28,13 +30,18 @@ import {
   DEFAULT_CUE_PREFS,
   formatClock,
   formatDistance,
+  hrCap,
   hrStats,
   initialCueState,
   initialGpsFilter,
+  isRunWalkStep,
   playerReducer,
   rollingPace,
+  runWalkCueText,
+  runWalkPhase,
   secondsInZone,
   setSpeed,
+  smoothedHr,
   snapshot,
   treadmillDistance,
   treadmillTarget,
@@ -79,6 +86,8 @@ export interface RunView {
   speedKph?: number;
   targetKph?: number;
   inclinePct?: number;
+  /** Heart-rate run/walk steps: the phase you are in, for the step pill. */
+  runPhase?: RunWalkPhase;
 }
 
 export interface Live {
@@ -128,6 +137,21 @@ export function paceRangeFor(step: Step): { minSecPerKm: number; maxSecPerKm: nu
   const t = step.target;
   if (t.type === 'pace_range') return t;
   if (t.type === 'pace_zone' && vdot !== undefined) return zonePace(vdot, t.zone);
+  return undefined;
+}
+
+/**
+ * HR range for cues: the profile's band for a zone target, the range itself, or anything
+ * under the cap for an "under" target.
+ */
+export function cueHrRange(step: Step): { minBpm: number; maxBpm: number; zone?: HrZone } | undefined {
+  const t = step.target;
+  if (t.type === 'hr_range') return { minBpm: t.minBpm, maxBpm: t.maxBpm };
+  if (t.type === 'hr_max') return { minBpm: 0, maxBpm: t.maxBpm };
+  if (t.type === 'hr_zone') {
+    const band = useFit.getState().hrProfile?.zones.find((z) => z.zone === t.zone);
+    return band ? { minBpm: band.minBpm, maxBpm: band.maxBpm, zone: t.zone } : undefined;
+  }
   return undefined;
 }
 
@@ -335,14 +359,15 @@ function step(tIn: number): void {
   samples = trimSamples(samples, t);
   const belt = useRun.getState().speedKph;
   const paceSecPerKm = treadmill() ? (belt ? 3600 / belt : undefined) : rollingPace(samples, t);
+  const hr = player.startedAt !== undefined ? smoothedHr(hrAll, t - player.startedAt) : undefined;
+  runWalk(t, distanceM, hr);
   const snap = snapshot(player, t, distanceM);
-  const r = cuesFor(cue, { snap, t, distanceM, currentPace: paceSecPerKm }, { unit: unit(), prefs: useFit.getState().settings.cues ?? DEFAULT_CUE_PREFS, paceRange: paceRangeFor, treadmill: treadmill() });
+  const r = cuesFor(cue, { snap, t, distanceM, currentPace: paceSecPerKm, hr }, { unit: unit(), prefs: useFit.getState().settings.cues ?? DEFAULT_CUE_PREFS, paceRange: paceRangeFor, treadmill: treadmill(), hrRange: cueHrRange });
   cue = r.state;
   for (const c of r.cues) {
     if (c.haptic) cueHaptic(c.haptic);
     // Countdown cues carry no text: the seconds are spoken, which ducks music like any cue.
-    const text = c.kind === 'countdown' ? COUNT_WORDS[cue.countdownAt ?? 0] : c.text;
-    if (text && useRun.getState().voice) services.speaker?.speak(text);
+    speak(c.kind === 'countdown' ? COUNT_WORDS[cue.countdownAt ?? 0] : c.text);
   }
   if (player.stepIdx !== before) {
     useRun.setState({ stepIdx: player.stepIdx });
@@ -354,6 +379,30 @@ function step(tIn: number): void {
     return;
   }
   if (t - lastSaveAt >= SAVE_EVERY_MS) save(t);
+}
+
+function speak(text: string | undefined): void {
+  if (text && useRun.getState().voice) services.speaker?.speak(text);
+}
+
+/**
+ * Heart-rate run/walk steps switch phase on their own. The first run phase of a step is
+ * silent (the step change already spoke); every switch after it is announced.
+ */
+function runWalk(t: number, distanceM: number, hr: number | undefined): void {
+  const st = player.steps[player.stepIdx];
+  if (st && isRunWalkStep(st)) {
+    const phase = runWalkPhase(player, t, hr, hrCap(st, cueHrRange(st)));
+    if (phase) {
+      const open = player.runWalk?.open;
+      const firstOfStep = !open || open.stepIdx !== player.stepIdx;
+      player = playerReducer(player, { type: 'phase', t, distanceM, phase });
+      if (!firstOfStep) speak(runWalkCueText(phase));
+    }
+  }
+  const open = player.runWalk?.open;
+  const runPhase = open && open.stepIdx === player.stepIdx ? open.phase : undefined;
+  if (useRun.getState().runPhase !== runPhase) useRun.setState({ runPhase });
 }
 
 function publish(t: number, paceSecPerKm?: number): void {

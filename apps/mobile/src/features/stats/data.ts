@@ -3,6 +3,7 @@
  * and shaped with the @fit/core stats math. Recomputed when the data version changes.
  */
 import {
+  type AerobicTest,
   type AgendaItem,
   type DailyMetrics,
   type IsoDate,
@@ -12,10 +13,14 @@ import {
   addDays,
   adherenceByWeek,
   daysInWeek,
+  decouplingTrend,
   easyPaceTrend,
   periodTotals,
+  runShareTrend,
   startOfWeek,
   weekStreak,
+  zone2MinutesByWeek,
+  zone2PaceTrend,
 } from '@fit/core';
 import { repo } from '@/data';
 
@@ -101,6 +106,21 @@ export interface StatsData {
   stretchThisWeek: { name: string; days: number }[];
   metrics: DailyMetrics[];
   restingHr: { date: IsoDate; bpm: number }[];
+  heart: HeartProgress;
+}
+
+/** Heart rate progress (spec §7 Progress), over the same 12 weeks as easy pace. */
+export interface HeartProgress {
+  z2Pace: { start: IsoDate; secPerKm: number }[];
+  /** Eight weeks, zero-filled. */
+  z2Minutes: { start: IsoDate; minutes: number }[];
+  /** Weekly Zone 2 minutes the active Zone 2 plan asks for this week. */
+  z2Target?: number;
+  runShare: { start: IsoDate; runShare: number }[];
+  decoupling: { sessionId: string; date: IsoDate; pct: number }[];
+  tests: AerobicTest[];
+  /** True when any of the above has data. */
+  any: boolean;
 }
 
 /** Eight weeks ending with the range's last week, for the per-week charts. */
@@ -186,6 +206,18 @@ export function loadStats(period: Period, offset: number, today: IsoDate): Stats
     .flatMap((m) => (m.restingHr ? [{ date: m.date, bpm: m.restingHr }] : []))
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  const plan = repo.activePlan(today);
+  const heart: HeartProgress = {
+    z2Pace: zone2PaceTrend(all, trendStart, range.end),
+    z2Minutes: zone2MinutesByWeek(all, wStart, wEnd),
+    z2Target: plan?.measure.kind === 'z2_minutes' && plan.measure.planned > 0 ? Math.round(plan.measure.planned) : undefined,
+    runShare: runShareTrend(all, trendStart, range.end),
+    decoupling: decouplingTrend(all.filter((r) => r.date <= range.end)).slice(-5),
+    tests: repo.aerobicTests().filter((t) => t.date <= range.end),
+    any: false,
+  };
+  heart.any = heart.z2Pace.length > 0 || heart.z2Minutes.some((w) => w.minutes > 0) || heart.runShare.length > 0 || heart.decoupling.length > 0 || heart.tests.length > 0;
+
   return {
     range,
     rows,
@@ -202,5 +234,6 @@ export function loadStats(period: Period, offset: number, today: IsoDate): Stats
     stretchThisWeek,
     metrics,
     restingHr,
+    heart,
   };
 }

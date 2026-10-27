@@ -4,12 +4,13 @@
  * change every second live in tiny components subscribed to one formatted value each, so
  * a tick re-renders a text node, not the screen.
  */
-import { type DistanceUnit, type HrZoneBand, type Step, formatClock, formatDistance, paceToUnit, zoneForBpm } from '@fit/core';
+import { type DistanceUnit, type HrZoneBand, type Step, formatClock, formatDistance, formatPace, paceToUnit, zoneForBpm } from '@fit/core';
 import { memo, useState } from 'react';
 import { Pressable, useWindowDimensions, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useHrProfile, useUnits } from '@/data/store';
+import { repo } from '@/data';
+import { useHrProfile, useToday, useUnits } from '@/data/store';
 import { useHrLive } from '@/features/hr/live';
 import { haptic } from '@/lib/haptics';
 import { createStyles, motion, type Palette, toneColor, usePalette } from '@/theme';
@@ -74,16 +75,28 @@ const HrGauge = memo(function HrGauge({ step }: { step: Step }) {
   const zones = useHrProfile()?.zones;
   const bpm = useHrLive((h) => h.bpm);
   const zone2S = useHrLive((h) => h.zone2S);
+  const runPhase = useRun((r) => r.runPhase);
+  const unit = useUnits().distance;
+  const today = useToday();
+  // Without live HR, a Zone 2 step falls back to the pace you usually hold there (spec §7).
+  const [z2Pace] = useState(() => (step.target.type === 'hr_zone' && step.target.zone === 2 ? repo.learnedZone2Pace(today) : undefined));
   const range = hrRangeFor(step, zones);
   const zone = step.target.type === 'hr_zone' ? step.target.zone : zones?.find((z) => range && z.minBpm <= range.minBpm && z.maxBpm >= range.minBpm)?.zone;
   const arcs: Arc[] = [0, 1, 2, 3, 4].map((i) => ({ from: i / 5, to: (i + 1) / 5, color: i + 1 === zone ? p.run.color : p.ringTrack, width: i + 1 === zone ? 14 : 10 }));
   const live = bpm !== undefined;
   const status = !live || !range ? (zone ? `Zone ${zone}` : 'Heart rate') : bpm > range.maxBpm ? 'Ease off' : bpm < range.minBpm ? 'A little low' : `In Zone ${zone ?? ''}`.trim();
-  const caption = zone2S ? `${formatClock(zone2S)} in Zone 2` : !zones ? 'Set heart rate zones in Settings' : live ? '' : 'HR will sync from Garmin';
+  const caption = zone2S ? `${formatClock(zone2S)} in Zone 2` : !zones ? 'Set heart rate zones in Settings' : live ? '' : z2Pace !== undefined ? `About ${formatPace(z2Pace, unit)} in Zone 2` : 'HR will sync from Garmin';
   return (
     <View style={[s.gauge, { width: size, height: size * 0.94 }]}>
       <Ring size={size} arcs={arcs} gapPx={5} marker={live && zones ? hrPos(bpm, zones) : undefined} markerColor={p.text} bg={p.bg} />
       <View style={s.gaugeCenter} pointerEvents="none">
+        {runPhase && (
+          <View style={{ paddingHorizontal: 10, paddingVertical: 2, borderRadius: 8, marginBottom: 4, backgroundColor: runPhase === 'run' ? p.run.tint : p.inset }}>
+            <T v="captionStrong" color={runPhase === 'run' ? p.run.onTint : p.textSecondary}>
+              {runPhase === 'run' ? 'RUN' : 'WALK'}
+            </T>
+          </View>
+        )}
         <T v="labelStrong" color={p.run.color}>
           {status}
         </T>

@@ -2,7 +2,7 @@
  * Run summary (spec §5 "Post-session summary", mockup Summary). Reads the stored session
  * once; the map and replay are lazy-loaded so opening a summary never waits on MapLibre.
  */
-import { type DistanceUnit, type SessionDetail, cumulativeDistance, formatClock, formatDistance, hrStats, metersToUnit, paceToUnit, splits as splitsOf, unitToMeters } from '@fit/core';
+import { type DistanceUnit, type SessionDetail, cumulativeDistance, localIsoDate, formatClock, formatDistance, hrStats, metersToUnit, paceToUnit, splits as splitsOf, unitToMeters } from '@fit/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { lazy, Suspense, useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
@@ -50,6 +50,12 @@ export function SummaryScreen() {
   // A time trial (or the plans' 5K retest) in this run, for "Update your paces?".
   const [trial] = useState(() => (session ? repo.sessionTrial(session.id) : undefined));
   // Stats over the merged trace, once; the zones only change in Settings.
+  // Stored per-run stats (decoupling, run/walk split), from the same rows Stats uses.
+  const [runStats] = useState(() => {
+    if (!session) return undefined;
+    const day = localIsoDate(new Date(session.startedAt));
+    return repo.runRows(day, day).find((r) => r.sessionId === session.id)?.stats;
+  });
   const [hr] = useState(() => (session && session.hr.length > 1 ? hrStats(session.hr, zones ?? [], { endMs: session.endedAt ? Date.parse(session.endedAt) - Date.parse(session.startedAt) : (session.hr[session.hr.length - 1]?.tOffsetMs ?? 0), pauses: session.pauses, log: session.log }) : undefined));
 
   const done = () => {
@@ -109,7 +115,7 @@ export function SummaryScreen() {
         {trial && <TrialCard sessionId={session.id} trial={trial} current={vdot} />}
         {bump && !trial && <PaceBumpCard bump={bump} />}
 
-        {hr && <HrCard session={session} stats={hr} zones={zones} />}
+        {hr && <HrCard session={session} stats={hr} zones={zones} run={runStats} />}
 
         <PostRunCard endedAt={session.endedAt} />
 

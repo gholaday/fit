@@ -1,4 +1,4 @@
-import { ZONE_NAMES, zoneBand } from '@fit/core';
+import { type CuePrefs, DEFAULT_CUE_PREFS, ZONE_NAMES, zoneBand } from '@fit/core';
 import { router } from 'expo-router';
 import { ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -100,6 +100,10 @@ export function SettingsScreen() {
           </Group>
         </Section>
 
+        <Section title="Voice cues">
+          <CueSwitches />
+        </Section>
+
         <Section title="Recording">
           <Group>
             <Row label="Health Connect" sub="Steps, resting heart rate and Garmin workouts" onPress={() => router.push('/health-connect')}>
@@ -132,6 +136,40 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       </T>
       {children}
     </View>
+  );
+}
+
+type CueToggle = Exclude<keyof CuePrefs, 'splits'>;
+
+const CUE_ROWS: readonly { key: CueToggle; label: string; sub: string }[] = [
+  { key: 'halfway', label: 'Halfway', sub: 'On steps of 3 minutes or more' },
+  { key: 'paceNudge', label: 'Pace nudges', sub: 'When you drift out of the pace range' },
+  { key: 'hrAlerts', label: 'Heart rate alerts', sub: 'Ease off above the range, then Back in zone' },
+  { key: 'hrBelow', label: 'Below the range', sub: 'You can pick it up a little' },
+  { key: 'zoneUpdates', label: 'Zone updates', sub: 'Every 5 minutes on heart rate steps' },
+];
+
+function CueSwitches() {
+  const p = usePalette();
+  const cues = useSettings().cues ?? DEFAULT_CUE_PREFS;
+  const set = (patch: Partial<CuePrefs>) => {
+    haptic.tick();
+    actions.updateSettings({ cues: { ...cues, ...patch } });
+  };
+  const sw = (value: boolean, label: string, onChange: (v: boolean) => void) => (
+    <Switch value={value} onValueChange={onChange} trackColor={{ true: p.primary, false: p.border }} thumbColor={p.surface} accessibilityLabel={label} />
+  );
+  return (
+    <Group>
+      <Row label="Splits" sub="Every mile or kilometer">
+        {sw(cues.splits === 'every', 'Splits', (on) => set({ splits: on ? 'every' : 'off' }))}
+      </Row>
+      {CUE_ROWS.map((r, i) => (
+        <Row key={r.key} label={r.label} sub={r.sub} last={i === CUE_ROWS.length - 1}>
+          {sw(cues[r.key], r.label, (on) => set({ [r.key]: on }))}
+        </Row>
+      ))}
+    </Group>
   );
 }
 

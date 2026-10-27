@@ -72,6 +72,7 @@ export function StatsScreen() {
         <CompletionCard data={data} />
         <RunningCard data={data} />
         <EasyPaceCard data={data} />
+        <HeartCard data={data} />
         <BestsCard data={data} />
         <PlanWeeksCard data={data} />
         <StrengthCard data={data} />
@@ -185,6 +186,111 @@ function EasyPaceCard({ data }: { data: StatsData }) {
         <T v="caption" tone="secondary">
           {`Week of ${monthDay(last.start)}. The trend shows from the second week.`}
         </T>
+      )}
+    </Card>
+  );
+}
+
+/** Heart rate progress (spec §7): Zone 2 pace, Zone 2 minutes, run share, decoupling and retests. */
+function HeartCard({ data }: { data: StatsData }) {
+  const s = useStyles();
+  const p = usePalette();
+  const unit = useSettings().units.distance;
+  const h = data.heart;
+  if (!h.any) return null;
+  const pace = h.z2Pace;
+  const first = pace[0];
+  const last = pace[pace.length - 1];
+  const d = first && last ? Math.round(paceToUnit(last.secPerKm, unit) - paceToUnit(first.secPerKm, unit)) : 0;
+  const z2Total = h.z2Minutes.reduce((t, w) => t + w.minutes, 0);
+  const z2Bars: Bar[] = h.z2Minutes.map((w, i) => ({ label: dayOfMonth(w.start), current: i === h.z2Minutes.length - 1, parts: [{ value: w.minutes, color: p.run.color }] }));
+  const thisWeek = h.z2Minutes[h.z2Minutes.length - 1]?.minutes ?? 0;
+  const share = h.runShare;
+  const resting = data.restingHr[data.restingHr.length - 1];
+  return (
+    <Card title="Heart rate progress" right="Last 12 weeks">
+      {last ? (
+        <View style={{ gap: 2 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+            <T v="display" num>
+              {formatPace(last.secPerKm, unit)}
+            </T>
+            {pace.length > 1 && d !== 0 && (
+              <T v="labelStrong" color={d < 0 ? p.stretch.onTint : p.textSecondary}>
+                {`${Math.abs(d)} s ${d < 0 ? 'faster' : 'slower'}`}
+              </T>
+            )}
+          </View>
+          <T v="caption" tone="secondary">
+            Pace in Zone 2. Faster at the same heart rate means a bigger aerobic base.
+          </T>
+          {pace.length > 1 && <TrendLine values={pace.map((x) => x.secPerKm)} color={p.run.color} height={56} invert accessibilityLabel={`Zone 2 pace by week, now ${formatPace(last.secPerKm, unit)}`} />}
+        </View>
+      ) : (
+        <T v="caption" tone="secondary">
+          Zone 2 pace shows once a week has 10 min or more in Zone 2.
+        </T>
+      )}
+
+      {z2Total > 0 && (
+        <View style={[s.section, { gap: 8 }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <T v="bodyMedium">Minutes in Zone 2</T>
+            <T v="labelStrong" num>
+              {h.z2Target !== undefined ? `${thisWeek} of ${h.z2Target} min this week` : `${thisWeek} min this week`}
+            </T>
+          </View>
+          <StackBars bars={z2Bars} height={56} goal={h.z2Target} accessibilityLabel={`Minutes in Zone 2 per week, ${z2Total} min in 8 weeks`} />
+        </View>
+      )}
+
+      {share.length > 0 && (
+        <View style={[s.section, { flexDirection: 'row', justifyContent: 'space-between' }]}>
+          <T v="bodyMedium">Running in run/walk</T>
+          <T v="labelStrong" num>
+            {share.length > 1 ? `${Math.round(share[0]!.runShare * 100)}% to ${Math.round(share[share.length - 1]!.runShare * 100)}%` : `${Math.round(share[0]!.runShare * 100)}%`}
+          </T>
+        </View>
+      )}
+
+      {h.decoupling.length > 0 && (
+        <View style={[s.section, { gap: 6 }]}>
+          <T v="bodyMedium">Decoupling on long runs</T>
+          {h.decoupling.map((x) => (
+            <Pressable key={x.sessionId} accessibilityRole="button" onPress={() => router.push({ pathname: '/summary/[id]', params: { id: x.sessionId } })} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <T v="label" tone="secondary" num>
+                {monthDay(x.date)}
+              </T>
+              <T v="labelStrong" num color={x.pct < 5 ? p.stretch.onTint : p.text}>{`${x.pct.toFixed(1)}%`}</T>
+            </Pressable>
+          ))}
+          <T v="micro" tone="tertiary">
+            Under 5% is good.
+          </T>
+        </View>
+      )}
+
+      {h.tests.length > 0 && (
+        <View style={[s.section, { gap: 6 }]}>
+          <T v="bodyMedium">Aerobic tests</T>
+          {h.tests.map((t) => (
+            <Pressable key={t.sessionId} accessibilityRole="button" onPress={() => router.push({ pathname: '/summary/[id]', params: { id: t.sessionId } })} style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+              <T v="label" tone="secondary" num>
+                {monthDay(t.date)}
+              </T>
+              <T v="labelStrong" num>
+                {[t.secPerKm !== undefined ? formatPace(t.secPerKm, unit) : undefined, t.avgBpm !== undefined ? `${Math.round(t.avgBpm)} bpm average` : undefined].filter(Boolean).join(', ') || formatMinutes(t.durationS)}
+              </T>
+            </Pressable>
+          ))}
+        </View>
+      )}
+
+      {resting && (
+        <View style={[s.section, { flexDirection: 'row', justifyContent: 'space-between' }]}>
+          <T v="bodyMedium">Resting heart rate</T>
+          <T v="labelStrong" num>{`${resting.bpm} bpm`}</T>
+        </View>
       )}
     </Card>
   );
@@ -387,4 +493,5 @@ const useStyles = createStyles((p) => ({
   nav: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 10 },
   divider: { borderTopWidth: 1, borderTopColor: p.divider },
+  section: { borderTopWidth: 1, borderTopColor: p.divider, paddingTop: 10 },
 }));

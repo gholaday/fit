@@ -1,8 +1,9 @@
 /**
  * Heart rate on the run summary (spec §7, §11): average and max, a line chart of the
- * merged trace (downsampled to 600 points), and time in each zone. Static SVG drawn once.
+ * merged trace (downsampled to 600 points), time in each zone with a Z1 to Z5 bar, and for
+ * long steady runs the decoupling and the run/walk split. Static SVG drawn once.
  */
-import { type HrStats, type HrZoneBand, type SessionDetail, downsampleHr, formatClock } from '@fit/core';
+import { type HrStats, type HrZoneBand, type SessionDetail, type SessionStats, downsampleHr, formatClock } from '@fit/core';
 import { memo, useState } from 'react';
 import { type LayoutChangeEvent, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -29,7 +30,7 @@ function linePath(session: SessionDetail, width: number): { d: string; lo: numbe
   return { d, lo, hi };
 }
 
-export const HrCard = memo(function HrCard({ session, stats, zones }: { session: SessionDetail; stats: HrStats; zones: readonly HrZoneBand[] | undefined }) {
+export const HrCard = memo(function HrCard({ session, stats, zones, run }: { session: SessionDetail; stats: HrStats; zones: readonly HrZoneBand[] | undefined; run?: SessionStats }) {
   const s = useStyles();
   const p = usePalette();
   const [width, setWidth] = useState(0);
@@ -86,6 +87,10 @@ export const HrCard = memo(function HrCard({ session, stats, zones }: { session:
 
       {zones && totalZoneS > 0 && (
         <View style={{ gap: 6, paddingBottom: 8 }}>
+          <View style={s.dist} accessibilityLabel={`Time in zone, ${Math.round((stats.zoneSeconds[1] / totalZoneS) * 100)}% in Zone 2`}>
+            {stats.zoneSeconds.map((sec, i) => (sec > 0 ? <View key={i} style={{ flex: sec, backgroundColor: ZONE_TONE(p)[i] }} /> : null))}
+          </View>
+          <T v="label" tone="secondary" num>{`${Math.round((stats.zoneSeconds[1] / totalZoneS) * 100)}% in Zone 2`}</T>
           {stats.zoneSeconds.map((sec, i) => {
             const band = zones[i];
             return (
@@ -94,7 +99,7 @@ export const HrCard = memo(function HrCard({ session, stats, zones }: { session:
                   {`Z${i + 1}`}
                 </T>
                 <View style={s.zoneTrack}>
-                  <View style={[s.zoneFill, { width: `${(sec / totalZoneS) * 100}%`, backgroundColor: i === 1 ? p.run.color : p.run.pending }]} />
+                  <View style={[s.zoneFill, { width: `${(sec / totalZoneS) * 100}%`, backgroundColor: ZONE_TONE(p)[i] }]} />
                 </View>
                 <T v="label" num style={{ width: 52, textAlign: 'right' }}>
                   {formatClock(sec)}
@@ -107,9 +112,32 @@ export const HrCard = memo(function HrCard({ session, stats, zones }: { session:
           })}
         </View>
       )}
+
+      {run?.runWalk && run.runWalk.runS + run.runWalk.walkS > 0 && (
+        <View style={s.extra}>
+          <T v="bodyMedium">Run and walk</T>
+          <T v="label" tone="secondary" num>
+            {`Ran ${formatClock(run.runWalk.runS)}, walked ${formatClock(run.runWalk.walkS)}, ${Math.round((run.runWalk.runS / (run.runWalk.runS + run.runWalk.walkS)) * 100)}% running`}
+          </T>
+        </View>
+      )}
+      {run?.decouplingPct !== undefined && (
+        <View style={s.extra}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <T v="bodyMedium">Decoupling</T>
+            <T v="bodyStrong" num>{`${run.decouplingPct.toFixed(1)}%`}</T>
+          </View>
+          <T v="caption" tone="secondary">
+            How much your heart rate drifted against pace from the first half to the second. Under 5% is good.
+          </T>
+        </View>
+      )}
     </View>
   );
 });
+
+/** Zone 2 stands out; the other zones step from light to dark. */
+const ZONE_TONE = (p: ReturnType<typeof usePalette>) => [p.run.pending, p.run.color, p.hard.color, p.sprint.color, p.sprint.onTint];
 
 const useStyles = createStyles((p) => ({
   card: { backgroundColor: p.surface, borderRadius: 16, paddingHorizontal: 14, paddingBottom: 8 },
@@ -120,4 +148,6 @@ const useStyles = createStyles((p) => ({
   zoneRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   zoneTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: p.inset, overflow: 'hidden' },
   zoneFill: { height: 8, borderRadius: 4 },
+  dist: { flexDirection: 'row', height: 12, borderRadius: 6, overflow: 'hidden', backgroundColor: p.inset, marginBottom: 2 },
+  extra: { borderTopWidth: 1, borderTopColor: p.divider, paddingVertical: 10, gap: 4 },
 }));
