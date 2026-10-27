@@ -1,21 +1,23 @@
-import { type Lane, addDays, formatClock, formatDistance, formatMinutes, localIsoDate } from '@fit/core';
+import { type IsoDate, type Lane, addDays, formatClock, formatDistance, formatMinutes, localIsoDate, weekdayOf } from '@fit/core';
 import { router } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { RefreshControl, View } from 'react-native';
 import Animated, { Extrapolation, interpolate, useAnimatedScrollHandler, useAnimatedStyle, useSharedValue } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
-import { useDayKeys, useFit, usePaceBump, useRecentRuns, useSettings, useToday, useTodayExternal, useWeekLogs } from '@/data/store';
+import { repo } from '@/data';
+import { actions, showSnack, useDataVersion, useDayKeys, useFit, usePaceBump, useSettings, useToday } from '@/data/store';
 import { PaceBumpCard } from '@/features/pace/paces';
 import { ACTIVITY_ICON, ACTIVITY_LABEL } from '@/features/health/ActivityModal';
-import { openActivities, syncedLabel, useHealth } from '@/features/health/state';
+import { openActivities, reloadHealth, syncedLabel, useHealth } from '@/features/health/state';
 import { syncHealth } from '@/features/health/sync';
 import { QuickLogSheet, quickLogLabel } from '@/features/quicklog/QuickLogSheet';
 import { haptic } from '@/lib/haptics';
-import { longDate } from '@/lib/format';
+import { longDate, weekdayLong } from '@/lib/format';
 import { createStyles, usePalette } from '@/theme';
 import { Icons, QUICK_LOG_ICON } from '@/ui/icons';
 import { Button, IconButton, T } from '@/ui/primitives';
+import { Sheet } from '@/ui/Sheet';
 import { ChecklistCard } from './ChecklistCard';
 import { DayWidget, SlimBar } from './DayWidget';
 import { type DoneActivity, DoneActivityCard } from './DoneActivityCard';
@@ -26,55 +28,116 @@ import { WeekStrip } from './WeekStrip';
 const COLLAPSE_FROM = 150;
 const COLLAPSE_TO = 200;
 
+/** A logged activity to delete, with what deleting it does. */
+interface Deleting {
+  title: string;
+  note: string;
+  run: () => void;
+}
+
+/**
+ * Rows logged on a day. Takes the data version so the compiler's memo re-reads after a
+ * write; a manual deps entry the callback never reads gets dropped.
+ */
+function loggedOn(day: IsoDate, _version: number) {
+  const before = new Date(`${addDays(day, 1)}T00:00:00`).toISOString();
+  return {
+    runs: repo
+      .history({ source: 'fit', before, limit: 30 })
+      .filter((r) => (r.kind === 'run' || r.kind === 'walk') && localIsoDate(new Date(r.startedAt)) === day)
+      .reverse(),
+    watch: repo.externalSessions(day, day).filter((x) => !x.linkedPlanKey),
+    logs: repo.quickLogs(day, day),
+  };
+}
+
+function dayTitle(day: IsoDate, today: IsoDate): string {
+  if (day === today) return 'Today';
+  if (day === addDays(today, -1)) return 'Yesterday';
+  if (day === addDays(today, 1)) return 'Tomorrow';
+  return weekdayLong(weekdayOf(day));
+}
+
 export function TodayScreen() {
   const s = useStyles();
   const p = usePalette();
   const insets = useSafeAreaInsets();
   const today = useToday();
+  const [picked, setPicked] = useState<IsoDate>();
+  // A day picked before midnight follows "today" once the date changes.
+  const day = picked ?? today;
+  const isToday = day === today;
   const settings = useSettings();
-  const keys = useDayKeys(today);
+  const keys = useDayKeys(day);
   const items = useFit(useShallow((st) => keys.map((k) => st.items[k]!)));
   const tomorrowItems = useFit(useShallow((st) => (st.byDate[addDays(today, 1)] ?? []).map((k) => st.items[k]!)));
   const summary = summarizeDay(items, tomorrowItems, new Date().getHours(), settings.units);
-  // Everything else done today, under the checklist: runs and watch activities no plan item
-  // claims, and quick logs.
-  const recent = useRecentRuns();
-  const weekLogs = useWeekLogs();
-  const watch = useTodayExternal();
+  const version = useDataVersion();
   const unit = settings.units.distance;
-  const claimed = new Set(items.map((i) => i.sessionId));
-  const done: DoneActivity[] = [
-    ...recent
-      .filter((r) => localIsoDate(new Date(r.startedAt)) === today && !claimed.has(r.id))
-      .reverse()
-      .map((r) => {
-        const time = formatClock(Math.round(r.elapsedMs / 1000));
-        return { key: r.id, title: r.name, detail: r.distanceM > 20 ? `${formatDistance(r.distanceM, unit, 2)}, ${time}` : time, lane: 'run' as const, icon: Icons.run, onPress: () => router.push({ pathname: '/summary/[id]', params: { id: r.id } }) };
-      }),
-    ...watch
-      .filter((x) => !x.linkedPlanKey)
-      .map((x) => {
+  const [deleting, setDeleting] = useState<Deleting>();
+
+  const select = (d: IsoDate) => {
+    actions.ensureRange(d, d);
+    setPicked(d === today ? undefined : d);
+  };
+
+  // Everything else logged on the day, under the checklist: runs and watch activities no
+  // plan item claims, and quick logs. Long press deletes them.
+  const logged = useMemo(() => loggedOn(day, version), [day, version]);
+  const done = useMemo<DoneActivity[]>(() => {
+    const claimed = new Set(items.flatMap((i) => [i.sessionId, i.externalSessionId]).filter(Boolean));
+    const ask = (d: Deleting) => () => setDeleting(d);
+    const runs = logged.runs
+      .filter((r) => !claimed.has(r.id))
+      .map((r): DoneActivity => {
+        const time = formatClock(r.durationS);
+        return {
+          key: r.id,
+          title: r.name,
+          detail: r.distanceM && r.distanceM > 20 ? `${formatDistance(r.distanceM, unit, 2)}, ${time}` : time,
+          lane: 'run',
+          icon: Icons.run,
+          onPress: () => router.push({ pathname: '/summary/[id]', params: { id: r.id } }),
+          onDelete: ask({ title: r.name, note: 'The route and stats are deleted.', run: () => repo.deleteSession(r.id) }),
+        };
+      });
+    const watch = logged.watch
+      .filter((x) => !claimed.has(x.id))
+      .map((x): DoneActivity => {
         const minutes = formatMinutes((Date.parse(x.endedAt) - Date.parse(x.startedAt)) / 1000);
+        const title = x.title || ACTIVITY_LABEL[x.activity];
         return {
           key: x.id,
-          title: x.title || ACTIVITY_LABEL[x.activity],
+          title,
           detail: x.distanceM ? `${formatDistance(x.distanceM, unit, 2)}, ${minutes}` : minutes,
-          lane: (x.activity === 'strength' ? 'workout' : x.activity === 'stretch' ? 'stretch' : 'run') as Lane,
+          lane: x.activity === 'strength' ? 'workout' : x.activity === 'stretch' ? 'stretch' : 'run',
           icon: ACTIVITY_ICON[x.activity],
           onPress: () => router.push({ pathname: '/activity/[id]', params: { id: x.id } }),
+          onDelete: ask({
+            title,
+            note: 'It is removed from Fit and not imported again. Your watch keeps it.',
+            run: () => {
+              repo.deleteExternal(x.id);
+              reloadHealth();
+            },
+          }),
         };
-      }),
-    ...weekLogs
-      .filter((l) => l.date === today)
-      .map((l) => ({
+      });
+    const logs = logged.logs.map((l): DoneActivity => {
+      const title = quickLogLabel(l.activityType);
+      return {
         key: l.id,
-        title: quickLogLabel(l.activityType),
+        title,
         detail: l.distanceM ? `${formatDistance(l.distanceM, unit, 2)}, ${formatMinutes(l.minutes * 60)}` : formatMinutes(l.minutes * 60),
         lane: (l.activityType === 'lift' ? 'workout' : l.activityType === 'stretch' ? 'stretch' : 'run') as Lane,
         icon: QUICK_LOG_ICON[l.activityType],
-      })),
-  ];
-  const heroKey = items.find((i) => i.lane === 'run' && i.status === 'pending')?.key;
+        onDelete: ask({ title, note: 'The quick log is removed.', run: () => repo.deleteQuickLog(l.id) }),
+      };
+    });
+    return [...runs, ...watch, ...logs];
+  }, [logged, items, unit]);
+
+  const heroKey = isToday ? items.find((i) => i.lane === 'run' && i.status === 'pending')?.key : undefined;
   const [quickLog, setQuickLog] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const refresh = () => {
@@ -85,6 +148,15 @@ export function TodayScreen() {
   const lastSyncedAt = useHealth((h) => h.lastSyncedAt);
   const pendingCount = useHealth((h) => h.pending.length);
   const bump = usePaceBump();
+
+  const confirmDelete = () => {
+    if (!deleting) return;
+    deleting.run();
+    actions.reload();
+    haptic.commit();
+    showSnack({ message: `${deleting.title} deleted` });
+    setDeleting(undefined);
+  };
 
   const scrollY = useSharedValue(0);
   const onScroll = useAnimatedScrollHandler((e) => {
@@ -101,34 +173,38 @@ export function TodayScreen() {
         <View style={s.header}>
           <View style={{ flex: 1 }}>
             <T v="label" tone="secondary">
-              {longDate(today)}
+              {longDate(day)}
             </T>
             <T v="display" accessibilityRole="header">
-              Today
+              {dayTitle(day, today)}
             </T>
           </View>
-          <Button label="Quick log" kind="outline" size="sm" style={{ borderRadius: 18 }} icon={<Icons.plus size={14} color={p.text} />} onPress={() => setQuickLog(true)} />
+          {isToday ? (
+            <Button label="Quick log" kind="outline" size="sm" style={{ borderRadius: 18 }} icon={<Icons.plus size={14} color={p.text} />} onPress={() => setQuickLog(true)} />
+          ) : (
+            <Button label="Back to today" kind="outline" size="sm" style={{ borderRadius: 18 }} onPress={() => select(today)} />
+          )}
           <IconButton label="Settings" bg="none" onPress={() => router.push('/settings')}>
             <Icons.settings size={22} color={p.text} />
           </IconButton>
         </View>
 
-        <WeekStrip today={today} />
-        <DayWidget summary={summary} stepGoal={settings.stepGoal} steps={metrics?.steps} />
-        {(metrics || lastSyncedAt) && (
+        <WeekStrip today={today} selected={day} onSelect={select} />
+        {isToday && <DayWidget summary={summary} stepGoal={settings.stepGoal} steps={metrics?.steps} />}
+        {isToday && metrics?.restingHr !== undefined && (
           <View style={s.health}>
             <Icons.heart size={20} color={p.run.color} />
             <View style={{ flex: 1 }}>
-              <T v="bodyMedium" num>
-                {metrics?.restingHr ? `Resting heart rate ${Math.round(metrics.restingHr)} bpm` : 'Resting heart rate not synced'}
-              </T>
-              <T v="caption" tone="secondary" num>
-                {lastSyncedAt ? `Last synced ${syncedLabel(lastSyncedAt)}` : 'Not synced yet'}
-              </T>
+              <T v="bodyMedium" num>{`Resting heart rate ${Math.round(metrics.restingHr)} bpm`}</T>
+              {lastSyncedAt && (
+                <T v="caption" tone="secondary" num>
+                  {`Last synced ${syncedLabel(lastSyncedAt)}`}
+                </T>
+              )}
             </View>
           </View>
         )}
-        {bump && <PaceBumpCard bump={bump} />}
+        {isToday && bump && <PaceBumpCard bump={bump} />}
         {pendingCount > 0 && (
           <Button
             label={`New activities (${pendingCount})`}
@@ -146,11 +222,13 @@ export function TodayScreen() {
         {items.length === 0 && done.length === 0 ? (
           <View style={s.empty}>
             <T v="bodyMedium" tone="secondary">
-              Nothing planned today
+              {isToday ? 'Nothing planned today' : day < today ? 'Nothing logged' : 'Nothing planned'}
             </T>
-            <T v="caption" tone="tertiary" align="center">
-              Add routines on the Plan tab under Schedule.
-            </T>
+            {isToday && (
+              <T v="caption" tone="tertiary" align="center">
+                Add routines on the Plan tab under Schedule.
+              </T>
+            )}
           </View>
         ) : (
           items.map((i) => <ChecklistCard key={i.key} itemKey={i.key} hero={i.key === heroKey} />)
@@ -159,19 +237,29 @@ export function TodayScreen() {
           <DoneActivityCard key={a.key} activity={a} />
         ))}
 
-        <Button label="Free run" kind="quiet" size="md" style={{ marginTop: 4 }} icon={<Icons.run size={18} color={p.text} />} onPress={() => router.push('/run')} />
-
+        {isToday && <Button label="Free run" kind="quiet" size="md" style={{ marginTop: 4 }} icon={<Icons.run size={18} color={p.text} />} onPress={() => router.push('/run')} />}
       </Animated.ScrollView>
 
-      <Animated.View pointerEvents="none" style={[s.slimWrap, { paddingTop: insets.top + 4 }, slimStyle]}>
-        <View style={s.slim}>
-          <SlimBar summary={summary} steps={metrics?.steps} />
-        </View>
-      </Animated.View>
+      {isToday && (
+        <Animated.View pointerEvents="none" style={[s.slimWrap, { paddingTop: insets.top + 4 }, slimStyle]}>
+          <View style={s.slim}>
+            <SlimBar summary={summary} steps={metrics?.steps} />
+          </View>
+        </Animated.View>
+      )}
       {/* Keeps scrolled content from showing under the transparent status bar. */}
       <View pointerEvents="none" style={[s.statusBar, { height: insets.top }]} />
 
       <QuickLogSheet visible={quickLog} onClose={() => setQuickLog(false)} />
+      <Sheet visible={!!deleting} onClose={() => setDeleting(undefined)} title={deleting ? `Delete ${deleting.title}` : ''}>
+        <View style={{ gap: 10 }}>
+          <T v="body" tone="secondary">
+            {deleting?.note ?? ''}
+          </T>
+          <Button label="Delete" onPress={confirmDelete} />
+          <Button label="Keep it" kind="outline" onPress={() => setDeleting(undefined)} />
+        </View>
+      </Sheet>
     </View>
   );
 }

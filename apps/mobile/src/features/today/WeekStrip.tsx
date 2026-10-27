@@ -1,18 +1,27 @@
-import { type IsoDate, addDays, startOfWeek, weekdayOf } from '@fit/core';
-import { memo } from 'react';
-import { View } from 'react-native';
+/**
+ * Day strip under the Today header: one row of days that scrolls back and forward in
+ * time, opening with today in the middle. Tapping a day selects it; the selected day is
+ * filled, today keeps a ring when another day is selected.
+ */
+import { type IsoDate, addDays, diffDays, weekdayOf } from '@fit/core';
+import { memo, useRef, useState } from 'react';
+import { FlatList, type LayoutChangeEvent, Pressable, View } from 'react-native';
 import { useShallow } from 'zustand/react/shallow';
 import { useFit } from '@/data/store';
+import { haptic } from '@/lib/haptics';
 import { dayOfMonth, weekdayLetter } from '@/lib/format';
 import { usePalette } from '@/theme';
 import { T } from '@/ui/primitives';
 
-type DayState = 'today' | 'done' | 'plan' | 'rest';
+/** Days either side of today. */
+const SPAN = 56;
 
-function useDayState(date: IsoDate, today: IsoDate): DayState {
+type DayState = 'done' | 'plan' | 'rest';
+
+/** Days outside the loaded window read as rest until they are selected (and loaded). */
+function useDayState(date: IsoDate): DayState {
   return useFit(
     useShallow((s) => {
-      if (date === today) return 'today';
       const items = (s.byDate[date] ?? []).map((k) => s.items[k]!);
       const main = items.filter((i) => i.lane !== 'stretch');
       if (items.length > 0 && items.every((i) => i.status !== 'pending')) return 'done';
@@ -21,33 +30,74 @@ function useDayState(date: IsoDate, today: IsoDate): DayState {
   );
 }
 
-const Day = memo(function Day({ date, today }: { date: IsoDate; today: IsoDate }) {
+const Day = memo(function Day({ date, today, selected, width, onSelect }: { date: IsoDate; today: IsoDate; selected: boolean; width: number; onSelect: (d: IsoDate) => void }) {
   const p = usePalette();
-  const st = useDayState(date, today);
-  const bg = st === 'today' ? p.primary : st === 'done' ? p.dayDone : 'transparent';
-  const fg = st === 'today' ? p.onPrimary : st === 'rest' ? p.textMuted : p.textBody;
-  const label = { today: 'today', done: 'all done', plan: 'planned', rest: 'rest day' }[st];
+  const st = useDayState(date);
+  const isToday = date === today;
+  const bg = selected ? p.primary : st === 'done' ? p.dayDone : 'transparent';
+  const fg = selected ? p.onPrimary : st === 'rest' ? p.textMuted : p.textBody;
+  const label = { done: 'all done', plan: 'planned', rest: 'rest day' }[st];
   return (
-    <View style={{ flex: 1, alignItems: 'center', gap: 6 }} accessible accessibilityLabel={`${dayOfMonth(date)}, ${label}`}>
-      <T v="micro" color={st === 'today' ? p.text : p.textTertiary}>
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ selected }}
+      accessibilityLabel={`${isToday ? 'Today, ' : ''}${dayOfMonth(date)}, ${label}`}
+      onPress={() => {
+        haptic.tick();
+        onSelect(date);
+      }}
+      style={{ width, alignItems: 'center', gap: 6 }}
+    >
+      <T v="micro" color={selected || isToday ? p.text : p.textTertiary}>
         {weekdayLetter(weekdayOf(date))}
       </T>
-      <View style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: bg, alignItems: 'center', justifyContent: 'center', borderWidth: st === 'plan' ? 1 : 0, borderColor: p.dashed }}>
+      <View
+        style={{
+          width: 34,
+          height: 34,
+          borderRadius: 17,
+          backgroundColor: bg,
+          alignItems: 'center',
+          justifyContent: 'center',
+          borderWidth: isToday && !selected ? 2 : st === 'plan' && !selected ? 1 : 0,
+          borderColor: isToday && !selected ? p.primary : p.dashed,
+        }}
+      >
         <T v="labelStrong" num color={fg}>
           {dayOfMonth(date)}
         </T>
       </View>
-    </View>
+    </Pressable>
   );
 });
 
-export const WeekStrip = memo(function WeekStrip({ today }: { today: IsoDate }) {
-  const monday = startOfWeek(today);
+export const WeekStrip = memo(function WeekStrip({ today, selected, onSelect }: { today: IsoDate; selected: IsoDate; onSelect: (d: IsoDate) => void }) {
+  const [width, setWidth] = useState(0);
+  const list = useRef<FlatList<IsoDate>>(null);
+  const days = Array.from({ length: SPAN * 2 + 1 }, (_, i) => addDays(today, i - SPAN));
+  const dayW = width / 7;
+  // Today in the middle: three days either side.
+  const offsetFor = (d: IsoDate) => Math.max(0, (diffDays(addDays(today, -SPAN), d) - 3) * dayW);
+
   return (
-    <View style={{ flexDirection: 'row' }}>
-      {Array.from({ length: 7 }, (_, i) => addDays(monday, i)).map((d) => (
-        <Day key={d} date={d} today={today} />
-      ))}
+    <View style={{ marginHorizontal: -4 }} onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}>
+      {width > 0 && (
+        <FlatList
+          ref={list}
+          horizontal
+          data={days}
+          keyExtractor={(d) => d}
+          showsHorizontalScrollIndicator={false}
+          getItemLayout={(_, i) => ({ length: dayW, offset: dayW * i, index: i })}
+          contentOffset={{ x: offsetFor(selected), y: 0 }}
+          snapToInterval={dayW}
+          decelerationRate="fast"
+          initialNumToRender={21}
+          windowSize={5}
+          renderItem={({ item }) => <Day date={item} today={today} selected={item === selected} width={dayW} onSelect={onSelect} />}
+          extraData={selected}
+        />
+      )}
     </View>
   );
 });
