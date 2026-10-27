@@ -2,7 +2,7 @@
 import { type LoggedSet, formatWeight } from '@fit/core';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, Switch, View } from 'react-native';
+import { Pressable, ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
 import { actions, useUnits } from '@/data/store';
@@ -98,14 +98,15 @@ export function ExerciseDetailScreen() {
               History
             </T>
             {history.map((h) => (
-              <View key={h.sessionId} style={[s.histRow]}>
+              <Pressable key={h.sessionId} accessibilityRole="button" onPress={() => router.push({ pathname: '/lift/[id]', params: { id: h.sessionId } })} style={({ pressed }) => [s.histRow, pressed && { opacity: 0.6 }]}>
                 <T v="bodyMedium" style={{ width: 96 }}>
                   {shortDate(h.date)}
                 </T>
                 <T v="body" num style={{ flex: 1 }}>
                   {setsSummary(h.sets, unit)}
                 </T>
-              </View>
+                <Icons.chevronRight size={14} color={p.textTertiary} />
+              </Pressable>
             ))}
           </View>
         )}

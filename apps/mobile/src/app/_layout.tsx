@@ -75,6 +75,7 @@ export default function RootLayout() {
         <Stack.Screen name="run-plan" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="history" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="activity/[id]" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="lift/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="run" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />
         <Stack.Screen name="summary/[id]" options={{ animation: 'fade' }} />
         <Stack.Screen name="replay/[id]" options={{ animation: 'fade', gestureEnabled: false }} />

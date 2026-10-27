@@ -99,6 +99,7 @@ export function TodayScreen() {
             detail: formatMinutes(r.durationS),
             type: 'strength',
             icon: Icons.barbell,
+            onPress: () => router.push({ pathname: '/lift/[id]', params: { id: r.id } }),
             onDelete: ask({ title: r.name, note: 'The sets are deleted.', run: () => repo.deleteSession(r.id) }),
           };
         }

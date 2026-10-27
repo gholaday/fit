@@ -154,8 +154,14 @@ const HistoryRow = memo(function HistoryRow({ item }: { item: HistoryItem }) {
   const p = usePalette();
   const unit = useUnits().distance;
   const lane = LANE[item.kind];
-  // Fit strength sessions have no summary screen yet, so only runs and watch sessions open.
-  const open = item.source === 'external' ? () => router.push({ pathname: '/activity/[id]', params: { id: item.id } }) : item.kind === 'run' ? () => router.push({ pathname: '/summary/[id]', params: { id: item.id } }) : undefined;
+  const open =
+    item.source === 'external'
+      ? () => router.push({ pathname: '/activity/[id]', params: { id: item.id } })
+      : item.kind === 'run'
+        ? () => router.push({ pathname: '/summary/[id]', params: { id: item.id } })
+        : item.kind === 'strength'
+          ? () => router.push({ pathname: '/lift/[id]', params: { id: item.id } })
+          : undefined;
   const meta = [startedLabel(item.startedAt), item.distanceM ? formatDistance(item.distanceM, unit, 2) : undefined, item.durationS > 0 ? formatMinutes(item.durationS) : undefined].filter(Boolean).join(', ');
   const Icon = item.kind === 'walk' ? Icons.walk : Icons.dots;
   return (
