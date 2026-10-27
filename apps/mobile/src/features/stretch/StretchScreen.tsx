@@ -19,6 +19,7 @@ import { haptic } from '@/lib/haptics';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { NotFound } from '@/ui/NotFound';
+import { FEEL_WORDS, RatingSlider } from '@/ui/RatingSlider';
 import { Sheet } from '@/ui/Sheet';
 import { Button, IconButton, T } from '@/ui/primitives';
 import { services } from '@/features/run/services';
@@ -114,6 +115,12 @@ function Player({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
     if (player.current.stepIdx !== before || ev.type !== 'tick') drive(player.current, t);
     cue(player.current, t);
     setView(snapshot(player.current, t, 0));
+  };
+
+  /** Next, Back and the moves list: moving on also starts the clock if it was paused. */
+  const moveTo = (ev: Parameters<typeof playerReducer>[1]) => {
+    apply(ev);
+    if (player.current.status === 'paused') apply({ type: 'resume', t: ev.t });
   };
 
   const done = (t: number) => {
@@ -227,6 +234,18 @@ function Player({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
             {formatClock(left)}
           </T>
           <T v="caption" tone="secondary">{`of ${formatClock(total)}`}</T>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Add 15 seconds"
+            hitSlop={8}
+            onPress={() => {
+              haptic.tick();
+              apply({ type: 'extend', t: t(), seconds: 15 });
+            }}
+            style={({ pressed }) => [s.extend, pressed && { opacity: 0.6 }]}
+          >
+            <T v="labelStrong">+15 s</T>
+          </Pressable>
         </View>
       </View>
 
@@ -267,7 +286,7 @@ function Player({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
             const steps = player.current.steps;
             const cur = itemOf(steps[player.current.stepIdx]!);
             const atStart = firstStepOfItem(steps, cur) === player.current.stepIdx;
-            apply({ type: 'jump', t: t(), distanceM: 0, idx: firstStepOfItem(steps, atStart ? Math.max(0, cur - 1) : cur) });
+            moveTo({ type: 'jump', t: t(), distanceM: 0, idx: firstStepOfItem(steps, atStart ? Math.max(0, cur - 1) : cur) });
           }}
         >
           <Icons.previous size={20} color={p.text} />
@@ -285,21 +304,11 @@ function Player({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
           {paused ? <Icons.play size={28} color={p.onPrimary} /> : <Icons.pause size={28} color={p.onPrimary} />}
         </Pressable>
         <IconButton
-          label="Add 15 seconds"
-          size={52}
-          onPress={() => {
-            haptic.tick();
-            apply({ type: 'extend', t: t(), seconds: 15 });
-          }}
-        >
-          <T v="labelStrong">+15 s</T>
-        </IconButton>
-        <IconButton
           label="Skip"
           size={52}
           onPress={() => {
             haptic.tick();
-            apply({ type: 'skip', t: t(), distanceM: 0 });
+            moveTo({ type: 'skip', t: t(), distanceM: 0 });
           }}
         >
           <Icons.skip size={20} color={p.text} />
@@ -317,7 +326,7 @@ function Player({ routine, scheduleKey }: { routine: RoutineDetail; scheduleKey?
                 onPress={() => {
                   haptic.tap();
                   setOverview(false);
-                  apply({ type: 'jump', t: t(), distanceM: 0, idx: firstStepOfItem(player.current.steps, i) });
+                  moveTo({ type: 'jump', t: t(), distanceM: 0, idx: firstStepOfItem(player.current.steps, i) });
                 }}
                 style={({ pressed }) => [s.overviewRow, current && { backgroundColor: p.stretch.tint }, pressed && { opacity: 0.7 }]}
               >
@@ -382,13 +391,17 @@ function CountdownRing({ progress, color, track }: { progress: { value: number }
   );
 }
 
-/** "How did it feel?" 1-5 and a note, then the scheduled stretch is marked done. */
+/**
+ * "How did it feel?" 1 to 5 and a note. Save (or back) marks the scheduled stretch done;
+ * Discard leaves it due.
+ */
 function Feel({ routine, scheduleKey, startedAt, endedAt }: { routine: RoutineDetail; scheduleKey?: string; startedAt: Date; endedAt: Date }) {
   const s = useStyles();
   const insets = useSafeAreaInsets();
   const p = usePalette();
   const [feel, setFeel] = useState<number>();
   const [note, setNote] = useState('');
+  const [discarding, setDiscarding] = useState(false);
   const minutes = Math.max(1, Math.round((endedAt.getTime() - startedAt.getTime()) / 60000));
   const save = () => {
     if (scheduleKey) actions.markDone(scheduleKey, { minutes, ...(feel ? { feel } : {}), ...(note.trim() ? { note: note.trim() } : {}) });
@@ -396,24 +409,39 @@ function Feel({ routine, scheduleKey, startedAt, endedAt }: { routine: RoutineDe
     showSnack({ message: `${routine.name} done` });
     router.back();
   };
+  const discard = () => {
+    setDiscarding(false);
+    showSnack({ message: 'Stretch discarded' });
+    router.back();
+  };
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      save();
+      return true;
+    });
+    return () => sub.remove();
+  });
   return (
     <View style={[s.screen, { paddingTop: insets.top + 40, paddingBottom: insets.bottom + 16, paddingHorizontal: 20 }]}>
-      <View style={{ flex: 1, gap: 16 }}>
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ gap: 16 }} keyboardShouldPersistTaps="handled">
         <T v="caption" tone="secondary">{`${routine.name}, ${minutes} min`}</T>
         <T v="display" accessibilityRole="header">
           How did it feel?
         </T>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          {[1, 2, 3, 4, 5].map((n) => (
-            <Button key={n} label={String(n)} kind={feel === n ? 'primary' : 'quiet'} style={{ flex: 1, paddingHorizontal: 0 }} accessibilityLabel={`Feel ${n} of 5`} onPress={() => setFeel(n)} />
-          ))}
-        </View>
-        <T v="caption" tone="tertiary">
-          1 is tight and stiff, 5 is loose and easy
-        </T>
+        <RatingSlider value={feel} words={FEEL_WORDS} label="Feel, 1 to 5" prompt="Tap or slide to rate" ends={['1 tight', '5 very loose']} onChange={setFeel} />
         <TextInput value={note} onChangeText={setNote} placeholder="Note, optional" placeholderTextColor={p.textTertiary} accessibilityLabel="Note" multiline style={s.note} />
-      </View>
+        <Button label="Discard stretch" kind="quiet" onPress={() => setDiscarding(true)} />
+      </ScrollView>
       <Button label="Save" onPress={save} />
+      <Sheet visible={discarding} onClose={() => setDiscarding(false)} title="Discard stretch">
+        <View style={{ gap: 10 }}>
+          <T v="body" tone="secondary">
+            {scheduleKey ? 'Nothing is saved, and the stretch stays due.' : 'Nothing is saved.'}
+          </T>
+          <Button label="Discard stretch" onPress={discard} />
+          <Button label="Keep it" kind="outline" onPress={() => setDiscarding(false)} />
+        </View>
+      </Sheet>
     </View>
   );
 }
@@ -428,7 +456,8 @@ const useStyles = createStyles((p) => ({
   // Read at arm's length mid-stretch, so larger than body copy.
   cue: { fontSize: 19, lineHeight: 28 },
   next: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, height: 52, borderRadius: 14, backgroundColor: p.surface, marginHorizontal: 20 },
-  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-evenly', paddingTop: 12 },
+  controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 36, paddingTop: 12 },
+  extend: { marginTop: 10, height: 32, paddingHorizontal: 14, borderRadius: 16, justifyContent: 'center', backgroundColor: p.inset },
   play: { width: 76, height: 76, borderRadius: 38, backgroundColor: p.primary, alignItems: 'center', justifyContent: 'center' },
   overviewRow: { flexDirection: 'row', alignItems: 'center', gap: 10, height: 48, paddingHorizontal: 10, borderRadius: 12 },
   note: { minHeight: 80, borderRadius: 12, backgroundColor: p.surface, padding: 12, color: p.text, fontFamily: 'Inter', fontSize: 15, textAlignVertical: 'top' },
