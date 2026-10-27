@@ -109,9 +109,10 @@ function EndSheet({ visible, onClose, linked }: { visible: boolean; onClose: () 
           onPress={async () => {
             haptic.success();
             close();
+            // The finished phase opens the summary (the effect above); only a run that
+            // never started has nothing to show.
             const id = await finishRun();
-            if (id) router.replace({ pathname: '/summary/[id]', params: { id } });
-            else router.back();
+            if (!id) router.back();
           }}
         />
         <Button label="Keep going" kind="outline" onPress={close} />
