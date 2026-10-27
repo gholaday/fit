@@ -1,11 +1,14 @@
 import { type ImageStyle, StyleSheet, type TextStyle, useColorScheme, type ViewStyle } from 'react-native';
+import { useFit } from '@/data/store';
 import { dark, light, type Palette } from './tokens';
 
 export * from './tokens';
 
-/** Follows the system light/dark setting. */
+/** Light or dark from the Appearance setting; System follows the phone. */
 export function usePalette(): Palette {
-  return useColorScheme() === 'dark' ? dark : light;
+  const system = useColorScheme();
+  const appearance = useFit((s) => s.settings.appearance);
+  return (appearance === 'system' ? system : appearance) === 'dark' ? dark : light;
 }
 
 type Styles = Record<string, ViewStyle | TextStyle | ImageStyle>;

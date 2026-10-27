@@ -1,4 +1,4 @@
-import { type CuePrefs, DEFAULT_CUE_PREFS, ZONE_NAMES, zoneBand } from '@fit/core';
+import { type CuePrefs, DEFAULT_CUE_PREFS, zoneBand } from '@fit/core';
 import { router } from 'expo-router';
 import { ScrollView, Switch, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -8,8 +8,6 @@ import { monthDay, thousands } from '@/lib/format';
 import { createStyles, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Group, IconButton, Row, Segmented, Stepper, T } from '@/ui/primitives';
-
-const METHOD_LABEL = { hrr: 'HR reserve', max: '% of max', maf: 'MAF', lthr: 'Threshold', custom: 'Custom' } as const;
 
 export function SettingsScreen() {
   const s = useStyles();
@@ -33,6 +31,19 @@ export function SettingsScreen() {
         </T>
       </View>
       <ScrollView contentContainerStyle={[s.content, { paddingBottom: insets.bottom + 32 }]}>
+        <Section title="Appearance">
+          <Segmented
+            look="inset"
+            options={[
+              { value: 'system', label: 'System' },
+              { value: 'light', label: 'Light' },
+              { value: 'dark', label: 'Dark' },
+            ]}
+            value={settings.appearance}
+            onChange={(appearance) => actions.updateSettings({ appearance })}
+          />
+        </Section>
+
         <Section title="Units">
           <View style={{ gap: 8 }}>
             <Segmented
@@ -74,18 +85,18 @@ export function SettingsScreen() {
           <Group>
             <Row
               label="Heart rate zones"
-              sub={hr && z2 ? `${METHOD_LABEL[hr.method]}, Zone 2 ${ZONE_NAMES[2].toLowerCase()} ${z2.minBpm}-${z2.maxBpm} bpm` : 'Not set'}
+              sub={hr && z2 ? `Zone 2 is ${z2.minBpm} to ${z2.maxBpm} bpm` : 'Not set'}
               onPress={() => router.push({ pathname: '/setup', params: { only: 'zones' } })}
             >
               <Icons.chevronRight size={18} color={p.textTertiary} />
             </Row>
-            <Row label="Pace profile" sub={vdot !== undefined ? `VDOT ${vdot.toFixed(1)}, sets every pace target` : 'Not set, enter a race or run a time trial'} onPress={() => router.push('/pace')}>
+            <Row label="Pace profile" sub={vdot !== undefined ? `VDOT ${vdot.toFixed(1)}` : 'Not set'} onPress={() => router.push('/pace')}>
               <Icons.chevronRight size={18} color={p.textTertiary} />
             </Row>
-            <Row label="Running plan" sub={plan ? (today < plan.startDate ? `${plan.name}, starts ${monthDay(plan.startDate)}` : `${plan.name}, week ${plan.currentWeek} of ${plan.weeks}`) : 'None'} onPress={() => router.push({ pathname: '/setup', params: { only: 'plan' } })}>
+            <Row label="Running plan" sub={plan ? (today < plan.startDate ? `${plan.name}, starts ${monthDay(plan.startDate)}` : `${plan.name}, week ${plan.currentWeek} of ${plan.weeks}`) : 'No plan'} onPress={() => router.push({ pathname: '/setup', params: { only: 'plan' } })}>
               <Icons.chevronRight size={18} color={p.textTertiary} />
             </Row>
-            <Row label="Post-run stretch" sub="Offer a stretch on the run summary" last>
+            <Row label="Post-run stretch" sub="Suggest a stretch after each run" last>
               <Switch
                 value={settings.postRunStretch}
                 onValueChange={(postRunStretch) => {
@@ -106,13 +117,13 @@ export function SettingsScreen() {
 
         <Section title="Recording">
           <Group>
-            <Row label="Health Connect" sub="Steps, resting heart rate and Garmin workouts" onPress={() => router.push('/health-connect')}>
+            <Row label="Health Connect" sub="Import steps, heart rate and watch workouts" onPress={() => router.push('/health-connect')}>
               <Icons.chevronRight size={18} color={p.textTertiary} />
             </Row>
-            <Row label="Heart rate sensor" sub={settings.hrSensor ? settings.hrSensor.name : 'None, tap to pair'} onPress={() => router.push('/hr-sensor')}>
+            <Row label="Heart rate sensor" sub={settings.hrSensor ? settings.hrSensor.name : 'Not paired'} onPress={() => router.push('/hr-sensor')}>
               <Icons.chevronRight size={18} color={p.textTertiary} />
             </Row>
-            <Row label="Permissions and diagnostics" sub="GPS, background access, battery limits" onPress={() => router.push('/diagnostics')} last>
+            <Row label="Permissions and diagnostics" sub="Check GPS, background and battery settings" onPress={() => router.push('/diagnostics')} last>
               <Icons.chevronRight size={18} color={p.textTertiary} />
             </Row>
           </Group>
@@ -120,7 +131,7 @@ export function SettingsScreen() {
 
         <Section title="Coming later">
           <Group>
-            <Row label="Backup and export" sub="Sync to the cloud and export your data" last />
+            <Row label="Backup and export" sub="Back up to the cloud and export your data" last />
           </Group>
         </Section>
       </ScrollView>
@@ -142,16 +153,17 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 type CueToggle = Exclude<keyof CuePrefs, 'splits'>;
 
 const CUE_ROWS: readonly { key: CueToggle; label: string; sub: string }[] = [
-  { key: 'halfway', label: 'Halfway', sub: 'On steps of 3 minutes or more' },
-  { key: 'paceNudge', label: 'Pace nudges', sub: 'When you drift out of the pace range' },
-  { key: 'hrAlerts', label: 'Heart rate alerts', sub: 'Ease off above the range, then Back in zone' },
-  { key: 'hrBelow', label: 'Below the range', sub: 'You can pick it up a little' },
-  { key: 'zoneUpdates', label: 'Zone updates', sub: 'Every 5 minutes on heart rate steps' },
+  { key: 'halfway', label: 'Halfway', sub: 'Say when you are halfway through a step of 3 min or longer' },
+  { key: 'paceNudge', label: 'Pace nudges', sub: 'Say when you are faster or slower than your target pace' },
+  { key: 'hrAlerts', label: 'Heart rate alerts', sub: 'Say when your heart rate goes above your zone and when it comes back' },
+  { key: 'hrBelow', label: 'Below the range', sub: 'Say when your heart rate drops below your zone' },
+  { key: 'zoneUpdates', label: 'Zone updates', sub: 'Say your heart rate zone every 5 min on heart rate steps' },
 ];
 
 function CueSwitches() {
   const p = usePalette();
-  const cues = useSettings().cues ?? DEFAULT_CUE_PREFS;
+  const settings = useSettings();
+  const cues = settings.cues ?? DEFAULT_CUE_PREFS;
   const set = (patch: Partial<CuePrefs>) => {
     haptic.tick();
     actions.updateSettings({ cues: { ...cues, ...patch } });
@@ -161,7 +173,7 @@ function CueSwitches() {
   );
   return (
     <Group>
-      <Row label="Splits" sub="Every mile or kilometer">
+      <Row label="Splits" sub={`Say your time and pace every ${settings.units.distance === 'km' ? 'kilometer' : 'mile'}`}>
         {sw(cues.splits === 'every', 'Splits', (on) => set({ splits: on ? 'every' : 'off' }))}
       </Row>
       {CUE_ROWS.map((r, i) => (
