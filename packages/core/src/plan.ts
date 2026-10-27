@@ -451,11 +451,15 @@ export interface PresetInfo {
   raceMeters?: number;
   /** Run/walk plans for beginners, effort based (no pace profile needed). */
   beginner: boolean;
+  /** Every nth week is a 70% cutback week; pass to weekKind with taperWeeks. */
+  cutbackEvery?: number;
+  taperWeeks: number;
 }
 
 export function presetInfo(id: PlanPresetId): PresetInfo {
-  const { name, subtitle, kind, measure, weeks, daysPerWeek, weeksOptions, raceMeters } = PRESETS[id];
-  const info: PresetInfo = { id, name, subtitle, kind, measure, weeks, daysPerWeek, beginner: id === 'c25k-9wk' || id === 'walk-to-run-6wk' };
+  const { name, subtitle, kind, measure, weeks, daysPerWeek, weeksOptions, raceMeters, cutbackEvery, taperWeeks } = PRESETS[id];
+  const info: PresetInfo = { id, name, subtitle, kind, measure, weeks, daysPerWeek, beginner: id === 'c25k-9wk' || id === 'walk-to-run-6wk', taperWeeks };
+  if (cutbackEvery) info.cutbackEvery = cutbackEvery;
   if (weeksOptions) info.weeksOptions = weeksOptions;
   if (raceMeters) info.raceMeters = raceMeters;
   return info;
@@ -486,6 +490,45 @@ export function suggestedPresets(canRun20Min: boolean): PlanPresetId[] {
 
 // ---------------------------------------------------------------------------
 // Volume multipliers and ramps
+
+export type WeekKind = 'build' | 'cutback' | 'taper';
+
+/** What a 1-based week is, for labels in the run plan manager (same rules as weekMultiplier). */
+export function weekKind(week: number, weeks: number, cutbackEvery: number | undefined, taperWeeks: number): WeekKind {
+  if (taperWeeks > 0 && week > weeks - taperWeeks) return 'taper';
+  if (cutbackEvery && week % cutbackEvery === 0) return 'cutback';
+  return 'build';
+}
+
+/**
+ * "Change run days" without rebuilding: each role moves to its weekday under the new
+ * days, within its own planned week. Only scheduled items from `from` on move, and never
+ * into the past. A retest takes the quality day (or the first non-long day); race day stays.
+ */
+export function runDayChanges(
+  presetId: PlanPresetId,
+  daysPerWeek: number,
+  preferredDays: readonly Weekday[],
+  longRunDay: Weekday,
+  items: readonly { id: string; role: string; date: IsoDate; originalDate: IsoDate; status: string }[],
+  from: IsoDate,
+): { id: string; to: IsoDate }[] {
+  const roles = PRESETS[presetId].slots.slice(0, daysPerWeek);
+  const dayOf = new Map<string, Weekday>();
+  for (const [day, role] of assignRoles(roles, preferredDays, longRunDay)) dayOf.set(role, day);
+  const retestRole = roles.includes('quality') ? 'quality' : roles.find((r) => r !== 'long');
+  if (retestRole) dayOf.set('retest', dayOf.get(retestRole)!);
+
+  const out: { id: string; to: IsoDate }[] = [];
+  for (const i of items) {
+    if (i.status !== 'scheduled' || i.date < from) continue;
+    const day = dayOf.get(i.role);
+    if (!day) continue;
+    const to = addDays(startOfWeek(i.originalDate), day - 1);
+    if (to >= from && to !== i.date) out.push({ id: i.id, to });
+  }
+  return out;
+}
 
 /** Volume multiplier for a 1-based week: cutback 70%, taper 60% then 40%. */
 export function weekMultiplier(week: number, weeks: number, cutbackEvery: number | undefined, taperWeeks: number): number {

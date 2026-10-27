@@ -92,6 +92,7 @@ import {
   type HistoryKind,
   computeRecords,
   currentRecords,
+  runDayChanges,
   type LiftBests,
   type LiftRecordInput,
   type LiftRecordKind,
@@ -1073,6 +1074,26 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
       });
     },
 
+    changeRunDays(preferredDays, longRunDay, from) {
+      const plan = db.select().from(t.plans).where(and(eq(t.plans.status, 'active'), notDeleted(t.plans))).get();
+      if (!plan) throw new Error('No active plan');
+      const inputs = JSON.parse(plan.inputsJson) as PlanInputs;
+      const items = db
+        .select({ id: t.planWorkouts.id, role: t.planWorkouts.role, date: t.planWorkouts.date, originalDate: t.planWorkouts.originalDate, status: t.planWorkouts.status })
+        .from(t.planWorkouts)
+        .where(and(eq(t.planWorkouts.planId, plan.id), gte(t.planWorkouts.date, from), notDeleted(t.planWorkouts)))
+        .all();
+      // Throws when the days cannot fit the plan's runs per week, before anything is written.
+      const moves = runDayChanges(inputs.presetId, inputs.daysPerWeek, preferredDays, longRunDay, items, from);
+      db.transaction((tx) => {
+        for (const m of moves) tx.update(t.planWorkouts).set({ date: m.to, originalDate: m.to, ...stamp() }).where(eq(t.planWorkouts.id, m.id)).run();
+        tx.update(t.plans)
+          .set({ inputsJson: JSON.stringify({ ...inputs, preferredDays: [...preferredDays], longRunDay }), ...stamp() })
+          .where(eq(t.plans.id, plan.id))
+          .run();
+      });
+    },
+
     rebuildPlan(onDate) {
       const plan = db.select().from(t.plans).where(and(eq(t.plans.status, 'active'), notDeleted(t.plans))).get();
       if (!plan) throw new Error('No active plan');
@@ -1407,6 +1428,11 @@ export function createSqliteRepository(db: FitDb, { clock, newId }: RepositoryDe
         tx.update(t.planWorkouts)
           .set({ status: 'scheduled', completedAt: null, sessionId: null, ...stamp() })
           .where(and(eq(t.planWorkouts.sessionId, id), eq(t.planWorkouts.status, 'done')))
+          .run();
+        // A strength session's scheduled routine is due again (as reopen() does).
+        tx.update(t.routineCompletions)
+          .set({ deletedAt: now(), ...stamp() })
+          .where(and(eq(t.routineCompletions.sessionId, id), notDeleted(t.routineCompletions)))
           .run();
         // A watch recording merged into this run becomes its own activity again.
         tx.update(t.externalSessions)

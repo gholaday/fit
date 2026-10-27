@@ -106,8 +106,7 @@
           }
         }
       ],
-      "react-native-health-connect",
-      "expo-sharing"
+      "react-native-health-connect"
     ],
     "experiments": {
       "typedRoutes": true,

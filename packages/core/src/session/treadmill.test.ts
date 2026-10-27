@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { StepLogEntry } from './player';
-import { parseGpx, toGpx } from './route';
+import { parseGpx } from './route';
 import { DEFAULT_TREADMILL, rescaleLog, setSpeed, treadmillDistance, treadmillTarget } from './treadmill';
 
 const entry = (idx: number, startS: number, endS: number, startM: number, endM: number): StepLogEntry => ({
@@ -39,17 +39,13 @@ describe('treadmill', () => {
 });
 
 describe('GPX', () => {
-  it('round-trips points, elevation and HR', () => {
-    const gpx = toGpx({
-      name: 'Tuesday run & walk',
-      startedAt: '2026-10-27T07:00:00.000Z',
-      points: [
-        { tOffsetMs: 0, lat: 47.6, lng: -122.3, alt: 12, accuracy: 4 },
-        { tOffsetMs: 1000, lat: 47.60003, lng: -122.3, accuracy: 4 },
-      ],
-      hr: [{ tOffsetMs: 900, bpm: 131, source: 'ble' }],
-    });
-    expect(gpx).toContain('Tuesday run &amp; walk');
+  it('reads points, elevation and Garmin HR', () => {
+    const gpx = `<?xml version="1.0" encoding="UTF-8"?>
+<gpx version="1.1" creator="Garmin Connect" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">
+<trk><name>Tuesday run &amp; walk</name><trkseg>
+<trkpt lat="47.6000000" lon="-122.3000000"><ele>12.0</ele><time>2026-10-27T07:00:00.000Z</time><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>131</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions></trkpt>
+<trkpt lat="47.6000300" lon="-122.3000000"><time>2026-10-27T07:00:01.000Z</time><extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>131</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions></trkpt>
+</trkseg></trk></gpx>`;
     const parsed = parseGpx(gpx);
     expect(parsed.startedAt).toBe('2026-10-27T07:00:00.000Z');
     expect(parsed.points).toEqual([

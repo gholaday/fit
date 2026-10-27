@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { weekdayOf } from './dates';
 import { counterIds } from './dsl';
-import { assignRoles, generatePlan, PRESET_IDS, presetInfo, weeklyVolume } from './plan';
+import { assignRoles, generatePlan, PRESET_IDS, presetInfo, runDayChanges, weekKind, weeklyVolume } from './plan';
 import { flattenSteps } from './workout';
 import type { PlanInputs } from './repository';
 
@@ -129,5 +129,25 @@ describe('every preset', () => {
     const trial = generatePlan({ ...zone2, presetId: 'base-builder', paceSource: 'trial', weeks: 4 }, TODAY, counterIds());
     expect(trial.weeks).toBe(4);
     expect(trial.workouts.filter((w) => w.role === 'retest').map((w) => [w.weekIndex, w.workout.name])).toEqual([[1, '3 km time trial']]);
+  });
+});
+
+describe('runDayChanges', () => {
+  it('moves each role to its new weekday inside its own week, never into the past', () => {
+    const plan = generatePlan(zone2, TODAY, counterIds());
+    const items = plan.workouts.map((w, i) => ({ id: String(i), role: w.role, date: w.date, originalDate: w.date, status: 'scheduled' }));
+    const from = '2026-11-04'; // Wednesday of week 2
+    const moves = runDayChanges('z2-base-8wk', 4, [1, 3, 5, 6], 6, items, from);
+    const after = new Map(items.map((i) => [i.id, i.date]));
+    for (const m of moves) after.set(m.id, m.to);
+    // Week 2 Monday is already past, so whatever lands there stays put.
+    expect(moves.every((m) => m.to >= from)).toBe(true);
+    const week3 = items.filter((i) => i.date >= '2026-11-09' && i.date <= '2026-11-15');
+    expect(week3.map((i) => weekdayOf(after.get(i.id)!)).sort()).toEqual([1, 3, 5, 6]);
+    expect(weekdayOf(after.get(week3.find((i) => i.role === 'long')!.id)!)).toBe(6);
+  });
+
+  it('labels cutback and taper weeks', () => {
+    expect([1, 4, 7, 8].map((w) => weekKind(w, 8, 4, 2))).toEqual(['build', 'cutback', 'taper', 'taper']);
   });
 });

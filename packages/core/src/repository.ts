@@ -506,6 +506,11 @@ export interface FitRepository {
   shiftRestOfWeek(from: IsoDate): void;
   /** Plan menu: every pending workout from `from` on moves a week later (travel, sick). */
   pushPlanBack(from: IsoDate): void;
+  /**
+   * Change run days without rebuilding: upcoming runs move to their role's new weekday in
+   * the same week. Same runs per week; throws when the days cannot hold them.
+   */
+  changeRunDays(preferredDays: readonly Weekday[], longRunDay: Weekday, from: IsoDate): void;
   /** "Rebuild plan from here?": a new plan with the same inputs, starting today. */
   rebuildPlan(today: IsoDate): PlanSummary;
 

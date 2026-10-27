@@ -39,30 +39,6 @@ export function valueRange(values: readonly (number | undefined)[]): [number, nu
   return [v[Math.floor(v.length * 0.05)]!, v[Math.min(v.length - 1, Math.ceil(v.length * 0.95) - 1)]!];
 }
 
-const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-/** GPX 1.1 with Garmin's TrackPointExtension for HR, readable by Strava and Garmin Connect. */
-export function toGpx(input: { name: string; startedAt: string; points: readonly TrackPoint[]; hr?: readonly HrSample[] }): string {
-  const t0 = Date.parse(input.startedAt);
-  const bpm = input.hr && input.hr.length > 0 ? routeValues(input.points, 'hr', input.hr) : [];
-  const pts = input.points
-    .map((p, i) => {
-      const ele = p.alt === undefined ? '' : `<ele>${p.alt.toFixed(1)}</ele>`;
-      const hr = bpm[i] === undefined ? '' : `<extensions><gpxtpx:TrackPointExtension><gpxtpx:hr>${bpm[i]}</gpxtpx:hr></gpxtpx:TrackPointExtension></extensions>`;
-      return `<trkpt lat="${p.lat.toFixed(7)}" lon="${p.lng.toFixed(7)}">${ele}<time>${new Date(t0 + p.tOffsetMs).toISOString()}</time>${hr}</trkpt>`;
-    })
-    .join('\n');
-  return [
-    '<?xml version="1.0" encoding="UTF-8"?>',
-    '<gpx version="1.1" creator="Fit" xmlns="http://www.topografix.com/GPX/1/1" xmlns:gpxtpx="http://www.garmin.com/xmlschemas/TrackPointExtension/v1">',
-    `<metadata><name>${esc(input.name)}</name><time>${new Date(t0).toISOString()}</time></metadata>`,
-    `<trk><name>${esc(input.name)}</name><trkseg>`,
-    pts,
-    '</trkseg></trk></gpx>',
-    '',
-  ].join('\n');
-}
-
 export interface ParsedGpx {
   /** First point's time; undefined if the file has no timestamps. */
   startedAt?: string;
