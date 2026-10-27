@@ -12,6 +12,7 @@ import { createStyles, motion, usePalette } from '@/theme';
 import { Icons } from '@/ui/icons';
 import { Button, IconButton, LaneTile, Segmented, T } from '@/ui/primitives';
 import { Sheet } from '@/ui/Sheet';
+import { WeightGoalCard } from '@/features/weight/WeightGoalCard';
 import { ScheduleTab } from './ScheduleTab';
 import { WeekGrid } from './WeekGrid';
 import { StatusShade } from '@/ui/StatusShade';
@@ -65,6 +66,7 @@ export function PlanScreen() {
         {/* Both stay mounted once seen, so switching back is instant. */}
         <View style={{ display: tab === 'week' ? 'flex' : 'none', gap: 14 }}>
           <PlanCard />
+          <WeightGoalCard />
           <View style={s.nav}>
             <IconButton label="Previous week" onPress={() => go(-1)}>
               <Icons.chevronLeft size={18} color={p.text} />

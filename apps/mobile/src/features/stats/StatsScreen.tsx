@@ -4,7 +4,7 @@
  * strength and stretching, then Activity (steps against the goal, resting heart rate).
  * A section with no data is hidden, not explained.
  */
-import { type IsoDate, type Weekday, addDays, formatDistance, formatMinutes, formatPace, paceToUnit } from '@fit/core';
+import { type IsoDate, type TrendPoint, type Weekday, type WeightGoal, addDays, formatDistance, formatMinutes, formatPace, paceToUnit } from '@fit/core';
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -12,6 +12,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { repo } from '@/data';
 import { useSettings, useToday } from '@/data/store';
 import { RecordsCard } from '@/features/records/RecordsCard';
+import { changeLabel } from '@/features/weight/format';
+import { WeightChart } from '@/features/weight/WeightChart';
 import { readAt, useFocusedDataVersion } from '@/lib/focusedVersion';
 import { dateRangeLabel, dayOfMonth, monthDay, thousands, weekdayLetter } from '@/lib/format';
 import { haptic } from '@/lib/haptics';
@@ -41,6 +43,7 @@ export function StatsScreen() {
   const data = useMemo(() => readAt(version, () => loadStats(period, offset, today)), [period, offset, today, version]);
   // Records span all time, so the period does not change them.
   const records = useMemo(() => readAt(version, () => ({ all: repo.records(), recent: repo.recentRecords(10) })), [version]);
+  const weight = useMemo(() => readAt(version, () => ({ trend: repo.weightTrend(), goal: repo.weightGoal() })), [version]);
 
   const go = (n: number) => {
     haptic.tick();
@@ -78,6 +81,7 @@ export function StatsScreen() {
 
         <CompletionCard data={data} period={period} />
         <StepsCard data={data} />
+        <WeightStatsCard trend={weight.trend} goal={weight.goal} from={data.range.start} to={data.range.end} />
         <RunningCard data={data} />
         <HeartCard data={data} />
         <RecordsCard records={records.all} recent={records.recent} streak={data.streak} />
@@ -335,6 +339,28 @@ function StepsCard({ data }: { data: StatsData }) {
       <StackBars bars={bars} height={70} goal={goal} accessibilityLabel={`Steps, ${thousands(avg)} a day on average, goal ${thousands(goal)}`} />
       <T v="micro" tone="tertiary">{`Goal ${thousands(goal)} steps a day`}</T>
     </Card>
+  );
+}
+
+/** The weight trend over the period, once there are weigh-ins on 2 days. */
+function WeightStatsCard({ trend, goal, from, to }: { trend: readonly TrendPoint[]; goal?: WeightGoal; from: IsoDate; to: IsoDate }) {
+  const unit = useSettings().units.weight;
+  if (trend.length < 2) return null;
+  const points = trend.filter((t) => t.date >= from && t.date <= to);
+  const first = points[0];
+  const last = points[points.length - 1];
+  return (
+    <Pressable accessibilityRole="button" accessibilityHint="Opens your weight" onPress={() => router.push('/weight')}>
+      <Card title="Weight" right={first && last && points.length > 1 ? changeLabel(last.kg - first.kg, unit) : undefined}>
+        {points.length > 0 ? (
+          <WeightChart points={points} from={from} to={to} unit={unit} goal={goal?.status === 'stopped' ? undefined : goal} height={90} axes />
+        ) : (
+          <T v="caption" tone="tertiary">
+            No weigh-ins in this period
+          </T>
+        )}
+      </Card>
+    </Pressable>
   );
 }
 

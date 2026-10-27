@@ -7,7 +7,8 @@
  * 2. Daily steps, resting HR and active calories for the days touched.
  * 3. Exercise sessions, with average and max HR, distance and calories from the same source.
  * 4. Health Connect HR for saved phone sessions that still need it.
- * 5. Store the new token and the sync time.
+ * 5. Weigh-ins, by time window rather than the changes token.
+ * 6. Store the new token and the sync time.
  */
 import { type DailyMetricsInput, type ExternalActivity, type ExternalSessionInput, GARMIN_CONNECT_PACKAGE, type IsoDate, addDays, localIsoDate } from '@fit/core';
 import { Platform } from 'react-native';
@@ -24,6 +25,7 @@ export const READ_PERMISSIONS: Permission[] = [
   { accessType: 'read', recordType: 'RestingHeartRate' },
   { accessType: 'read', recordType: 'ActiveCaloriesBurned' },
   { accessType: 'read', recordType: 'Distance' },
+  { accessType: 'read', recordType: 'Weight' },
 ];
 
 const CHANGE_TYPES = ['ExerciseSession', 'Steps', 'RestingHeartRate', 'ActiveCaloriesBurned'] as const;
@@ -105,7 +107,7 @@ let activities: Record<number, ExternalActivity> | undefined;
 const between = (startTime: string, endTime: string) => ({ operator: 'between' as const, startTime, endTime });
 
 /** All pages of a read. */
-async function readAll<T extends 'ExerciseSession' | 'HeartRate' | 'RestingHeartRate'>(type: T, startTime: string, endTime: string, origins?: string[]): Promise<RecordResult<T>[]> {
+async function readAll<T extends 'ExerciseSession' | 'HeartRate' | 'RestingHeartRate' | 'Weight'>(type: T, startTime: string, endTime: string, origins?: string[]): Promise<RecordResult<T>[]> {
   const out: RecordResult<T>[] = [];
   const { readRecords } = await hc();
   let pageToken: string | undefined;
@@ -291,6 +293,16 @@ async function run(): Promise<SyncResult> {
         const samples = records.flatMap((r) => r.samples.map((x) => ({ time: x.time, bpm: x.beatsPerMinute })));
         repo.addHealthHr(w.sessionId, samples);
       }
+    }
+
+    // Weigh-ins from every app (a scale writes its own records). The 30 day window on a full
+    // read, else from two days before the newest imported one; the repository dedupes by id.
+    if (types.has('Weight')) {
+      const newest = repo.weighIns(50).find((w) => w.source === 'health_connect')?.measuredAt;
+      const from = full || !newest ? since : new Date(Date.parse(newest) - 2 * DAY_MS).toISOString();
+      const records = await readAll('Weight', from, now.toISOString());
+      const inputs = records.flatMap((r) => (r.metadata?.id ? [{ hcRecordId: r.metadata.id, measuredAt: r.time, kg: r.weight.inKilograms }] : []));
+      if (inputs.length > 0) repo.importHealthWeights(inputs);
     }
 
     repo.setHealthSyncState({ changesToken: changes.token, lastSyncedAt: new Date().toISOString() });

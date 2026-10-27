@@ -48,6 +48,8 @@ export interface Palette {
   success: string;
   /** Light blue for the steps bar and chart, lighter than the run blue. */
   steps: string;
+  /** Muted teal for the weight trend and goal progress. */
+  weight: string;
   /** Gold for record trophies, the one saturated accent. */
   trophy: string;
 }
@@ -82,6 +84,7 @@ export const light: Palette = {
   walk: '#C9CACF',
   success: '#5F9370',
   steps: '#7DB9E3',
+  weight: '#5E9C9E',
   trophy: '#E0A800',
 };
 
@@ -116,6 +119,7 @@ export const dark: Palette = {
   walk: '#4B4E57',
   success: '#8DB596',
   steps: '#8FC6EC',
+  weight: '#86BFC1',
   trophy: '#F2C230',
 };
 

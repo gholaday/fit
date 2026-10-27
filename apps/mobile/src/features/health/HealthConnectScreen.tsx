@@ -24,9 +24,10 @@ const READS: readonly { label: string; why: string }[] = [
   { label: 'Exercise sessions', why: 'Watch workouts, to mark plan items done' },
   { label: 'Heart rate', why: 'Fills gaps in heart rate on your runs' },
   { label: 'Steps', why: 'Your daily step goal on Today' },
-  { label: 'Resting heart rate', why: 'Shown on Today' },
+  { label: 'Resting heart rate', why: 'Shown in Stats' },
   { label: 'Active calories', why: 'Stored with workouts and days' },
   { label: 'Distance', why: 'How far your watch workouts went' },
+  { label: 'Weight', why: 'Weigh-ins from your scale or other apps' },
 ];
 
 export function HealthConnectScreen() {

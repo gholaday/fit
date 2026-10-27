@@ -74,6 +74,7 @@ export default function RootLayout() {
         <Stack.Screen name="pace" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="run-plan" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="history" options={{ animation: 'slide_from_right' }} />
+        <Stack.Screen name="weight" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="activity/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="lift/[id]" options={{ animation: 'slide_from_right' }} />
         <Stack.Screen name="run" options={{ animation: 'slide_from_bottom', gestureEnabled: false }} />

@@ -12,6 +12,7 @@ import { ACTIVITY_ICON, ACTIVITY_LABEL } from '@/features/health/ActivityModal';
 import { openActivities, reloadHealth, useHealth } from '@/features/health/state';
 import { syncHealth } from '@/features/health/sync';
 import { QuickLogSheet, quickLogLabel } from '@/features/quicklog/QuickLogSheet';
+import { WeightCard } from '@/features/weight/WeightCard';
 import { haptic } from '@/lib/haptics';
 import { longDate, weekdayLong } from '@/lib/format';
 import { createStyles, usePalette } from '@/theme';
@@ -218,6 +219,7 @@ export function TodayScreen() {
         <WeekStrip today={today} selected={day} onSelect={select} />
         {isToday && <DayWidget ref={widget} today={today} summary={summary} items={items} units={settings.units} onJump={jump} onDay={select} />}
         {isToday && <StepsCard today={today} steps={metrics?.steps} goal={settings.stepGoal} lastSyncedAt={lastSyncedAt} />}
+        {isToday && <WeightCard />}
         {isToday && bump && <PaceBumpCard bump={bump} />}
         {pendingCount > 0 && (
           <Button
