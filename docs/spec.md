@@ -1,4 +1,4 @@
-# Fit: Personal Workout & Running App Spec
+# Orbit: Personal Workout & Running App Spec
 
 *Personal, single-user app. v1 spec, October 2026.*
 
@@ -338,7 +338,7 @@ Every outdoor session with GPS data gets a traced route and an animated replay, 
 |---|---|---|
 | Phone-recorded run (§5) | ✅ Always | Full-resolution points |
 | Garmin run via Health Connect | ⚠️ Unconfirmed | Health Connect has an `ExerciseRoute` type, but it's unclear whether Garmin Connect writes routes to it (it does not write routes to Apple Health). **Check in the Health Connect spike.** |
-| GPX/FIT file *(manual fallback)* | ✅ | "Open with Fit" from a downloaded Garmin export, attached to an existing session |
+| GPX/FIT file *(manual fallback)* | ✅ | "Open with Orbit" from a downloaded Garmin export, attached to an existing session |
 
 When an imported session has no route, its summary shows the stats without a map and an "Add route from file" action (GPX/FIT exported from Garmin Connect).
 
@@ -712,7 +712,7 @@ Daily habit stretching (morning / evening) with **guided, follow-along sessions*
 
 Garmin Connect writes natively to Android **Health Connect**: steps, heart rate (resting and during workouts), sleep, calories, workouts/exercise sessions, weight and SpO2. Reading Health Connect gets your Garmin data into the app with no Garmin API, approval or watch code. Garmin-only metrics (Body Battery, Training Status, HRV Status) are not available this way.
 
-**Data path:** Garmin watch → Bluetooth → Garmin Connect app → Health Connect → Fit. Data lands only after the watch syncs, so it can lag minutes to hours. The UI always shows "last synced".
+**Data path:** Garmin watch → Bluetooth → Garmin Connect app → Health Connect → Orbit. Data lands only after the watch syncs, so it can lag minutes to hours. The UI always shows "last synced".
 
 ### Library & setup
 - `react-native-health-connect` with its Expo config plugin (dev build, already required).
@@ -734,7 +734,7 @@ Garmin Connect writes natively to Android **Health Connect**: steps, heart rate 
 
 | Write *(optional, off by default)* | Why |
 |---|---|
-| `ExerciseSession`, `Distance`, `ExerciseRoute` | Share Fit sessions with other apps. Off by default to avoid duplicates if you also record on the watch. |
+| `ExerciseSession`, `Distance`, `ExerciseRoute` | Share Orbit sessions with other apps. Off by default to avoid duplicates if you also record on the watch. |
 
 Background read permission is **not** requested in v1; syncing happens in the foreground.
 
@@ -750,7 +750,7 @@ Background read permission is **not** requested in v1; syncing happens in the fo
 - Stats → **Activity** tab: steps per day/week, resting HR trend over 90 days.
 
 **2. Heart rate on phone-recorded sessions**
-If you wore the watch during a run recorded in Fit, pull `HeartRate` samples for that session's time window after the watch syncs:
+If you wore the watch during a run recorded in Orbit, pull `HeartRate` samples for that session's time window after the watch syncs:
 - Avg / max HR on the summary, HR line chart under the pace chart.
 - **Per-step avg HR** in the step breakdown (e.g. how high each sprint pushed you).
 - A banner on the summary: "Heart rate added from Garmin" (or "Waiting for watch sync" with retry on next open).
@@ -758,7 +758,7 @@ If you wore the watch during a run recorded in Fit, pull `HeartRate` samples for
 
 **3. Importing watch-recorded workouts**
 Runs, walks, treadmill runs and strength sessions recorded on the Garmin become **external sessions**:
-- **Merge with phone sessions (the normal case):** if an external session overlaps a Fit-recorded session by > 50% of its duration, it's merged rather than imported separately. Fit keeps its own GPS route, steps and splits; the watch contributes HR samples (and calories). Timestamps are aligned by absolute time, so a watch started a few seconds early or late is fine. The modal shows "Added Garmin heart rate to …" with an Undo.
+- **Merge with phone sessions (the normal case):** if an external session overlaps an Orbit-recorded session by > 50% of its duration, it's merged rather than imported separately. Orbit keeps its own GPS route, steps and splits; the watch contributes HR samples (and calories). Timestamps are aligned by absolute time, so a watch started a few seconds early or late is fine. The modal shows "Added Garmin heart rate to …" with an Undo.
 - **New-activity modal (Strava-style):** on app open, after the Health Connect sync, any newly detected session pops up a bottom-sheet modal, one per activity (stacked, "1 of 2"):
   - **Header:** activity type icon, date/time, duration, distance, avg HR (whatever Health Connect has), source "Garmin Venu 3".
   - **Match suggestion:** if a pending plan workout fits (same day ±1, compatible type, duration within ±30%), it's pre-selected: "Matches **Zone 2 Run** (today, 40 min)". A picker lists other pending workouts from the last 3 days, plus "Not part of my plan".
@@ -813,13 +813,13 @@ hc_sync_state      key, changes_token, last_synced_at
 Track weight toward a goal, with a quick weigh-in on Today. Stored in kg, shown in the units setting (lb or kg).
 
 **Weigh-ins**
-- Manual from Today, or Health Connect `Weight` records (a smart scale, Garmin Index, another app), imported with steps by time window (30 days on a full sync, otherwise from 2 days before the newest imported weigh-in), not the changes token. Health Connect rows dedupe by record id; deleting one in Fit hides it and it is not imported again.
+- Manual from Today, or Health Connect `Weight` records (a smart scale, Garmin Index, another app), imported with steps by time window (30 days on a full sync, otherwise from 2 days before the newest imported weigh-in), not the changes token. Health Connect rows dedupe by record id; deleting one in Orbit hides it and it is not imported again.
 - A day can have several weigh-ins. The trend uses each day's first one, since morning weights are the most consistent.
 
 **Trend** (core `weightTrend`)
 - A smoothed line that ignores day-to-day water swings: `trend += (w - trend) * (1 - e^(-days / 7))`. `days` is the gap since the last weigh-in, so missed days are handled. It starts at the first weigh-in.
 - Rate (core `weightRate`): a least-squares line through the last 14 days of daily weigh-ins, per week. Fitting the trend would lag a steady change. It needs weigh-ins on at least 2 days across 7 or more days; before that, no rate is shown.
-- Every Fit number for weight uses the trend. The last weigh-in shows beside it, smaller.
+- Every Orbit number for weight uses the trend. The last weigh-in shows beside it, smaller.
 
 **Goal** (one active goal, set from the Plan screen)
 - Start (the trend when the goal is set, editable), target and pace. Pace choices: 0.25, 0.5, 0.75 or 1 kg a week (0.5, 1, 1.5 or 2 lb in pounds), capped at 1% of the start weight a week. Gaining works too: the direction comes from the target.
@@ -897,17 +897,23 @@ settings           key, value_json
 
 **Bottom tabs:** Today, Plan, Library, Stats, (Settings via avatar/gear)
 
-**Today day widget**
-- Left: the **day ring** (core `dayRing`, `ringHit`). A single ring with one arc per lane scheduled today, in lane order (run, strength, stretch), equal shares that meet with no gaps. Three lanes take a third each, two take half, one takes the whole ring. Each arc shows the lane's pending tint and fills clockwise in the lane color by the share of that lane's items done. Skipped items stay unfilled. With nothing scheduled it is a plain track. Center: "2 of 3" done.
-- Right: **This week**, Monday to Sunday as small day rings in lane colors, "3 of 5 done" and the run distance. A light blue dot in a day's ring means the step goal was met that day. Tapping a day opens it.
-- Tapping an arc swaps the right panel to that lane's items today: the lane name and "1 of 2 done", then each item (title, then time, or the result once done, or "Skipped"). Tapping a row scrolls the checklist to its card. Tapping the arc again, the center, or outside the widget, or the app coming back to the foreground, returns to This week.
-- **Steps card** under the widget: "6,421 steps", a progress bar toward the daily goal (default 8,000) in the steps color, green when met, and a line of steps per hour today. Hourly steps are read from Health Connect on demand (aggregated by hour) and re-read after each sync; they are not stored.
+**Today: Orbit layout** (design canvas boards A2 and A-Scrolled)
+- **Header:** weekday ("Wednesday") over "Nov 4, week 5 of 12" (or "Nov 6, rest day"), settings button on the right.
+- **Week strip:** Monday to Sunday as small day rings in lane colors with the weekday letter; today sits in a dark circle. Tapping a day opens it.
+- **Day ring**, centered, about 290 px (core `dayRing`, `ringHit`). One arc per lane scheduled today, in lane order (run, strength, stretch), equal shares with no gaps, each filling clockwise by the share of its items done; skipped items stay unfilled. Drawing: 26 px stroke at radius 120 of a 300 box; each filled arc has a linear gradient along the arc from the lane's light to deep tone and a soft blurred copy under it as a glow; a dotted tick bezel outside the ring; a white knob with a lane-colored border at the end of each partly or fully filled arc, with a small check when the lane is complete; a white inner disc.
+- **Ring center:** "2 of 3", "done today", then a pill in the next item's lane tint: "Next: Legs, 6:30 PM". All done: dark check badge, "All done", "3 of 3 today", and the ring's glow is stronger.
+- **Lane focus:** tapping an arc dims the other arcs and the bezel (about 22% opacity), thickens the chosen arc to 34 px and draws a thin lane-colored indicator arc just outside it. The center becomes the lane name over "0 of 1" and "done today", and the lane cards below are replaced by that lane's detail card: title, time and length, its first three exercises with sets, reps and weight (or the run structure, or the routine's moves), "2 more exercises", and Complete and Skip. Tapping the arc again, the center or outside returns to the normal view.
+- **Lane cards:** one per lane scheduled today in a row of three (two or one fill the row): a 30 px tile, the lane name and its status (result once done such as "3.1 mi", the time, or "1 of 2"). Tiles are a gradient in the lane color with a white Lucide icon: footprints for run, weight for workout, feather for stretch. A done lane adds a small dark check badge on the tile's corner. Tapping a card focuses its arc.
+- **Stats row:** steps, active minutes today, weight trend (only once there are weigh-ins).
+- **Rest day** (nothing scheduled): the ring becomes the steps ring, one gradient arc in the steps color filling toward the step goal with a knob, center "Rest day", "6,421", "of 8,000 steps". Below: a Tomorrow card ("Tomorrow: Long run", what and how long) and two tiles, Stretch (pick a routine) and the weight trend with its weekly rate.
+- **All done:** below the ring a summary card (active time, distance run, sets lifted), a New record card when one was set today, and a Tomorrow line.
+- **Action pill**, floating above the tab bar: the primary button starts the next item and takes its lane color ("Start Legs"); then Log and Weigh in. With nothing left to start the primary becomes Log activity (and Free run joins on a rest day).
+- **Scrolling** collapses the header and ring into a slim bar (small ring, "2 of 3 done", the date, steps) and reveals the cards: one per item today with Start or Complete, the Steps card (count, bar toward the goal, hourly line read from Health Connect on demand, not stored), the Weight card (only while a goal is active or just reached, see §12), and Up next for the week.
 - No heart rate card on Today.
-- Shrinks to a slim bar (done count, item strip, steps) as the checklist scrolls.
 
 | Screen | Purpose / key elements |
 |---|---|
-| **Today** | **Day widget** at the top (see below). **Today's checklist**: every item scheduled today (run/Z2, strength routine, stretch routines) as cards, each with **Done** (one tap, long-press for details) and **Skip**; run cards also have **Start** for in-app recording. Hero card for the main workout: name, structure bar or bpm range, est. time & distance, mode chip. **+ Quick log** button. "Up next" list for the week. Plan progress (week 5 of 12). New-activity modal on open when Garmin sessions arrive (§11), with a "New activities" chip if dismissed. Quick actions: Free run, Treadmill, Strength, Stretch. |
+| **Today** | **Orbit layout** (see above): week strip, centered day ring, lane cards, action pill; the cards below appear on scroll. **Today's checklist**: every item scheduled today (run/Z2, strength routine, stretch routines) as cards, each with **Done** (one tap, long-press for details) and **Skip**; run cards also have **Start** for in-app recording. Hero card for the main workout: name, structure bar or bpm range, est. time & distance, mode chip. **+ Quick log** button. "Up next" list for the week. Plan progress (week 5 of 12). New-activity modal on open when Garmin sessions arrive (§11), with a "New activities" chip if dismissed. Quick actions: Free run, Treadmill, Strength, Stretch. |
 | **Pre-start** | Workout preview (step list), mode toggle (Outdoor/Treadmill/Timer), GPS signal indicator, HR sensor status ("♥ 72 bpm", device name below), voice on/off, **Start**. |
 | **In-session (run)** | Current step pill + colored progress bar for whole workout. Giant primary metric (time remaining in step, or distance remaining). Secondary metrics: current pace vs target zone, total time, total distance. Next step preview. Pause / Skip / Lock. Swipe → map. |
 | **In-session (treadmill)** | Same layout; primary = target speed/incline; ± speed controls. |
@@ -972,7 +978,7 @@ The phone stays **local-first**: SQLite is the source of truth for the UI, every
 
 ### Architecture
 ```
-Fit app (SQLite)   ──HTTPS──▶ Sync API (Next.js route handlers on Vercel) ──▶ Neon Postgres
+Orbit app (SQLite) ──HTTPS──▶ Sync API (Next.js route handlers on Vercel) ──▶ Neon Postgres
                                    apps/api in the monorepo                   schema: fit
 ```
 - **No direct DB connection from the phone.** A connection string in an APK is extractable; the API sits in between and holds the Neon credentials.

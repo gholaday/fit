@@ -1,4 +1,4 @@
-# Fit design reference
+# Orbit design reference
 
 Theme: **Midnight**, light and dark, following the system setting. Light is the primary reference.
 

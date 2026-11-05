@@ -1,4 +1,4 @@
-We're building **Fit**, my personal fitness app: an Android-first Expo app plus a small Next.js sync API, in one monorepo. Everything you need is in this repo:
+We're building **Orbit** (repo and package names still say fit), my personal fitness app: an Android-first Expo app plus a small Next.js sync API, in one monorepo. Everything you need is in this repo:
 
 - `docs/spec.md` is the full product and technical spec. Read all of it before writing code.
 - `docs/design.md` has the design tokens, icon set, copy rules, and an index of the mockups.

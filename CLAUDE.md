@@ -19,4 +19,4 @@ Two Claude sessions work in this folder at the same time. Stay inside the paths 
 ## CI and releases
 - Repo: https://github.com/gholaday/fit. The lead session pushes; the mobile session commits locally only.
 - `.github/workflows/ci.yml` runs typecheck, lint, test and build on every push to main and on PRs.
-- Releases follow the murmur pattern: commit "Release x.y.z" with a plain description of the changes as the body (it becomes the release notes), tag `vx.y.z`, push the tag. `release.yml` sets the app version and versionCode from the tag, runs `expo prebuild`, builds a release APK signed by `apps/mobile/plugins/with-release-signing.js` from the `ANDROID_*` secrets, and attaches `fit-x.y.z.apk` to the GitHub release.
+- Releases follow the murmur pattern: commit "Release x.y.z" with a plain description of the changes as the body (it becomes the release notes), tag `vx.y.z`, push the tag. `release.yml` sets the app version and versionCode from the tag, runs `expo prebuild`, builds a release APK signed by `apps/mobile/plugins/with-release-signing.js` from the `ANDROID_*` secrets, and attaches `orbit-x.y.z.apk` to the GitHub release.

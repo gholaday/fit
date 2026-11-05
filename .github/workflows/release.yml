@@ -1,6 +1,6 @@
 name: Release
 
-# Push a tag like v0.1.0 to publish the signed Android app as fit-0.1.0.apk on the
+# Push a tag like v0.1.0 to publish the signed Android app as orbit-0.1.0.apk on the
 # GitHub release, where Obtainium picks it up. Needs the ANDROID_KEYSTORE_BASE64,
 # ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS and ANDROID_KEY_PASSWORD secrets.
 on:
@@ -68,7 +68,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          apk="fit-$VERSION.apk"
+          apk="orbit-$VERSION.apk"
           cp apps/mobile/android/app/build/outputs/apk/release/app-release.apk "$apk"
           bash .github/release-notes.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/notes.md"
           if [ -s "$RUNNER_TEMP/notes.md" ]; then notes=(--notes-file "$RUNNER_TEMP/notes.md"); else notes=(--generate-notes); fi
