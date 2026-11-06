@@ -3,7 +3,8 @@ import { memo, type ReactNode, useEffect, useRef } from 'react';
 import { Pressable, type PressableProps, type StyleProp, Text, type TextProps, type TextStyle, View, type ViewStyle } from 'react-native';
 import { createStyles, laneColor, toneColor, usePalette } from '@/theme';
 import { type } from '@/theme/type';
-import { LANE_ICON } from './icons';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import { Icons, LANE_ICON } from './icons';
 import { haptic } from '@/lib/haptics';
 
 type Variant = keyof typeof type;
@@ -105,6 +106,39 @@ export const LaneTile = memo(function LaneTile({ lane, size = 36, faded }: { lan
   return (
     <View style={{ width: size, height: size, borderRadius: size > 38 ? 11 : 10, backgroundColor: c.tint, alignItems: 'center', justifyContent: 'center', opacity: faded ? 0.7 : 1 }}>
       <Icon size={size > 38 ? 22 : 20} color={c.color} />
+    </View>
+  );
+});
+
+/**
+ * A lane tile on Today (spec §14 Orbit): the lane gradient with a white icon, and a small
+ * dark check badge on the corner once the lane is done.
+ */
+export const GradientTile = memo(function GradientTile({ lane, size = 30, done }: { lane: Lane; size?: number; done?: boolean }) {
+  const p = usePalette();
+  const [light, deep] = p.grad[lane];
+  const Icon = LANE_ICON[lane];
+  const r = Math.round(size * 0.3);
+  const id = `tile-${lane}`;
+  return (
+    <View style={{ width: size, height: size }}>
+      <Svg width={size} height={size} style={{ position: 'absolute' }}>
+        <Defs>
+          <LinearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+            <Stop offset="0" stopColor={light} />
+            <Stop offset="1" stopColor={deep} />
+          </LinearGradient>
+        </Defs>
+        <Rect width={size} height={size} rx={r} fill={`url(#${id})`} />
+      </Svg>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <Icon size={Math.round(size * 0.5)} color="#FFFFFF" />
+      </View>
+      {done && (
+        <View accessibilityLabel="Done" style={{ position: 'absolute', right: -4, bottom: -4, width: 16, height: 16, borderRadius: 8, backgroundColor: p.primary, borderWidth: 2, borderColor: p.surface, alignItems: 'center', justifyContent: 'center' }}>
+          <Icons.check size={9} color={p.onPrimary} strokeWidth={4} />
+        </View>
+      )}
     </View>
   );
 });

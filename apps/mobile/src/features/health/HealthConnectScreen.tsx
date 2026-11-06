@@ -108,7 +108,7 @@ export function HealthConnectScreen() {
         {status && status.availability !== 'available' && (
           <View style={{ gap: 12 }}>
             <T v="body" tone="secondary">
-              {status.availability === 'missing' ? 'Health Connect is not on this phone. Install it from the Play Store, then come back here.' : 'Health Connect needs an update before Fit can read from it.'}
+              {status.availability === 'missing' ? 'Health Connect is not on this phone. Install it from the Play Store, then come back here.' : 'Health Connect needs an update before Orbit can read from it.'}
             </T>
             <Button
               label={status.availability === 'missing' ? 'Install Health Connect' : 'Update Health Connect'}
@@ -124,7 +124,7 @@ export function HealthConnectScreen() {
         {status?.availability === 'available' && !connected && (
           <View style={{ gap: 12 }}>
             <T v="body" tone="secondary">
-              Fit reads what your Garmin watch syncs to Health Connect. It never writes to Health Connect, and the data stays on this phone.
+              Orbit reads what your Garmin watch syncs to Health Connect. It never writes to Health Connect, and the data stays on this phone.
             </T>
             <Group>
               {READS.map((r, i) => (

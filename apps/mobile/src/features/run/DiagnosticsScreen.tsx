@@ -95,7 +95,7 @@ export function DiagnosticsScreen() {
           </Group>
           {isSamsung() && (
             <T v="caption" tone="secondary" style={{ paddingHorizontal: 4 }}>
-              On Samsung phones also add Fit to Never sleeping apps in Settings, Battery, Background usage limits.
+              On Samsung phones also add Orbit to Never sleeping apps in Settings, Battery, Background usage limits.
             </T>
           )}
         </Section>

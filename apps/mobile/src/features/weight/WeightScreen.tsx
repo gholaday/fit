@@ -120,7 +120,7 @@ export function WeightScreen() {
         ) : (
           <>
             <T v="body" tone="secondary">
-              Pick a target and a pace, and Fit shows when you can expect to reach it.
+              Pick a target and a pace, and Orbit shows when you can expect to reach it.
             </T>
             <Button label="Set a weight goal" kind="outline" size="sm" onPress={() => setGoalSheet(true)} />
           </>

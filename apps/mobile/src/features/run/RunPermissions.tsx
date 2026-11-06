@@ -92,8 +92,8 @@ export function RunPermissions({ onDone, onUseTimer }: { onDone: () => void; onU
       icon: <Icons.battery size={28} color={p.run.color} />,
       title: 'Battery limits',
       body: isSamsung()
-        ? 'Allow Fit to run without battery limits. On Samsung phones also add Fit to Never sleeping apps in Settings, Battery, Background usage limits.'
-        : 'Allow Fit to run without battery limits, so Android does not pause recording during long runs.',
+        ? 'Allow Orbit to run without battery limits. On Samsung phones also add Orbit to Never sleeping apps in Settings, Battery, Background usage limits.'
+        : 'Allow Orbit to run without battery limits, so Android does not pause recording during long runs.',
       action: 'Allow',
     },
   };

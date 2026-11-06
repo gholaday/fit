@@ -32,7 +32,7 @@ const MODES: readonly { value: SessionMode; label: string }[] = [
   { value: 'timer', label: 'Timer' },
 ];
 const SOURCES: readonly { value: 'fit' | 'external'; label: string }[] = [
-  { value: 'fit', label: 'Recorded in Fit' },
+  { value: 'fit', label: 'Recorded in Orbit' },
   { value: 'external', label: 'From watch' },
 ];
 

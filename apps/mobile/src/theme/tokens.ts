@@ -52,6 +52,8 @@ export interface Palette {
   weight: string;
   /** Gold for record trophies, the one saturated accent. */
   trophy: string;
+  /** Light to deep tones for the Orbit day ring arcs and lane tiles (design canvas A2). */
+  grad: Record<Lane | 'steps', readonly [string, string]>;
 }
 
 export const light: Palette = {
@@ -86,6 +88,7 @@ export const light: Palette = {
   steps: '#7DB9E3',
   weight: '#5E9C9E',
   trophy: '#E0A800',
+  grad: { run: ['#A9D1E6', '#3F7EA3'], workout: ['#BDB6E2', '#6E64A8'], stretch: ['#9CCBA8', '#4E8460'], steps: ['#C9E5F7', '#3F8CC2'] },
 };
 
 export const dark: Palette = {
@@ -121,6 +124,8 @@ export const dark: Palette = {
   steps: '#8FC6EC',
   weight: '#86BFC1',
   trophy: '#F2C230',
+  // Deep ends lift so the arcs keep their contrast on the dark surface.
+  grad: { run: ['#B9DCEE', '#5A97BA'], workout: ['#CBC5EA', '#8077BD'], stretch: ['#AED8B7', '#64A074'], steps: ['#D2EAF9', '#5AA2D4'] },
 };
 
 export function laneColor(p: Palette, lane: Lane): ActivityColor {

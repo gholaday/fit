@@ -21,7 +21,7 @@ type Blocker = 'unsupported' | 'off' | 'denied';
 const BLOCKER_TEXT: Record<Blocker, string> = {
   unsupported: 'This phone does not support Bluetooth LE sensors.',
   off: 'Turn on Bluetooth to scan for sensors.',
-  denied: 'Fit needs the Nearby devices permission to find sensors. Allow it in system settings.',
+  denied: 'Orbit needs the Nearby devices permission to find sensors. Allow it in system settings.',
 };
 
 /** Signal strength in words; RSSI is dBm, closer to 0 is stronger. */

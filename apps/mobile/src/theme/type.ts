@@ -30,6 +30,9 @@ export const type = {
   captionStrong: face(12, '600', { lineHeight: 16 }),
   micro: face(11, '500', { lineHeight: 14 }),
   tiny: face(10, '500', { lineHeight: 13 }),
+  /** The Orbit ring center: "2 of 3", the step count, "All done". */
+  ring: face(48, '700', { letterSpacing: -1.4, lineHeight: 54, fontVariant: ['tabular-nums'] }),
+  ringSm: face(30, '700', { letterSpacing: -0.6, lineHeight: 36 }),
   /** Numbers: tabular figures so values do not jitter. */
   stat: face(20, '600', { fontVariant: ['tabular-nums'], lineHeight: 26 }),
   statSm: face(17, '600', { fontVariant: ['tabular-nums'], lineHeight: 22 }),

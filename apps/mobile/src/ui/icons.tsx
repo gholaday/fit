@@ -61,6 +61,9 @@ export const Icons = {
   // Activities.
   run: icon(false, <><Path d="M4 16v-2.38C4 11.5 2.97 10.5 3 8c.03-2.72 1.49-6 4.5-6C9.37 2 10 3.8 10 5.5c0 3.11-2 5.66-2 8.68V16a2 2 0 1 1-4 0Z" /><Path d="M20 20v-2.38c0-2.12 1.03-3.12 1-5.62-.03-2.72-1.49-6-4.5-6C14.63 6 14 7.8 14 9.5c0 3.11 2 5.66 2 8.68V20a2 2 0 1 0 4 0Z" /><Path d="M16 17h4" /><Path d="M4 13h4" /></>),
   barbell: icon(false, <><Path d="M12.409 13.017A5 5 0 0 1 22 15c0 3.866-4 7-9 7-4.077 0-8.153-.82-10.371-2.462-.426-.316-.631-.832-.62-1.362C2.118 12.723 2.627 2 10 2a3 3 0 0 1 3 3 2 2 0 0 1-2 2c-1.105 0-1.64-.444-2-1" /><Path d="M15 14a5 5 0 0 0-7.584 2" /><Path d="M9.964 6.825C8.019 7.977 9.5 13 8 15" /></>),
+  weight: icon(false, <><Circle cx="12" cy="5" r="3" /><Path d="M6.5 8a2 2 0 0 0-1.905 1.46L2.1 18.5A2 2 0 0 0 4 21h16a2 2 0 0 0 1.925-2.54L19.4 9.5A2 2 0 0 0 17.48 8Z" /></>),
+  feather: icon(false, <><Path d="M12.67 19a2 2 0 0 0 1.416-.588l6.154-6.172a6 6 0 0 0-8.49-8.49L5.586 9.914A2 2 0 0 0 5 11.328V18a1 1 0 0 0 1 1z" /><Path d="M16 8 2 22" /><Path d="M17.5 15H9" /></>),
+  trendDown: icon(false, <><Path d="M16 17h6v-6" /><Path d="m22 17-8.5-8.5-5 5L2 7" /></>),
   stretching: icon(false, <><Circle cx="12" cy="5" r="1" /><Path d="m9 20 3-6 3 6" /><Path d="m6 8 6 2 6-2" /><Path d="M12 10v4" /></>),
   walk: icon(false, <><Path d="m17 14 3 3.3a1 1 0 0 1-.7 1.7H4.7a1 1 0 0 1-.7-1.7L7 14h-.3a1 1 0 0 1-.7-1.7L9 9h-.2A1 1 0 0 1 8 7.3L12 3l4 4.3a1 1 0 0 1-.8 1.7H15l3 3.3a1 1 0 0 1-.7 1.7H17Z" /><Path d="M12 22v-3" /></>),
   mountain: icon(false, <><Path d="m8 3 4 8 5-5 5 15H2L8 3z" /></>),
@@ -74,10 +77,11 @@ export const Icons = {
   stop: icon(true, <><Rect width="18" height="18" x="3" y="3" rx="2" /></>),
 } as const;
 
+/** Lane tiles (spec §14 Orbit): footprints, weight and feather. */
 export const LANE_ICON: Record<Lane, AppIcon> = {
   run: Icons.run,
-  workout: Icons.barbell,
-  stretch: Icons.stretching,
+  workout: Icons.weight,
+  stretch: Icons.feather,
 };
 
 export const QUICK_LOG_ICON: Record<QuickLogType, AppIcon> = {
